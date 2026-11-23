@@ -35,13 +35,11 @@ export const routes: Routes = [
   {
     path: '404',
     title: 'Page not found | Made by Marcel',
-    loadComponent: () =>
-      import('./features/not-found/not-found-page').then((m) => m.NotFoundPage),
+    loadComponent: () => import('./features/not-found/not-found-page').then((m) => m.NotFoundPage),
   },
   {
     path: '**',
     title: 'Page not found | Made by Marcel',
-    loadComponent: () =>
-      import('./features/not-found/not-found-page').then((m) => m.NotFoundPage),
+    loadComponent: () => import('./features/not-found/not-found-page').then((m) => m.NotFoundPage),
   },
 ];
