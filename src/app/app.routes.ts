@@ -32,5 +32,16 @@ export const routes: Routes = [
     title: 'Contact | Made by Marcel',
     loadComponent: () => import('./features/contact/contact-page').then((m) => m.ContactPage),
   },
-  { path: '**', redirectTo: '' },
+  {
+    path: '404',
+    title: 'Page not found | Made by Marcel',
+    loadComponent: () =>
+      import('./features/not-found/not-found-page').then((m) => m.NotFoundPage),
+  },
+  {
+    path: '**',
+    title: 'Page not found | Made by Marcel',
+    loadComponent: () =>
+      import('./features/not-found/not-found-page').then((m) => m.NotFoundPage),
+  },
 ];
