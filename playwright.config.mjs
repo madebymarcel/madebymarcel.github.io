@@ -30,6 +30,6 @@ export default defineConfig({
     command: 'npm run build && npm run serve',
     url: 'http://127.0.0.1:4173',
     reuseExistingServer: !process.env.CI,
-    timeout: 30_000,
+    timeout: 90_000,
   },
 });

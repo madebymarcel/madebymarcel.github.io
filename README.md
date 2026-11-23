@@ -1,46 +1,51 @@
 # Made by Marcel
 
-A personal frontend portfolio built as a standalone HTML page, including an SVG parallax scene and a day/night palette. The existing artwork and interactions remain in `index.html`; build tooling does not transform it.
+Personal frontend portfolio and **Angular engineering playground**. The published website is built with Angular 22, using strict TypeScript, feature-first organization and static prerendering for GitHub Pages.
 
-## Requirements
+## Getting started
 
-- Node.js 24 or newer
-- npm
-
-## Develop and test
+Requires Node.js 24.15+ and npm.
 
 ```sh
-npm install
-npm run build
-npm run serve
+npm ci
+npm start
 ```
 
-Visit http://127.0.0.1:4173.
+## Quality gates
 
-| Command                | Purpose                                                                  |
-| ---------------------- | ------------------------------------------------------------------------ |
-| `npm run lint`         | ESLint for tooling **and the inline page JavaScript**                    |
-| `npm run format:check` | Verify formatting of tooling and docs (not the large generated SVG/HTML) |
-| `npm run format`       | Format tooling and docs                                                  |
-| `npm run test:unit`    | Node's built-in tests for static page invariants                         |
-| `npm run test:e2e`     | Playwright tests on desktop and mobile Chromium                          |
-| `npm run lighthouse`   | Lighthouse CI desktop audit; run after `npm run build`                   |
-| `npm run build`        | Copy `index.html` unchanged to `dist/`                                   |
+| Script                 | Purpose                                         |
+| ---------------------- | ----------------------------------------------- |
+| `npm run build`        | Production build and static prerendering        |
+| `npm run lint`         | TypeScript/Angular/template rules               |
+| `npm run typecheck`    | Strict TypeScript checking                      |
+| `npm run format:check` | Check formatting                                |
+| `npm run test:unit`    | Angular TestBed + Vitest                        |
+| `npm run test:e2e`     | Playwright desktop/mobile and axe accessibility |
+| `npm run lighthouse`   | Lighthouse performance and quality budgets      |
 
-Install Chromium locally before the first E2E run:
+For browser tests, first install Chromium: `npx playwright install chromium`. Then use `npm run test:e2e`.
 
-```sh
-npx playwright install chromium
+Read [engineering principles](docs/engineering-principles.md) and [architecture decisions](docs/decisions/0001-angular-static-site.md).
+
+## Architecture
+
+```text
+src/app/
+  core/theme/         Application-level theme state
+  layout/             Site shell (header and footer)
+  features/           Pages grouped by user-facing feature
+  app.routes.ts       Lazy routes
+  app.routes.server.ts Prerendering policy
 ```
 
-## CI and deployment
+No empty shared folders, store abstractions or state libraries are added until there is a use case. Feature tests live beside their implementation.
 
-PRs into `main` run JavaScript linting, formatting checks, Node tests, Playwright, axe accessibility checks, Lighthouse CI and CodeQL. The Pages deployment only runs on successful validation of `main`, never on a PR.
+## The earlier parallax demo
 
-Once the CI workflow has been merged, set **Settings â Pages â Build and deployment â Source: GitHub Actions**. Then add a GitHub repository ruleset for `main` requiring pull requests and the **Validate website** status check (plus CodeQL if its checks are enabled). GitHub App access cannot administer branch protection or Pages settings from this integration.
+The previous standalone SVG parallax homepage is preserved in `prototypes/parallax/index.html` as source material, not the deployed entry point. It can be converted into an Angular feature when the lab is ready.
 
-Dependabot checks npm and GitHub Actions dependencies weekly. All automation uses GitHub Actions on the free public repository.
+## CI/CD
 
-`index.html` is intentionally excluded from Prettier to avoid unintentionally reformatting or rewriting the original SVG. The JavaScript inside it **is** extracted temporarily and linted.
+PRs into `main` must pass `Validate website`. Production builds deploy to GitHub Pages only after a successful `main` build. CodeQL and Dependabot remain enabled.
 
-The dependency lockfile is committed. CI uses `npm ci` for reproducible installations.
+Angular prerenders to `dist/portfolio/browser`; GitHub Pages publishes that directory. Production is unaffected until this PR merges.

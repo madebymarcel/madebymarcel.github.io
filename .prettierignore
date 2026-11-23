@@ -1,8 +1,11 @@
-index.html
-package-lock.json
 node_modules/
 dist/
+.angular/
+coverage/
 .generated/
 .lighthouseci/
 playwright-report/
 test-results/
+package-lock.json
+prototypes/
+.github/
