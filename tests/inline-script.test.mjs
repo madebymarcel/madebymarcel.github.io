@@ -26,8 +26,5 @@ test('rejects missing, duplicate and external scripts', () => {
     () => extractInlineJavaScript('<script>a()</script><script>b()</script>'),
     /exactly one/,
   );
-  assert.throws(
-    () => extractInlineJavaScript('<script src="/app.js"></script>'),
-    /inline script/,
-  );
+  assert.throws(() => extractInlineJavaScript('<script src="/app.js"></script>'), /inline script/);
 });
