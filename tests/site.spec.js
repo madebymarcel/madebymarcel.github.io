@@ -15,9 +15,9 @@ test('home page renders and navigates to a lazy-loaded section', async ({ page }
 
 test('theme control changes the active color mode', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Switch to dark theme' }).click();
+  await page.getByRole('button', { name: 'Dark mode' }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-  await page.getByRole('button', { name: 'Switch to light theme' }).click();
+  await page.getByRole('button', { name: 'Dark mode' }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 });
 
