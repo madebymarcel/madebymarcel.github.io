@@ -67,30 +67,51 @@ float surfaceHeight(vec2 p, float t) {
   return h;
 }
 
-// Return click-generated slope (xy) and height (z) from the same wavefront.
-// Analytic slope avoids resampling every ripple for each finite difference.
-vec3 clickRippleField(vec2 p, float t, float aspect) {
+// Click ripples are expanding wave PACKETS, not just one thin wavefront.
+// Their trailing wake keeps the surface, refracted caustics, and light focus
+// disturbed together until it dissipates. xy = slope, z = height, w = focus.
+vec4 clickRippleField(vec2 p, float t, float aspect) {
   vec2 gradient = vec2(0.0);
   float height = 0.0;
+  float focusing = 0.0;
 
   for (int i = 0; i < 4; i++) {
     float age = t - uRipples[i].z;
-    if (age >= 0.0 && age < 3.4) {
+    if (age >= 0.0 && age < 4.8) {
       vec2 center = (uRipples[i].xy - 0.5) * vec2(aspect, 1.0) * 4.0;
       vec2 outward = p - center;
       float distanceToClick = length(outward);
       float offset = distanceToClick - age * 0.93;
-      float envelope = exp(-pow(offset * 5.0, 2.0)) * exp(-age * 0.65);
+
+      // A soft leading edge and a much longer, decaying oscillating wake.
+      // Unlike a thin Gaussian ring, the area behind the crest stays disturbed.
+      float edgePosition = clamp((offset - 0.035) / 0.17, 0.0, 1.0);
+      float leadingEdge = 1.0 - edgePosition * edgePosition * (3.0 - 2.0 * edgePosition);
+      float edgeDerivative = -6.0 * edgePosition * (1.0 - edgePosition) / 0.17;
+      float wake = exp(-max(-offset, 0.0) * 1.35);
+      float wakeDerivative = offset < 0.0 ? wake * 1.35 : 0.0;
+      float decay = exp(-age * 0.42)
+        * smoothstep(0.0, 0.12, age)
+        * (1.0 - smoothstep(3.4, 4.8, age));
+      float envelope = leadingEdge * wake * decay;
+      float envelopeDerivative =
+        (edgeDerivative * wake + leadingEdge * wakeDerivative) * decay;
+
       float phase = offset * 18.0;
       float wave = sin(phase);
+      float amplitude = 0.085;
+      height += amplitude * wave * envelope;
 
-      height += 0.11 * wave * envelope;
-      float radialSlope = 0.11 * envelope * (18.0 * cos(phase) - 50.0 * offset * wave);
+      // First derivative bends rays. Curvature approximates how those rays
+      // converge/diverge, so caustic BRIGHTNESS changes as well as position.
+      float radialSlope = amplitude *
+        (18.0 * cos(phase) * envelope + wave * envelopeDerivative);
       gradient += (outward / max(distanceToClick, 0.001)) * radialSlope;
+      focusing -= amplitude * 18.0 * 18.0 * wave * envelope;
     }
   }
 
-  return vec3(gradient, height);
+  return vec4(gradient, height, focusing);
 }
 
 void main() {
@@ -99,7 +120,7 @@ void main() {
   vec2 p = (uv - 0.5) * vec2(aspect, 1.0) * 4.0;
   float t = uTime;
 
-  vec3 clickRipple = clickRippleField(p, t, aspect);
+  vec4 clickRipple = clickRippleField(p, t, aspect);
   float ambientHeight = surfaceHeight(p, t);
   float h = ambientHeight + clickRipple.z;
   float epsilon = 0.027;
@@ -111,9 +132,9 @@ void main() {
   ) / epsilon + clickRipple.xy;
   vec3 normal = normalize(vec3(-slope * 1.45, 1.0));
 
-  // The water color and the caustic network sample one refracted surface.
-  // Click-ripple slope gives the light lines their own visible wavefront bend.
-  vec2 refracted = waterFlow(p, t) - slope * 0.14 - clickRipple.xy * 0.12;
+  // Light rays are bent by the same normals driving the water surface.
+  // The lingering ripple slopes continuously warp the underwater network.
+  vec2 refracted = waterFlow(p, t) - slope * 0.14 - clickRipple.xy * 0.18;
 
   float current = 0.5 + 0.5 * sin(refracted.x * 0.76 + sin(refracted.y * 0.5 - t * 0.06));
   float shadow = 0.5 + 0.5 * sin(refracted.y * 0.93 - refracted.x * 0.24 + t * 0.045);
@@ -126,9 +147,13 @@ void main() {
 
   float caustics = causticLines(refracted * 2.0 + vec2(t * 0.065, -t * 0.037), t);
   float illuminated = smoothstep(0.18, 0.84, depth);
-  float rippleEnergy = clamp(length(clickRipple.xy) * 0.24, 0.0, 1.0);
-  color += vec3(0.011, 0.155, 0.126) * caustics
-    * (0.21 + illuminated * 0.77) * (0.85 + rippleEnergy * 0.38);
+  // A disturbed surface also changes how much sunlight reaches the floor.
+  // Converging rays brighten lines; diverging rays temporarily wash them out.
+  float lightConvergence = clamp(1.0 - clickRipple.w * 0.034, 0.40, 1.80);
+  float rippleCaustics = clamp(-clickRipple.w * 0.027, 0.0, 1.0) * 0.24;
+  color += vec3(0.011, 0.155, 0.126)
+    * (caustics * lightConvergence + rippleCaustics)
+    * (0.21 + illuminated * 0.77);
 
   // A grazing light creates broken silver-green sheen and occasional warm glints.
   vec3 halfway = normalize(vec3(0.35, 0.43, 1.0));
