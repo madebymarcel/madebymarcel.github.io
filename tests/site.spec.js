@@ -6,10 +6,11 @@ test('home page renders and navigates to a lazy-loaded section', async ({ page }
 
   await page.goto('/');
   await expect(page).toHaveTitle(/Made by Marcel/);
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('Good experiences');
-  await page.getByRole('link', { name: 'Visit the lab' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Made by Marcel');
+  await page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'Lab' }).click();
   await expect(page).toHaveURL(/\/lab\/?$/);
   await expect(page.getByRole('heading', { name: 'Lab' })).toBeVisible();
+  await expect(page.locator('footer')).toHaveText(`Made by Marcel (${new Date().getFullYear()})`);
   expect(errors).toEqual([]);
 });
 
