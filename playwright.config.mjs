@@ -12,7 +12,10 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   projects: [
-    { name: 'desktop-chromium', use: { browserName: 'chromium', viewport: { width: 1440, height: 900 } } },
+    {
+      name: 'desktop-chromium',
+      use: { browserName: 'chromium', viewport: { width: 1440, height: 900 } },
+    },
     {
       name: 'mobile-chromium',
       use: {
