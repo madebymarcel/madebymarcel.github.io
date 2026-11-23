@@ -15,6 +15,8 @@ test('home remains readable with reduced motion enabled', async ({ page }) => {
 
 test('full-bleed water does not create horizontal scrolling', async ({ page }) => {
   await page.goto('/');
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+  const overflow = await page.evaluate(
+    () => globalThis.document.documentElement.scrollWidth > globalThis.innerWidth,
+  );
   expect(overflow).toBe(false);
 });
