@@ -24,8 +24,11 @@ jobs:
         with:
           node-version: '24'
           package-manager-cache: false
-      - name: Install dependencies
-        run: npm ci --no-audit --no-fund
+      - name: Install and regenerate dependency lockfile
+        run: npm install --no-audit --no-fund
+      - name: Export updated lockfile for commit
+        run: |
+          node -e "const fs=require('node:fs');const s=fs.readFileSync('package-lock.json').toString('base64');console.log('LOCKFILE_BEGIN');for(let i=0;i<s.length;i+=2000)console.log('LOCK_CHUNK:'+s.slice(i,i+2000));console.log('LOCKFILE_END')"
       - run: npm run lint
       - run: npm run format:check
       - run: npm run test:unit

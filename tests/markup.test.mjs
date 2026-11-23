@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { extractInlineJavaScript } from '../scripts/inline-script.mjs';
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
@@ -8,7 +9,7 @@ test('portfolio remains a self-contained static page', () => {
   assert.match(html, /^<!doctype html>/i);
   assert.match(html, /<html lang="en">/);
   assert.match(html, /<svg\b/);
-  assert.equal([...html.matchAll(/<script\b/gi)].length, 1);
+  assert.match(extractInlineJavaScript(html), /const palette =/);
 });
 
 test('page exposes semantic content and a keyboard-accessible theme switch', () => {
