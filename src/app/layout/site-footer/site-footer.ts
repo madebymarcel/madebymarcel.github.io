@@ -4,7 +4,7 @@ import { Component } from '@angular/core';
   selector: 'app-site-footer',
   template: `
     <footer class="site-footer">
-      <p>Made by Marcel. Designed and engineered with care.</p>
+      <p>Made by Marcel ({{ year }})</p>
     </footer>
   `,
   styles: [
@@ -20,4 +20,6 @@ import { Component } from '@angular/core';
     `,
   ],
 })
-export class SiteFooter {}
+export class SiteFooter {
+  protected readonly year = new Date().getFullYear();
+}
