@@ -10,6 +10,25 @@
       content="Made by Marcel. Frontend engineering, selected work, and a playground for thoughtful web experiences."
     />
     <meta name="theme-color" content="#f8f7f4" />
+    <!-- Runs before the stylesheet and Angular to avoid a wrong-theme first paint. -->
+    <script>
+      (() => {
+        const storageKey = 'madebymarcel-theme';
+        let stored = null;
+        try {
+          stored = window.localStorage.getItem(storageKey);
+        } catch {
+          // Private modes may disallow access to local storage.
+        }
+        const systemDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
+        const mode =
+          stored === 'light' || stored === 'dark' ? stored : systemDark ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', mode);
+        document
+          .querySelector('meta[name="theme-color"]')
+          ?.setAttribute('content', mode === 'dark' ? '#15141b' : '#f8f7f4');
+      })();
+    </script>
   </head>
   <body>
     <app-root></app-root>
