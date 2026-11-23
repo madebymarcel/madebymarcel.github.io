@@ -23,7 +23,7 @@ npm start
 | `npm run test:e2e`     | Playwright desktop/mobile and axe accessibility |
 | `npm run lighthouse`   | Lighthouse performance and quality budgets      |
 
-For browser tests, first install Chromium: `npx playwright install chromium`. Then use `npm run test:e2e`.
+For browser tests, install all browsers used by the Playwright matrix: `npx playwright install chromium firefox webkit`. Then run `npm run test:e2e`.
 
 Read [engineering principles](docs/engineering-principles.md) and [architecture decisions](docs/decisions/0001-angular-static-site.md).
 
@@ -48,4 +48,4 @@ The previous standalone SVG parallax homepage is preserved in `prototypes/parall
 
 PRs into `main` must pass `Validate website`. Production builds deploy to GitHub Pages only after a successful `main` build. CodeQL and Dependabot remain enabled.
 
-Angular prerenders to `dist/portfolio/browser`; GitHub Pages publishes that directory. Production is unaffected until this PR merges.
+Angular prerenders to `dist/portfolio/browser`; GitHub Pages publishes that directory. The Pages deployment workflow publishes the statically prerendered Angular application after successful validation on `main`.
