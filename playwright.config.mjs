@@ -17,12 +17,31 @@ export default defineConfig({
       use: { browserName: 'chromium', viewport: { width: 1440, height: 900 } },
     },
     {
+      name: 'desktop-firefox',
+      use: { browserName: 'firefox', viewport: { width: 1440, height: 900 } },
+    },
+    {
+      name: 'desktop-webkit',
+      use: { browserName: 'webkit', viewport: { width: 1440, height: 900 } },
+    },
+    {
       name: 'mobile-chromium',
       use: {
         browserName: 'chromium',
         viewport: { width: 390, height: 844 },
         isMobile: true,
         hasTouch: true,
+        deviceScaleFactor: 2,
+      },
+    },
+    {
+      name: 'mobile-webkit',
+      use: {
+        browserName: 'webkit',
+        viewport: { width: 390, height: 844 },
+        isMobile: true,
+        hasTouch: true,
+        deviceScaleFactor: 3,
       },
     },
   ],
