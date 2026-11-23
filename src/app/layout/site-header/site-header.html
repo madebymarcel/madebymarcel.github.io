@@ -3,24 +3,37 @@
     <a class="wordmark" routerLink="/"
       >made<span>by</span>marcel<span class="wordmark-dot">.</span></a
     >
-    <nav aria-label="Primary">
-      @for (item of navigation; track item.path) {
-      <a
-        [routerLink]="item.path"
-        routerLinkActive="active"
-        [routerLinkActiveOptions]="{ exact: true }"
-        ariaCurrentWhenActive="page"
-        >{{ item.label }}</a
-      >
-      }
-    </nav>
     <button
-      class="theme-toggle"
+      #menuButton
+      class="menu-toggle"
       type="button"
-      [attr.aria-pressed]="theme.mode() === 'dark'"
-      (click)="theme.toggle()"
+      aria-controls="header-actions"
+      [attr.aria-expanded]="menuOpen()"
+      (click)="toggleMenu()"
     >
-      Dark mode
+      Menu
     </button>
+    <div id="header-actions" class="header-actions" [class.is-open]="menuOpen()">
+      <nav aria-label="Primary">
+        @for (item of navigation; track item.path) {
+        <a
+          [routerLink]="item.path"
+          routerLinkActive="active"
+          [routerLinkActiveOptions]="{ exact: true }"
+          ariaCurrentWhenActive="page"
+          (click)="closeMenu()"
+          >{{ item.label }}</a
+        >
+        }
+      </nav>
+      <button
+        class="theme-toggle"
+        type="button"
+        [attr.aria-pressed]="theme.mode() === 'dark'"
+        (click)="theme.toggle()"
+      >
+        Dark mode
+      </button>
+    </div>
   </div>
 </header>

@@ -7,6 +7,10 @@ test('home page renders and navigates to a lazy-loaded section', async ({ page }
   await page.goto('/');
   await expect(page).toHaveTitle(/Made by Marcel/);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Made by Marcel');
+
+  const menu = page.getByRole('button', { name: 'Menu' });
+  if (await menu.isVisible()) await menu.click();
+
   await page
     .getByRole('navigation', { name: 'Primary' })
     .getByRole('link', { name: 'Lab' })
@@ -19,6 +23,10 @@ test('home page renders and navigates to a lazy-loaded section', async ({ page }
 
 test('theme control changes the active color mode', async ({ page }) => {
   await page.goto('/');
+
+  const menu = page.getByRole('button', { name: 'Menu' });
+  if (await menu.isVisible()) await menu.click();
+
   await page.getByRole('button', { name: 'Dark mode' }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await page.getByRole('button', { name: 'Dark mode' }).click();
