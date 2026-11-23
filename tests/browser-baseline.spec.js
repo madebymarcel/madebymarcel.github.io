@@ -4,7 +4,7 @@ test('normalizes editable controls without triggering iOS small-text zoom', asyn
   await page.goto('/');
 
   const computed = await page.evaluate(() => {
-    const host = document.createElement('div');
+    const host = globalThis.document.createElement('div');
     host.innerHTML = `
       <label for="baseline-input">Input</label>
       <input id="baseline-input" />
@@ -13,10 +13,10 @@ test('normalizes editable controls without triggering iOS small-text zoom', asyn
       <label for="baseline-textarea">Textarea</label>
       <textarea id="baseline-textarea"></textarea>
     `;
-    document.body.append(host);
+    globalThis.document.body.append(host);
 
     const controls = [...host.querySelectorAll('input, select, textarea')];
-    const sizes = controls.map((element) => Number.parseFloat(getComputedStyle(element).fontSize));
+    const sizes = controls.map((element) => Number.parseFloat(globalThis.getComputedStyle(element).fontSize));
     host.remove();
     return sizes;
   });
@@ -35,7 +35,7 @@ test('preserves browser zoom and allows tap manipulation', async ({ page }) => {
 
   const touchAction = await page
     .getByRole('button', { name: 'Dark mode' })
-    .evaluate((button) => getComputedStyle(button).touchAction);
+    .evaluate((button) => globalThis.getComputedStyle(button).touchAction);
   expect(touchAction).toBe('manipulation');
 });
 
@@ -45,7 +45,7 @@ for (const width of [320, 390]) {
     await page.goto('/');
 
     const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      () => globalThis.document.documentElement.scrollWidth - globalThis.document.documentElement.clientWidth,
     );
     expect(overflow).toBeLessThanOrEqual(1);
   });
