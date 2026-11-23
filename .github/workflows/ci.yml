@@ -31,9 +31,10 @@ jobs:
       - run: npm run format:check
       - run: npm run test:unit
       - run: npm run build
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install --with-deps chromium firefox webkit
       - run: npm run test:e2e
       - run: npm run lighthouse
+      - run: npx lhci autorun --config=./lighthouserc.mobile.cjs
       - name: Upload test and Lighthouse reports
         if: always()
         uses: actions/upload-artifact@v7
