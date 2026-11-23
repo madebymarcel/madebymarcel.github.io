@@ -15,8 +15,6 @@ precision mediump float;
 
 uniform vec2 uResolution;
 uniform float uTime;
-uniform vec2 uPointer;
-uniform float uPointerStrength;
 uniform vec3 uRipples[4];
 
 float hash(vec2 p) {
@@ -54,31 +52,45 @@ float causticLines(vec2 p, float t) {
   return 1.0 - smoothstep(0.025, 0.16, edge);
 }
 
-float surfaceHeight(vec2 p, float t, float aspect) {
-  vec2 warped = p + 0.13 * sin(vec2(p.y * 1.25 + t * 0.20, p.x * 0.95 - t * 0.13));
+// Ambient waves and light bands use the same slowly moving water coordinates.
+vec2 waterFlow(vec2 p, float t) {
+  return p + 0.13 * sin(vec2(p.y * 1.25 + t * 0.20, p.x * 0.95 - t * 0.13));
+}
+
+float surfaceHeight(vec2 p, float t) {
+  vec2 warped = waterFlow(p, t);
   float h = 0.0;
   h += 0.24 * sin(dot(warped, vec2(1.06, 0.30)) * 2.25 + t * 0.38);
   h += 0.16 * sin(dot(warped, vec2(-0.44, 1.1)) * 3.7 - t * 0.33);
   h += 0.072 * sin(dot(warped, vec2(0.72, 0.95)) * 6.0 + t * 0.57);
   h += 0.028 * sin(dot(warped, vec2(-1.0, 0.50)) * 11.5 - t * 0.75);
+  return h;
+}
 
-  // Touch and click pulses disturb the same surface as the ambient waves.
+// Return click-generated slope (xy) and height (z) from the same wavefront.
+// Analytic slope avoids resampling every ripple for each finite difference.
+vec3 clickRippleField(vec2 p, float t, float aspect) {
+  vec2 gradient = vec2(0.0);
+  float height = 0.0;
+
   for (int i = 0; i < 4; i++) {
     float age = t - uRipples[i].z;
     if (age >= 0.0 && age < 3.4) {
       vec2 center = (uRipples[i].xy - 0.5) * vec2(aspect, 1.0) * 4.0;
-      float distanceToClick = length(p - center);
-      float front = age * 0.93;
-      float envelope = exp(-pow((distanceToClick - front) * 5.0, 2.0)) * exp(-age * 0.65);
-      h += 0.11 * sin((distanceToClick - front) * 18.0) * envelope;
+      vec2 outward = p - center;
+      float distanceToClick = length(outward);
+      float offset = distanceToClick - age * 0.93;
+      float envelope = exp(-pow(offset * 5.0, 2.0)) * exp(-age * 0.65);
+      float phase = offset * 18.0;
+      float wave = sin(phase);
+
+      height += 0.11 * wave * envelope;
+      float radialSlope = 0.11 * envelope * (18.0 * cos(phase) - 50.0 * offset * wave);
+      gradient += (outward / max(distanceToClick, 0.001)) * radialSlope;
     }
   }
 
-  vec2 mouse = (uPointer - 0.5) * vec2(aspect, 1.0) * 4.0;
-  float mouseDistance = length(p - mouse);
-  h += 0.025 * sin(mouseDistance * 19.0 - t * 3.0)
-    * exp(-mouseDistance * 3.5) * uPointerStrength;
-  return h;
+  return vec3(gradient, height);
 }
 
 void main() {
@@ -87,19 +99,24 @@ void main() {
   vec2 p = (uv - 0.5) * vec2(aspect, 1.0) * 4.0;
   float t = uTime;
 
-  float h = surfaceHeight(p, t, aspect);
+  vec3 clickRipple = clickRippleField(p, t, aspect);
+  float ambientHeight = surfaceHeight(p, t);
+  float h = ambientHeight + clickRipple.z;
   float epsilon = 0.027;
   vec2 slope = (
     vec2(
-      surfaceHeight(p + vec2(epsilon, 0.0), t, aspect),
-      surfaceHeight(p + vec2(0.0, epsilon), t, aspect)
-    ) - h
-  ) / epsilon;
+      surfaceHeight(p + vec2(epsilon, 0.0), t),
+      surfaceHeight(p + vec2(0.0, epsilon), t)
+    ) - ambientHeight
+  ) / epsilon + clickRipple.xy;
   vec3 normal = normalize(vec3(-slope * 1.45, 1.0));
 
-  // Large soft areas of dark depth and transparent-looking teal.
-  float current = 0.5 + 0.5 * sin(p.x * 0.76 + sin(p.y * 0.5 - t * 0.06));
-  float shadow = 0.5 + 0.5 * sin(p.y * 0.93 - p.x * 0.24 + t * 0.045);
+  // The water color and the caustic network sample one refracted surface.
+  // Click-ripple slope gives the light lines their own visible wavefront bend.
+  vec2 refracted = waterFlow(p, t) - slope * 0.14 - clickRipple.xy * 0.12;
+
+  float current = 0.5 + 0.5 * sin(refracted.x * 0.76 + sin(refracted.y * 0.5 - t * 0.06));
+  float shadow = 0.5 + 0.5 * sin(refracted.y * 0.93 - refracted.x * 0.24 + t * 0.045);
   float depth = clamp(current * 0.52 + shadow * 0.48 + h * 0.11, 0.0, 1.0);
   vec3 color = mix(
     vec3(0.002, 0.038, 0.049),
@@ -107,12 +124,11 @@ void main() {
     0.12 + depth * 0.67
   );
 
-  // The caustic network drifts through refracted wave coordinates.
-  vec2 flow = p + 0.22 * sin(vec2(p.y * 1.47 + t * 0.2, p.x * 1.14 - t * 0.13));
-  flow += normal.xy * 0.17;
-  float caustics = causticLines(flow * 2.0 + vec2(t * 0.065, -t * 0.037), t);
+  float caustics = causticLines(refracted * 2.0 + vec2(t * 0.065, -t * 0.037), t);
   float illuminated = smoothstep(0.18, 0.84, depth);
-  color += vec3(0.012, 0.17, 0.137) * caustics * (0.21 + illuminated * 0.77);
+  float rippleEnergy = clamp(length(clickRipple.xy) * 0.24, 0.0, 1.0);
+  color += vec3(0.011, 0.155, 0.126) * caustics
+    * (0.21 + illuminated * 0.77) * (0.85 + rippleEnergy * 0.38);
 
   // A grazing light creates broken silver-green sheen and occasional warm glints.
   vec3 halfway = normalize(vec3(0.35, 0.43, 1.0));
@@ -203,13 +219,10 @@ export function startWaterShader(canvas: HTMLCanvasElement): () => void {
 
   const resolutionLocation = gl.getUniformLocation(program, 'uResolution');
   const timeLocation = gl.getUniformLocation(program, 'uTime');
-  const pointerLocation = gl.getUniformLocation(program, 'uPointer');
-  const pointerStrengthLocation = gl.getUniformLocation(program, 'uPointerStrength');
   const ripplesLocation = gl.getUniformLocation(program, 'uRipples[0]');
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const rings: Ripple[] = [];
   const rippleUniform = new Float32Array(12);
-  const pointer = { x: 0.5, y: 0.5, strength: 0 };
   const startedAt = performance.now();
   let frame = 0;
   let destroyed = false;
@@ -248,11 +261,8 @@ export function startWaterShader(canvas: HTMLCanvasElement): () => void {
     gl.useProgram(program);
     gl.uniform2f(resolutionLocation, canvas.width, canvas.height);
     gl.uniform1f(timeLocation, time);
-    gl.uniform2f(pointerLocation, pointer.x, pointer.y);
-    gl.uniform1f(pointerStrengthLocation, reducedMotion.matches ? 0 : pointer.strength);
     gl.uniform3fv(ripplesLocation, rippleUniform);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
-    pointer.strength *= 0.94;
     if (!reducedMotion.matches) frame = requestAnimationFrame(render);
   };
 
@@ -284,14 +294,6 @@ export function startWaterShader(canvas: HTMLCanvasElement): () => void {
     };
   };
 
-  const onMove = (event: PointerEvent) => {
-    if (reducedMotion.matches) return;
-    const position = eventPosition(event);
-    if (!position) return;
-    pointer.x = position.x;
-    pointer.y = position.y;
-    pointer.strength = 1;
-  };
   const onDown = (event: PointerEvent) => {
     if (reducedMotion.matches) return;
     const position = eventPosition(event);
@@ -312,7 +314,6 @@ export function startWaterShader(canvas: HTMLCanvasElement): () => void {
   });
   resize();
   observer.observe(canvas);
-  window.addEventListener('pointermove', onMove, { passive: true });
   window.addEventListener('pointerdown', onDown, { passive: true });
   document.addEventListener('visibilitychange', refreshAnimation);
   reducedMotion.addEventListener('change', refreshAnimation);
@@ -323,7 +324,6 @@ export function startWaterShader(canvas: HTMLCanvasElement): () => void {
     destroyed = true;
     stop();
     observer.disconnect();
-    window.removeEventListener('pointermove', onMove);
     window.removeEventListener('pointerdown', onDown);
     document.removeEventListener('visibilitychange', refreshAnimation);
     reducedMotion.removeEventListener('change', refreshAnimation);
