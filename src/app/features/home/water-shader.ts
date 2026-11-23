@@ -15,7 +15,6 @@ precision mediump float;
 
 uniform vec2 uResolution;
 uniform float uTime;
-uniform vec3 uRipples[4];
 
 float hash(vec2 p) {
   return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -67,74 +66,24 @@ float surfaceHeight(vec2 p, float t) {
   return h;
 }
 
-// Click ripples are expanding wave PACKETS, not just one thin wavefront.
-// Their trailing wake keeps the surface, refracted caustics, and light focus
-// disturbed together until it dissipates. xy = slope, z = height, w = focus.
-vec4 clickRippleField(vec2 p, float t, float aspect) {
-  vec2 gradient = vec2(0.0);
-  float height = 0.0;
-  float focusing = 0.0;
-
-  for (int i = 0; i < 4; i++) {
-    float age = t - uRipples[i].z;
-    if (age >= 0.0 && age < 4.8) {
-      vec2 center = (uRipples[i].xy - 0.5) * vec2(aspect, 1.0) * 4.0;
-      vec2 outward = p - center;
-      float distanceToClick = length(outward);
-      float offset = distanceToClick - age * 0.93;
-
-      // A soft leading edge and a much longer, decaying oscillating wake.
-      // Unlike a thin Gaussian ring, the area behind the crest stays disturbed.
-      float edgePosition = clamp((offset - 0.035) / 0.17, 0.0, 1.0);
-      float leadingEdge = 1.0 - edgePosition * edgePosition * (3.0 - 2.0 * edgePosition);
-      float edgeDerivative = -6.0 * edgePosition * (1.0 - edgePosition) / 0.17;
-      float wake = exp(-max(-offset, 0.0) * 1.35);
-      float wakeDerivative = offset < 0.0 ? wake * 1.35 : 0.0;
-      float decay = exp(-age * 0.42)
-        * smoothstep(0.0, 0.12, age)
-        * (1.0 - smoothstep(3.4, 4.8, age));
-      float envelope = leadingEdge * wake * decay;
-      float envelopeDerivative =
-        (edgeDerivative * wake + leadingEdge * wakeDerivative) * decay;
-
-      float phase = offset * 18.0;
-      float wave = sin(phase);
-      float amplitude = 0.085;
-      height += amplitude * wave * envelope;
-
-      // First derivative bends rays. Curvature approximates how those rays
-      // converge/diverge, so caustic BRIGHTNESS changes as well as position.
-      float radialSlope = amplitude *
-        (18.0 * cos(phase) * envelope + wave * envelopeDerivative);
-      gradient += (outward / max(distanceToClick, 0.001)) * radialSlope;
-      focusing -= amplitude * 18.0 * 18.0 * wave * envelope;
-    }
-  }
-
-  return vec4(gradient, height, focusing);
-}
-
 void main() {
   vec2 uv = gl_FragCoord.xy / uResolution;
   float aspect = uResolution.x / uResolution.y;
   vec2 p = (uv - 0.5) * vec2(aspect, 1.0) * 4.0;
   float t = uTime;
 
-  vec4 clickRipple = clickRippleField(p, t, aspect);
-  float ambientHeight = surfaceHeight(p, t);
-  float h = ambientHeight + clickRipple.z;
+  float h = surfaceHeight(p, t);
   float epsilon = 0.027;
   vec2 slope = (
     vec2(
       surfaceHeight(p + vec2(epsilon, 0.0), t),
       surfaceHeight(p + vec2(0.0, epsilon), t)
-    ) - ambientHeight
-  ) / epsilon + clickRipple.xy;
+    ) - h
+  ) / epsilon;
   vec3 normal = normalize(vec3(-slope * 1.45, 1.0));
 
-  // Light rays are bent by the same normals driving the water surface.
-  // The lingering ripple slopes continuously warp the underwater network.
-  vec2 refracted = waterFlow(p, t) - slope * 0.14 - clickRipple.xy * 0.18;
+  // Ambient surface normals continuously bend the light beneath the water.
+  vec2 refracted = waterFlow(p, t) - slope * 0.14;
 
   float current = 0.5 + 0.5 * sin(refracted.x * 0.76 + sin(refracted.y * 0.5 - t * 0.06));
   float shadow = 0.5 + 0.5 * sin(refracted.y * 0.93 - refracted.x * 0.24 + t * 0.045);
@@ -147,12 +96,7 @@ void main() {
 
   float caustics = causticLines(refracted * 2.0 + vec2(t * 0.065, -t * 0.037), t);
   float illuminated = smoothstep(0.18, 0.84, depth);
-  // A disturbed surface also changes how much sunlight reaches the floor.
-  // Converging rays brighten lines; diverging rays temporarily wash them out.
-  float lightConvergence = clamp(1.0 - clickRipple.w * 0.034, 0.40, 1.80);
-  float rippleCaustics = clamp(-clickRipple.w * 0.027, 0.0, 1.0) * 0.24;
-  color += vec3(0.011, 0.155, 0.126)
-    * (caustics * lightConvergence + rippleCaustics)
+  color += vec3(0.011, 0.155, 0.126) * caustics
     * (0.21 + illuminated * 0.77);
 
   // A grazing light creates broken silver-green sheen and occasional warm glints.
@@ -171,12 +115,6 @@ void main() {
   gl_FragColor = vec4(pow(color, vec3(0.94)), 1.0);
 }
 `;
-
-interface Ripple {
-  x: number;
-  y: number;
-  startedAt: number;
-}
 
 function compile(gl: WebGLRenderingContext, type: number, source: string): WebGLShader | null {
   const shader = gl.createShader(type);
@@ -244,10 +182,7 @@ export function startWaterShader(canvas: HTMLCanvasElement): () => void {
 
   const resolutionLocation = gl.getUniformLocation(program, 'uResolution');
   const timeLocation = gl.getUniformLocation(program, 'uTime');
-  const ripplesLocation = gl.getUniformLocation(program, 'uRipples[0]');
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-  const rings: Ripple[] = [];
-  const rippleUniform = new Float32Array(12);
   const startedAt = performance.now();
   let frame = 0;
   let destroyed = false;
@@ -277,16 +212,9 @@ export function startWaterShader(canvas: HTMLCanvasElement): () => void {
     if (destroyed || contextLost || document.hidden) return;
     if (canvas.width === 0 || canvas.height === 0) return;
     const time = reducedMotion.matches ? 0 : (timestamp - startedAt) / 1000;
-    for (let i = 0; i < 4; i++) {
-      const ring = rings[i];
-      rippleUniform[i * 3] = ring?.x ?? 0.5;
-      rippleUniform[i * 3 + 1] = ring?.y ?? 0.5;
-      rippleUniform[i * 3 + 2] = ring?.startedAt ?? -100;
-    }
     gl.useProgram(program);
     gl.uniform2f(resolutionLocation, canvas.width, canvas.height);
     gl.uniform1f(timeLocation, time);
-    gl.uniform3fv(ripplesLocation, rippleUniform);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     if (!reducedMotion.matches) frame = requestAnimationFrame(render);
   };
@@ -301,31 +229,6 @@ export function startWaterShader(canvas: HTMLCanvasElement): () => void {
     frame = requestAnimationFrame(render);
   };
 
-  const eventPosition = (event: PointerEvent): { x: number; y: number } | null => {
-    const rect = canvas.getBoundingClientRect();
-    if (
-      event.clientX < rect.left ||
-      event.clientX > rect.right ||
-      event.clientY < rect.top ||
-      event.clientY > rect.bottom ||
-      rect.width === 0 ||
-      rect.height === 0
-    ) {
-      return null;
-    }
-    return {
-      x: (event.clientX - rect.left) / rect.width,
-      y: 1 - (event.clientY - rect.top) / rect.height,
-    };
-  };
-
-  const onDown = (event: PointerEvent) => {
-    if (reducedMotion.matches) return;
-    const position = eventPosition(event);
-    if (!position) return;
-    rings.unshift({ ...position, startedAt: (performance.now() - startedAt) / 1000 });
-    rings.length = Math.min(rings.length, 4);
-  };
   const onLost = (event: Event) => {
     event.preventDefault();
     contextLost = true;
@@ -339,7 +242,6 @@ export function startWaterShader(canvas: HTMLCanvasElement): () => void {
   });
   resize();
   observer.observe(canvas);
-  window.addEventListener('pointerdown', onDown, { passive: true });
   document.addEventListener('visibilitychange', refreshAnimation);
   reducedMotion.addEventListener('change', refreshAnimation);
   canvas.addEventListener('webglcontextlost', onLost);
@@ -349,7 +251,6 @@ export function startWaterShader(canvas: HTMLCanvasElement): () => void {
     destroyed = true;
     stop();
     observer.disconnect();
-    window.removeEventListener('pointerdown', onDown);
     document.removeEventListener('visibilitychange', refreshAnimation);
     reducedMotion.removeEventListener('change', refreshAnimation);
     canvas.removeEventListener('webglcontextlost', onLost);
