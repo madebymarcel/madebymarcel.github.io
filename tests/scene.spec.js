@@ -9,7 +9,7 @@ test('renders the original parallax scene without JavaScript exceptions', async 
   await expect(page.locator('.scene-frame svg')).toBeVisible();
   expect(await page.locator('[data-parallax-layer]').count()).toBeGreaterThan(10);
 
-  await page.evaluate(() => window.scrollTo(0, window.innerHeight / 2));
+  await page.evaluate(() => globalThis.scrollTo(0, globalThis.innerHeight / 2));
   await expect(page.locator('.scene-stage')).toBeVisible();
   expect(errors).toEqual([]);
 });
