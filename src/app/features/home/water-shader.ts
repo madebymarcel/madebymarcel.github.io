@@ -140,6 +140,17 @@ export function startWaterShader(canvas: HTMLCanvasElement): () => void {
     return () => {};
   }
 
+  // Software WebGL can saturate the CPU with fragment-shader work.
+  // Leave the static CSS water fallback in place on these devices.
+  const rendererInfo = gl.getExtension('WEBGL_debug_renderer_info');
+  const renderer = String(
+    gl.getParameter(rendererInfo?.UNMASKED_RENDERER_WEBGL ?? gl.RENDERER) ?? '',
+  );
+  if (/swiftshader|llvmpipe|softpipe|software rasterizer/i.test(renderer)) {
+    canvas.style.display = 'none';
+    return () => {};
+  }
+
   const vertex = compile(gl, gl.VERTEX_SHADER, VERTEX_SHADER);
   const fragment = compile(gl, gl.FRAGMENT_SHADER, FRAGMENT_SHADER);
   if (!vertex || !fragment) {
@@ -187,15 +198,17 @@ export function startWaterShader(canvas: HTMLCanvasElement): () => void {
   let frame = 0;
   let destroyed = false;
   let contextLost = false;
+  let lastDraw = Number.NEGATIVE_INFINITY;
+  const frameInterval = 1000 / 30;
 
   const resize = () => {
     if (destroyed || contextLost) return;
     const bounds = canvas.getBoundingClientRect();
     if (bounds.width <= 0 || bounds.height <= 0) return;
-    const maxPixels = 1_600_000;
+    const maxPixels = 700_000;
     const scale = Math.min(
       window.devicePixelRatio || 1,
-      bounds.width < 768 ? 1.25 : 1.5,
+      bounds.width < 768 ? 1 : 1.25,
       Math.sqrt(maxPixels / (bounds.width * bounds.height)),
     );
     const width = Math.max(1, Math.floor(bounds.width * scale));
@@ -211,6 +224,11 @@ export function startWaterShader(canvas: HTMLCanvasElement): () => void {
     frame = 0;
     if (destroyed || contextLost || document.hidden) return;
     if (canvas.width === 0 || canvas.height === 0) return;
+    if (!reducedMotion.matches && timestamp - lastDraw < frameInterval) {
+      frame = requestAnimationFrame(render);
+      return;
+    }
+    lastDraw = timestamp;
     const time = reducedMotion.matches ? 0 : (timestamp - startedAt) / 1000;
     gl.useProgram(program);
     gl.uniform2f(resolutionLocation, canvas.width, canvas.height);
