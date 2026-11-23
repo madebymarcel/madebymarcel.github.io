@@ -107,6 +107,12 @@ a {
   overflow-wrap: break-word;
 }
 
+/* Only the homepage's water stage escapes the regular content column. */
+.site-main:has(.water-hero) {
+  max-width: none;
+  padding: 0;
+}
+
 .skip-link {
   position: absolute;
   top: -5rem;
