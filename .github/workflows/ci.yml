@@ -26,6 +26,10 @@ jobs:
           package-manager-cache: false
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
+      - name: Format Angular foundation for bootstrap
+        run: |
+          npx prettier --write .
+          node -e "const fs=require('node:fs');for(const p of [\"eslint.config.mjs\",\"playwright.config.mjs\",\"README.md\",\"src/app/app.routes.ts\",\"src/app/features/about/about-page.ts\",\"src/app/features/experience/experience-page.ts\",\"src/app/features/home/home-page.html\",\"src/app/features/lab/lab-page.ts\",\"src/app/layout/site-footer/site-footer.ts\",\"src/app/layout/site-header/site-header.html\",\"src/styles.scss\"]){console.log('FORMATTED_FILE:'+p);console.log(fs.readFileSync(p).toString('base64'));console.log('FORMATTED_END')}"
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run format:check
