@@ -1,29 +1,26 @@
-import js from '@eslint/js';
+import eslint from '@eslint/js';
+import tseslint from 'typescript-eslint';
+import angular from 'angular-eslint';
 import globals from 'globals';
 
-export default [
+export default tseslint.config(
   {
-    ignores: [
-      'node_modules/**',
-      'dist/**',
-      'playwright-report/**',
-      'test-results/**',
-      '.lighthouseci/**',
-    ],
+    ignores: ['dist/**', 'node_modules/**', '.angular/**', 'coverage/**', '.lighthouseci/**', 'playwright-report/**', 'test-results/**', 'prototypes/**'],
   },
   {
-    files: ['scripts/**/*.mjs', 'tests/**/*.{js,mjs}', '*.mjs', '*.cjs'],
+    files: ['src/**/*.ts'],
+    extends: [eslint.configs.recommended, ...tseslint.configs.recommended, ...angular.configs.tsRecommended],
+    processor: angular.processInlineTemplates,
+  },
+  {
+    files: ['src/**/*.html'],
+    extends: [...angular.configs.templateRecommended, ...angular.configs.templateAccessibility],
+  },
+  {
+    files: ['tests/**/*.js', '*.mjs', '*.cjs'],
+    extends: [eslint.configs.recommended],
     languageOptions: {
       globals: globals.node,
     },
-    rules: js.configs.recommended.rules,
   },
-  {
-    files: ['.generated/inline-script.js'],
-    languageOptions: {
-      sourceType: 'script',
-      globals: globals.browser,
-    },
-    rules: js.configs.recommended.rules,
-  },
-];
+);

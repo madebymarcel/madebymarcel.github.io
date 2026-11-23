@@ -1,0 +1,22 @@
+<header class="site-header">
+  <div class="header-inner">
+    <a class="wordmark" routerLink="/" aria-label="Made by Marcel, home">made<span>by</span>marcel<span class="wordmark-dot">.</span></a>
+    <nav aria-label="Primary">
+      @for (item of navigation; track item.path) {
+        <a
+          [routerLink]="item.path"
+          routerLinkActive="active"
+          [routerLinkActiveOptions]="{ exact: true }"
+          ariaCurrentWhenActive="page"
+        >{{ item.label }}</a>
+      }
+    </nav>
+    <button
+      class="theme-toggle"
+      type="button"
+      [attr.aria-label]="theme.mode() === 'light' ? 'Switch to dark theme' : 'Switch to light theme'"
+      [attr.aria-pressed]="theme.mode() === 'dark'"
+      (click)="theme.toggle()"
+    >{{ theme.mode() === 'light' ? 'Dark' : 'Light' }} mode</button>
+  </div>
+</header>

@@ -24,9 +24,14 @@ jobs:
         with:
           node-version: '24'
           package-manager-cache: false
+      # Bootstrap the initial Angular lockfile, then restore npm ci in the final PR.
       - name: Install dependencies
-        run: npm ci --no-audit --no-fund
+        run: npm install --no-audit --no-fund
+      - name: Export bootstrap lockfile
+        run: |
+          node -e "const fs=require('node:fs');const s=fs.readFileSync('package-lock.json').toString('base64');console.log('LOCKFILE_BEGIN');for(let i=0;i<s.length;i+=2000)console.log('LOCK_CHUNK:'+s.slice(i,i+2000));console.log('LOCKFILE_END')"
       - run: npm run lint
+      - run: npm run typecheck
       - run: npm run format:check
       - run: npm run test:unit
       - run: npm run build
@@ -66,7 +71,7 @@ jobs:
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:
-          path: dist
+          path: dist/portfolio/browser
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v5
