@@ -32,23 +32,65 @@
   --border-strong: #696172;
 }
 
-* {
+/* Keep native control behavior; normalize only inconsistent browser defaults. */
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  min-width: 320px;
+}
+
+/* Avoid media forcing a layout wider than its containing element. */
+img,
+picture,
+video,
+canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+svg {
+  max-width: 100%;
 }
 
 button,
 input,
+select,
 textarea {
   font: inherit;
+  color: inherit;
+}
+
+/* iOS Safari can zoom into editable controls with text below 16 CSS pixels. */
+input,
+select,
+textarea {
+  font-size: max(1rem, 16px);
+}
+
+textarea {
+  resize: vertical;
+}
+
+/* Remove the double-tap delay without disabling pinch zoom or scrolling. */
+a,
+button,
+summary,
+input[type='button'],
+input[type='submit'] {
+  touch-action: manipulation;
 }
 
 a:focus-visible,
-button:focus-visible {
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 4px;
 }
@@ -62,6 +104,7 @@ a {
   margin: 0 auto;
   padding: 0 1.5rem;
   min-height: 55vh;
+  overflow-wrap: break-word;
 }
 
 .skip-link {
