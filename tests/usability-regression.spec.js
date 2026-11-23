@@ -28,7 +28,10 @@ test('normal links preserve browser Back and Forward navigation', async ({ page 
   const menu = page.getByRole('button', { name: 'Menu' });
   if (await menu.isVisible()) await menu.click();
 
-  await page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'About' }).click();
+  await page
+    .getByRole('navigation', { name: 'Primary' })
+    .getByRole('link', { name: 'About' })
+    .click();
   await expect(page.getByRole('heading', { name: 'About' })).toBeVisible();
 
   await page.goBack();
