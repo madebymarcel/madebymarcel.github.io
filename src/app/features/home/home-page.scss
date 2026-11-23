@@ -1,0 +1,47 @@
+:host {
+  display: block;
+}
+
+.water-hero {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  place-items: center;
+  width: 100vw;
+  min-height: max(440px, calc(100svh - 132px));
+  margin-inline: calc(50% - 50vw);
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 60% 30%, #0a4545, transparent 67%),
+    linear-gradient(145deg, #052e36, #002229 68%, #003b3b);
+  color: #f5fcfb;
+}
+
+.water-hero__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  pointer-events: none;
+}
+
+.water-hero h1 {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  padding: 1.5rem;
+  font-size: clamp(1.35rem, 3vw, 2.15rem);
+  font-weight: 300;
+  line-height: 1.3;
+  letter-spacing: 0.19em;
+  text-align: center;
+  text-shadow: 0 2px 18px #001c25;
+  text-transform: lowercase;
+}
+
+@media (max-width: 480px) {
+  .water-hero h1 {
+    letter-spacing: 0.12em;
+  }
+}
