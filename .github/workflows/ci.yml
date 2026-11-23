@@ -64,6 +64,8 @@ jobs:
         with:
           node-version: '24'
           package-manager-cache: false
+      - name: Install production build dependencies
+        run: npm ci --no-audit --no-fund
       - run: npm run build
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
