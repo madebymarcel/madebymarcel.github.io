@@ -24,7 +24,10 @@ test('navigation moves focus to the new page heading', async ({ page }) => {
   await page.goto('/');
 
   await page.getByRole('button', { name: 'Menu' }).click();
-  await page.getByRole('navigation', { name: 'Primary' }).getByRole('link', { name: 'About' }).click();
+  await page
+    .getByRole('navigation', { name: 'Primary' })
+    .getByRole('link', { name: 'About' })
+    .click();
 
   const heading = page.getByRole('heading', { name: 'About' });
   await expect(heading).toBeVisible();
