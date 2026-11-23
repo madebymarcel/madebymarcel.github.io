@@ -16,7 +16,9 @@ test('normalizes editable controls without triggering iOS small-text zoom', asyn
     globalThis.document.body.append(host);
 
     const controls = [...host.querySelectorAll('input, select, textarea')];
-    const sizes = controls.map((element) => Number.parseFloat(globalThis.getComputedStyle(element).fontSize));
+    const sizes = controls.map((element) =>
+      Number.parseFloat(globalThis.getComputedStyle(element).fontSize),
+    );
     host.remove();
     return sizes;
   });
@@ -45,7 +47,9 @@ for (const width of [320, 390]) {
     await page.goto('/');
 
     const overflow = await page.evaluate(
-      () => globalThis.document.documentElement.scrollWidth - globalThis.document.documentElement.clientWidth,
+      () =>
+        globalThis.document.documentElement.scrollWidth -
+        globalThis.document.documentElement.clientWidth,
     );
     expect(overflow).toBeLessThanOrEqual(1);
   });
