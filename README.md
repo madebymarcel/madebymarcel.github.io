@@ -43,6 +43,4 @@ Dependabot checks npm and GitHub Actions dependencies weekly. All automation use
 
 `index.html` is intentionally excluded from Prettier to avoid unintentionally reformatting or rewriting the original SVG. The JavaScript inside it **is** extracted temporarily and linted.
 
-## Initial bootstrap
-
-The first CI run temporarily uses `npm install` to generate a full `package-lock.json` in GitHub Actions. After the lockfile is committed, CI should use `npm ci` and the temporary export step should be removed.
+The dependency lockfile is committed. CI uses `npm ci` for reproducible installations.
