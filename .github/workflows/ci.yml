@@ -26,10 +26,6 @@ jobs:
           package-manager-cache: false
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
-      - name: Bootstrap Prettier output for review
-        run: |
-          npx prettier --write playwright.config.mjs README.md
-          node -e "const fs=require('node:fs');for(const p of ['playwright.config.mjs','README.md']){console.log('FORMATTED_FILE:'+p);console.log(Buffer.from(fs.readFileSync(p)).toString('base64'));console.log('FORMATTED_END')}"
       - run: npm run lint
       - run: npm run format:check
       - run: npm run test:unit
