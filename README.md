@@ -17,15 +17,15 @@ npm run serve
 
 Visit http://127.0.0.1:4173.
 
-| Command | Purpose |
-| --- | --- |
-| `npm run lint` | ESLint for tooling **and the inline page JavaScript** |
+| Command                | Purpose                                                                  |
+| ---------------------- | ------------------------------------------------------------------------ |
+| `npm run lint`         | ESLint for tooling **and the inline page JavaScript**                    |
 | `npm run format:check` | Verify formatting of tooling and docs (not the large generated SVG/HTML) |
-| `npm run format` | Format tooling and docs |
-| `npm run test:unit` | Node's built-in tests for static page invariants |
-| `npm run test:e2e` | Playwright tests on desktop and mobile Chromium |
-| `npm run lighthouse` | Lighthouse CI desktop audit; run after `npm run build` |
-| `npm run build` | Copy `index.html` unchanged to `dist/` |
+| `npm run format`       | Format tooling and docs                                                  |
+| `npm run test:unit`    | Node's built-in tests for static page invariants                         |
+| `npm run test:e2e`     | Playwright tests on desktop and mobile Chromium                          |
+| `npm run lighthouse`   | Lighthouse CI desktop audit; run after `npm run build`                   |
+| `npm run build`        | Copy `index.html` unchanged to `dist/`                                   |
 
 Install Chromium locally before the first E2E run:
 
@@ -37,7 +37,7 @@ npx playwright install chromium
 
 PRs into `main` run JavaScript linting, formatting checks, Node tests, Playwright, axe accessibility checks, Lighthouse CI and CodeQL. The Pages deployment only runs on successful validation of `main`, never on a PR.
 
-Once the CI workflow has been merged, set **Settings → Pages → Build and deployment → Source: GitHub Actions**. Then add a GitHub repository ruleset for `main` requiring pull requests and the **Validate website** status check (plus CodeQL if its checks are enabled). GitHub App access cannot administer branch protection or Pages settings from this integration.
+Once the CI workflow has been merged, set **Settings â Pages â Build and deployment â Source: GitHub Actions**. Then add a GitHub repository ruleset for `main` requiring pull requests and the **Validate website** status check (plus CodeQL if its checks are enabled). GitHub App access cannot administer branch protection or Pages settings from this integration.
 
 Dependabot checks npm and GitHub Actions dependencies weekly. All automation uses GitHub Actions on the free public repository.
 
