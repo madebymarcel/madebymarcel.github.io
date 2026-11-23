@@ -35,6 +35,35 @@ test('navigation moves focus to the new page heading', async ({ page }) => {
   await expect(page.getByRole('navigation', { name: 'Primary' })).toBeHidden();
 });
 
+test('reselecting the active mobile page restores visible keyboard focus', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/about/');
+
+  const menu = page.getByRole('button', { name: 'Menu' });
+  await menu.click();
+  await page
+    .getByRole('navigation', { name: 'Primary' })
+    .getByRole('link', { name: 'About' })
+    .click();
+
+  await expect(page.getByRole('heading', { name: 'About' })).toBeVisible();
+  await expect(menu).toHaveAttribute('aria-expanded', 'false');
+  await expect(menu).toBeFocused();
+});
+
+test('the wordmark closes mobile navigation while returning home', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/about/');
+
+  const menu = page.getByRole('button', { name: 'Menu' });
+  await menu.click();
+  await page.locator('.wordmark').click();
+
+  await expect(page.getByRole('heading', { name: 'Made by Marcel' })).toBeVisible();
+  await expect(menu).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByRole('navigation', { name: 'Primary' })).toBeHidden();
+});
+
 test('unknown direct URL displays a helpful 404 page', async ({ page }) => {
   await page.goto('/this-page-is-not-here');
   await expect(page.getByRole('heading', { name: 'Page not found' })).toBeVisible();

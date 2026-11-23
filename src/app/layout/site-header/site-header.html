@@ -1,6 +1,6 @@
 <header class="site-header">
   <div class="header-inner">
-    <a class="wordmark" routerLink="/"
+    <a class="wordmark" routerLink="/" (click)="onNavigate('/')"
       >made<span>by</span>marcel<span class="wordmark-dot">.</span></a
     >
     <button
@@ -21,7 +21,7 @@
           routerLinkActive="active"
           [routerLinkActiveOptions]="{ exact: true }"
           ariaCurrentWhenActive="page"
-          (click)="closeMenu()"
+          (click)="onNavigate(item.path)"
           >{{ item.label }}</a
         >
         }

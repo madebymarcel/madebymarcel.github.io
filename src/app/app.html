@@ -1,6 +1,6 @@
-<a class="skip-link" href="#main-content">Skip to content</a>
+<a class="skip-link" [attr.href]="skipHref" (click)="skipToContent($event)">Skip to content</a>
 <app-site-header />
-<main id="main-content" class="site-main" appRouteFocus>
+<main #mainContent id="main-content" class="site-main" tabindex="-1" appRouteFocus>
   <router-outlet />
 </main>
 <app-site-footer />

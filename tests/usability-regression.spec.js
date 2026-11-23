@@ -20,7 +20,19 @@ test('skip link is keyboard accessible', async ({ page }) => {
   await page.keyboard.press('Tab');
   await expect(skip).toBeFocused();
   await expect(skip).toBeVisible();
-  await expect(skip).toHaveAttribute('href', '#main-content');
+  await expect(skip).toHaveAttribute('href', '/#main-content');
+});
+
+test('skip link retains the nested route and moves focus into main content', async ({ page }) => {
+  await page.goto('/projects/');
+  await page.keyboard.press('Tab');
+
+  const skip = page.getByRole('link', { name: 'Skip to content' });
+  await expect(skip).toBeFocused();
+  await page.keyboard.press('Enter');
+
+  await expect(page).toHaveURL(/\/projects\/?$/);
+  await expect(page.locator('#main-content')).toBeFocused();
 });
 
 test('normal links preserve browser Back and Forward navigation', async ({ page }) => {
