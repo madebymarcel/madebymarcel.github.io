@@ -35,6 +35,10 @@ test('preserves browser zoom and allows tap manipulation', async ({ page }) => {
   const viewport = page.locator('meta[name="viewport"]');
   await expect(viewport).toHaveAttribute('content', 'width=device-width, initial-scale=1');
 
+  // On narrow screens the theme control is inside the collapsed navigation.
+  const menu = page.getByRole('button', { name: 'Menu' });
+  if (await menu.isVisible()) await menu.click();
+
   const touchAction = await page
     .getByRole('button', { name: 'Dark mode' })
     .evaluate((button) => globalThis.getComputedStyle(button).touchAction);
