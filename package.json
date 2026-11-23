@@ -1,0 +1,29 @@
+{
+  "name": "madebymarcel-portfolio",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "serve": "http-server dist -a 127.0.0.1 -p 4173 -c-1",
+    "lint": "node scripts/extract-inline-js.mjs && eslint scripts tests playwright.config.mjs eslint.config.mjs .generated/inline-script.js lighthouserc.cjs",
+    "format": "prettier --write scripts tests playwright.config.mjs eslint.config.mjs lighthouserc.cjs package.json .prettierrc.json .github README.md",
+    "format:check": "prettier --check scripts tests playwright.config.mjs eslint.config.mjs lighthouserc.cjs package.json .prettierrc.json .github README.md",
+    "test:unit": "node --test tests/*.test.mjs",
+    "test:e2e": "playwright test",
+    "lighthouse": "lhci autorun"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
+    "@eslint/js": "10.0.1",
+    "@lhci/cli": "0.16.1",
+    "@playwright/test": "1.65.1",
+    "eslint": "10.15.0",
+    "globals": "17.14.0",
+    "http-server": "14.1.1",
+    "prettier": "3.10.1"
+  }
+}
