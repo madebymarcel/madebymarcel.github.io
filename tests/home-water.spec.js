@@ -12,3 +12,9 @@ test('home remains readable with reduced motion enabled', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Made by Marcel' })).toBeVisible();
 });
+
+test('full-bleed water does not create horizontal scrolling', async ({ page }) => {
+  await page.goto('/');
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+  expect(overflow).toBe(false);
+});
