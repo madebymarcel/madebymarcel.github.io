@@ -1,14 +1,17 @@
 <header class="site-header">
   <div class="header-inner">
-    <a class="wordmark" routerLink="/">made<span>by</span>marcel<span class="wordmark-dot">.</span></a>
+    <a class="wordmark" routerLink="/"
+      >made<span>by</span>marcel<span class="wordmark-dot">.</span></a
+    >
     <nav aria-label="Primary">
       @for (item of navigation; track item.path) {
-        <a
-          [routerLink]="item.path"
-          routerLinkActive="active"
-          [routerLinkActiveOptions]="{ exact: true }"
-          ariaCurrentWhenActive="page"
-        >{{ item.label }}</a>
+      <a
+        [routerLink]="item.path"
+        routerLinkActive="active"
+        [routerLinkActiveOptions]="{ exact: true }"
+        ariaCurrentWhenActive="page"
+        >{{ item.label }}</a
+      >
       }
     </nav>
     <button
@@ -16,6 +19,8 @@
       type="button"
       [attr.aria-pressed]="theme.mode() === 'dark'"
       (click)="theme.toggle()"
-    >Dark mode</button>
+    >
+      Dark mode
+    </button>
   </div>
 </header>

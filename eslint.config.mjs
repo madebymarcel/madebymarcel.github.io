@@ -5,11 +5,24 @@ import globals from 'globals';
 
 export default tseslint.config(
   {
-    ignores: ['dist/**', 'node_modules/**', '.angular/**', 'coverage/**', '.lighthouseci/**', 'playwright-report/**', 'test-results/**', 'prototypes/**'],
+    ignores: [
+      'dist/**',
+      'node_modules/**',
+      '.angular/**',
+      'coverage/**',
+      '.lighthouseci/**',
+      'playwright-report/**',
+      'test-results/**',
+      'prototypes/**',
+    ],
   },
   {
     files: ['src/**/*.ts'],
-    extends: [eslint.configs.recommended, ...tseslint.configs.recommended, ...angular.configs.tsRecommended],
+    extends: [
+      eslint.configs.recommended,
+      ...tseslint.configs.recommended,
+      ...angular.configs.tsRecommended,
+    ],
     processor: angular.processInlineTemplates,
   },
   {

@@ -13,15 +13,15 @@ npm start
 
 ## Quality gates
 
-| Script | Purpose |
-| --- | --- |
-| `npm run build` | Production build and static prerendering |
-| `npm run lint` | TypeScript/Angular/template rules |
-| `npm run typecheck` | Strict TypeScript checking |
-| `npm run format:check` | Check formatting |
-| `npm run test:unit` | Angular TestBed + Vitest |
-| `npm run test:e2e` | Playwright desktop/mobile and axe accessibility |
-| `npm run lighthouse` | Lighthouse performance and quality budgets |
+| Script                 | Purpose                                         |
+| ---------------------- | ----------------------------------------------- |
+| `npm run build`        | Production build and static prerendering        |
+| `npm run lint`         | TypeScript/Angular/template rules               |
+| `npm run typecheck`    | Strict TypeScript checking                      |
+| `npm run format:check` | Check formatting                                |
+| `npm run test:unit`    | Angular TestBed + Vitest                        |
+| `npm run test:e2e`     | Playwright desktop/mobile and axe accessibility |
+| `npm run lighthouse`   | Lighthouse performance and quality budgets      |
 
 For browser tests, first install Chromium: `npx playwright install chromium`. Then use `npm run test:e2e`.
 
