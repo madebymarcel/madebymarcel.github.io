@@ -12,7 +12,10 @@ test('mobile menu opens, closes on Escape and restores button focus', async ({ p
 
   await menu.click();
   await expect(navigation).toBeVisible();
-  await expect(page.locator('.menu-toggle[aria-controls]')).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('.menu-toggle[aria-controls]')).toHaveAttribute(
+    'aria-expanded',
+    'true',
+  );
 
   await page.keyboard.press('Escape');
   await expect(navigation).toBeHidden();
