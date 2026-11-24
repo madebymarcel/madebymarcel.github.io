@@ -3,7 +3,7 @@
 </div>
 <details class="composition ds-card">
   <summary>View layout composition</summary>
-  <pre><code>{{ markup() }}</code></pre>
+  <pre><code [textContent]="markup()"></code></pre>
 </details>
 
 <ng-template #renderNode let-node>
@@ -20,7 +20,8 @@
       }
     </div>
   </div>
-  } @else {
+  }
+  @if (node.kind === 'tile') {
   <div class="ds-card preview-tile" [class]="'preview-' + node.appearance">
     <p class="preview-title">{{ node.title }}</p>
     @if (node.description) {
