@@ -27,5 +27,6 @@ function composition(node: LayoutNode, depth = 0): string {
 export class LayoutPreview {
   readonly pattern = input.required<LayoutPattern>();
   readonly markup = computed(() => composition(this.pattern().root));
+  readonly visualTypes: readonly string[] = ['media', 'portrait', 'hero'];
   readonly chart = [28, 47, 38, 72, 58, 90];
 }

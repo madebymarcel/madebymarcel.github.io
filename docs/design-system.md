@@ -96,13 +96,14 @@ rendered design on supported browsers.
 
 The Lab offers 26 responsive composition examples grouped into editorial,
 creative, discovery and application categories. Foundations and components
-remain available as the first entry. The desktop catalogue uses a sidebar and
-the narrow-screen version uses a native grouped select.
+remain available above the catalogue. All 26 previews are stacked vertically
+in category order, using the full available page width with the shared page
+gutter. There is no sidebar, selection state or artificial preview width.
 
 Each example renders actual HTML using shared composition primitives, not
-an image of a layout. Fit, 480px and 320px preview widths constrain the
-container; viewport-based typography and spacing still follow the browser
-viewport. Content and charts are illustrative, not functioning applications.
+an image of a layout. Resize the browser to inspect responsive composition,
+typography and spacing. Content and charts are illustrative, not functioning
+applications.
 
 Additional primitives include equal splits, sidebars, bento grids,
 independent masonry columns, workspaces, layered and sticky compositions,

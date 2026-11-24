@@ -513,9 +513,7 @@ export const LAYOUT_CATEGORIES: readonly LayoutCategory[] = [
               'Review accessibility preferences',
             ]),
           ]),
-          group('ds-center', [
-            tile('Next · Review', 'Illustrative step navigation.'),
-          ]),
+          group('ds-center', [tile('Next · Review', 'Illustrative step navigation.')]),
         ]),
       },
       {

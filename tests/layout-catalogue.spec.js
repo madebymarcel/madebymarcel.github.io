@@ -1,46 +1,41 @@
 import { expect, test } from '@playwright/test';
 
-test('catalogue switches between all 26 layouts and foundations', async ({ page }) => {
+test('all 26 layout previews and foundations are rendered in one column', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/lab/');
-  const sidebar = page.getByRole('complementary', { name: 'Design system catalogue' });
-  const options = sidebar.getByRole('button');
-  await expect(options).toHaveCount(27);
-  const names = await options.allTextContents();
+  const previews = page.locator('.layout-example .preview-stage');
+  await expect(previews).toHaveCount(26);
+  await expect(page.getByRole('heading', { name: 'Design system', exact: true })).toBeVisible();
 
-  for (const name of names.slice(1)) {
-    const option = sidebar.getByRole('button', { name: name.trim(), exact: true });
-    await option.click();
-    await expect(option).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.locator('#lab-panel h2')).toHaveText(name.trim());
-    await expect(page.locator('.preview-stage')).toBeVisible();
-    await expect(page.locator('.preview-stage .preview-tile').first()).toBeVisible();
+  const bounds = await previews.evaluateAll((items) => {
+    return items.map((item) => {
+      const rect = item.getBoundingClientRect();
+      return { width: rect.width, top: rect.top, bottom: rect.bottom };
+    });
+  });
+  for (const [index, rect] of bounds.entries()) {
+    expect(rect.width).toBeGreaterThan(1280);
+    if (index > 0) expect(rect.top).toBeGreaterThan(bounds[index - 1].bottom);
   }
 
-  await options.first().click();
-  await expect(page.getByRole('heading', { name: 'Design system', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Bento layout', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Canvas workspace', exact: true })).toBeVisible();
 });
 
-test('layout previews respond to container width and mobile selection', async ({ page }) => {
+test('all layout previews reflow when the browser becomes narrow', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/lab/');
-  await page.getByRole('button', { name: 'Bento layout', exact: true }).click();
-  const bento = page.locator('.preview-stage .ds-bento');
+  const bento = page.locator('[data-pattern="bento"] .ds-bento');
   const columns = () => {
     return bento.evaluate((element) => {
       return globalThis.getComputedStyle(element).gridTemplateColumns.split(' ').length;
     });
   };
   expect(await columns()).toBe(3);
-  await page.getByRole('button', { name: '320px', exact: true }).click();
-  expect(await columns()).toBe(1);
 
   await page.setViewportSize({ width: 320, height: 780 });
-  const menu = page.getByLabel('Catalogue entry');
-  await expect(menu).toBeVisible();
-  await menu.selectOption('editorial');
-  await expect(page.locator('#lab-panel h2')).toHaveText('Editorial layout');
-  await expect(page.locator('.preview-stage')).toBeVisible();
+  expect(await columns()).toBe(1);
+  await expect(page.locator('.layout-example .preview-stage')).toHaveCount(26);
   const overflow = await page.evaluate(
     () =>
       globalThis.document.documentElement.scrollWidth -

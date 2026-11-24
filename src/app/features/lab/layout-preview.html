@@ -26,7 +26,7 @@
     @if (node.description) {
     <p class="ds-hint">{{ node.description }}</p>
     }
-    @if (node.appearance === 'media' || node.appearance === 'portrait' || node.appearance === 'hero') {
+    @if (visualTypes.includes(node.appearance)) {
     <div class="ds-frame preview-art" aria-hidden="true"></div>
     }
     @if (node.appearance === 'list') {

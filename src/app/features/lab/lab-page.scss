@@ -1,5 +1,6 @@
 .lab-page {
   max-width: none;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-fluid-stack);
 }
 
@@ -87,84 +88,21 @@
   border-radius: var(--radius-medium);
 }
 
-.catalogue-shell {
-  display: grid;
-  gap: var(--space-fluid-stack);
-  align-items: start;
+.layout-catalogue,
+.layout-category {
+  --stack-gap: var(--space-fluid-section);
+  grid-template-columns: minmax(0, 1fr);
 }
 
-.catalogue-sidebar {
-  display: none;
-  min-inline-size: 0;
-  padding: var(--space-3);
-  border: var(--border-width) solid var(--border);
-  border-radius: var(--radius-large);
-  background: var(--surface);
-}
-
-.catalogue-heading {
-  padding: var(--space-3);
-  color: var(--muted);
-  font-size: var(--type-small);
-  font-weight: var(--weight-semibold);
-}
-
-.catalogue-option {
-  display: block;
-  inline-size: 100%;
-  min-block-size: var(--target-size);
-  padding: var(--space-3);
-  border: var(--border-width) solid transparent;
-  border-radius: var(--radius-medium);
-  background: transparent;
-  text-align: start;
-  font-size: var(--type-small);
-  cursor: pointer;
-}
-
-.catalogue-option:hover {
-  background: var(--background);
-}
-
-.catalogue-option[aria-pressed='true'] {
-  border-color: var(--accent);
-  color: var(--accent);
-  font-weight: var(--weight-semibold);
-}
-
-.catalogue-panel {
-  min-inline-size: 0;
+.layout-example {
   --stack-gap: var(--space-fluid-stack);
+  grid-template-columns: minmax(0, 1fr);
+  padding-block-start: var(--space-fluid-card);
+  border-block-start: var(--border-width) solid var(--border);
 }
 
-.preview-width {
-  inline-size: 100%;
-  min-inline-size: 0;
-  margin-inline: auto;
-}
-
-.preview-width-medium {
-  max-inline-size: var(--layout-preview-medium);
-}
-
-.preview-width-narrow {
-  max-inline-size: var(--layout-narrow);
-}
-
-@media (min-width: 64rem) {
-  .catalogue-shell {
-    grid-template-columns: var(--catalogue-width) minmax(0, 1fr);
-  }
-
-  .catalogue-sidebar {
-    display: block;
-    position: sticky;
-    inset-block-start: var(--space-4);
-    max-block-size: calc(100svh - var(--space-6));
-    overflow: auto;
-  }
-
-  .catalogue-mobile {
-    display: none;
-  }
+.layout-example h4 {
+  margin: 0;
+  font-size: var(--type-step-1);
+  line-height: var(--line-tight);
 }
