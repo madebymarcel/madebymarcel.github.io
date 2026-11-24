@@ -20,24 +20,20 @@
       }
     </div>
   </div>
-  }
-  @if (node.kind === 'tile') {
+  } @if (node.kind === 'tile') {
   <div class="ds-card preview-tile" [class]="'preview-' + node.appearance">
     <p class="preview-title">{{ node.title }}</p>
     @if (node.description) {
     <p class="ds-hint">{{ node.description }}</p>
-    }
-    @if (visualTypes.includes(node.appearance)) {
+    } @if (visualTypes.includes(node.appearance)) {
     <div class="ds-frame preview-art" aria-hidden="true"></div>
-    }
-    @if (node.appearance === 'list') {
+    } @if (node.appearance === 'list') {
     <ul class="preview-list ds-stack">
       @for (item of node.items; track $index) {
       <li>{{ item }}</li>
       }
     </ul>
-    }
-    @if (node.appearance === 'chart') {
+    } @if (node.appearance === 'chart') {
     <div class="preview-chart" aria-hidden="true">
       @for (value of chart; track $index) {
       <span [style.block-size.%]="value"></span>
