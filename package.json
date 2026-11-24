@@ -14,7 +14,7 @@
     "design:generate": "node scripts/generate-design-scales.mjs",
     "typecheck": "tsc --noEmit --project tsconfig.app.json",
     "format": "prettier --write .",
-    "format:check": "prettier --check .",
+    "format:check": "prettier --check . || (prettier src/app/features/lab/layout-preview.html && exit 1)",
     "test:unit": "ng test --watch=false",
     "test:e2e": "playwright test",
     "lighthouse": "lhci autorun"
