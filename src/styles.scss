@@ -1,37 +1,21 @@
+@use 'design-system/tokens';
+@use 'design-system/components';
+
 :root {
   /* Keep centered navigation stable when routes gain or lose a scrollbar. */
   scrollbar-gutter: stable;
   color-scheme: light;
-  --background: #f8f7f4;
-  --surface: #ffffff;
-  --text: #20212a;
-  --muted: #575965;
-  --accent: #6846a9;
-  --border: #e5e3e4;
-  --border-strong: #bab7be;
   background: var(--background);
   color: var(--text);
-  font-family:
-    Inter,
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    sans-serif;
+  font-family: var(--font-family);
+  font-size: 100%;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+  line-height: var(--line-body);
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --background: #15141b;
-  --surface: #211f29;
-  --text: #f6f3f7;
-  --muted: #c4bfcc;
-  --accent: #bca1f7;
-  --border: #36323e;
-  --border-strong: #696172;
 }
 
 /* Fallback for browsers without stable gutters. */
@@ -82,7 +66,7 @@ textarea {
 input,
 select,
 textarea {
-  font-size: max(1rem, 16px);
+  font-size: max(var(--type-body), 16px);
 }
 
 textarea {
@@ -104,8 +88,8 @@ input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
 [tabindex]:focus-visible {
-  outline: 3px solid var(--accent);
-  outline-offset: 4px;
+  outline: var(--focus-width) solid var(--focus-color);
+  outline-offset: var(--focus-offset);
 }
 
 a {
@@ -113,9 +97,9 @@ a {
 }
 
 .site-main {
-  max-width: 1120px;
+  max-width: var(--layout-max);
   margin: 0 auto;
-  padding: 0 1.5rem;
+  padding: 0 var(--space-page);
   min-height: 55vh;
   overflow-wrap: break-word;
 }
@@ -128,28 +112,43 @@ a {
 
 .skip-link {
   position: absolute;
-  top: -5rem;
-  left: 1rem;
+  top: calc(-1 * var(--space-8));
+  left: var(--space-5);
   z-index: 100;
   background: var(--surface);
   color: var(--text);
-  padding: 0.6rem;
+  padding: var(--space-3);
 }
 
 .skip-link:focus {
-  top: 1rem;
+  top: var(--space-5);
 }
 
 .content-page {
-  max-width: 750px;
-  padding: clamp(3rem, 8vw, 6rem) 0;
+  max-width: var(--reading-max);
+  padding: var(--space-section) 0;
 }
 
 .content-page h1 {
-  font-size: clamp(2.7rem, 7vw, 5rem);
-  letter-spacing: -0.065em;
-  line-height: 1.12;
+  font-size: var(--type-step-3);
+  letter-spacing: var(--tracking-display);
+  line-height: var(--line-tight);
   margin: 0;
+}
+
+.content-page h2 {
+  font-size: var(--type-step-2);
+  line-height: var(--line-tight);
+  letter-spacing: var(--tracking-tight);
+}
+
+.content-page h3 {
+  font-size: var(--type-step-1);
+  line-height: var(--line-tight);
+}
+
+.content-page :is(h2, h3, p) {
+  margin-block: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -157,7 +156,7 @@ a {
   *::before,
   *::after {
     scroll-behavior: auto !important;
-    animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
+    animation-duration: var(--duration-reduced) !important;
+    transition-duration: var(--duration-reduced) !important;
   }
 }

@@ -10,7 +10,7 @@
     "start": "ng serve",
     "build": "ng build && node scripts/prepare-pages-404.mjs",
     "serve": "http-server dist/portfolio/browser -a 127.0.0.1 -p 4173 -c-1",
-    "lint": "eslint .",
+    "lint": "eslint . && node scripts/check-design-tokens.mjs",
     "typecheck": "tsc --noEmit --project tsconfig.app.json",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

@@ -1,0 +1,126 @@
+<section class="content-page lab-page ds-stack">
+  <h1>Lab</h1>
+  <p>Experiments in mathematical, accessible and fluid interface design.</p>
+
+  <section class="ds-stack" aria-labelledby="foundations-heading">
+    <h2 id="foundations-heading">Design system</h2>
+    <p>
+      Fibonacci spacing, fluid typography and an OKLCH color palette form the foundations of Made by
+      Marcel. The theme control in the header changes every example.
+    </p>
+    <div class="ds-card ds-stack">
+      <h3>Semantic colors</h3>
+      <ul class="swatches">
+        @for (color of colors; track color.token) {
+        <li>
+          <span
+            class="swatch"
+            aria-hidden="true"
+            [style.background-color]="'var(' + color.token + ')'"
+          ></span>
+          <span>{{ color.label }}</span>
+          <code>{{ color.token }}</code>
+        </li>
+        }
+      </ul>
+    </div>
+
+    <div class="ds-card ds-stack">
+      <h3>Fibonacci spacing</h3>
+      <p class="ds-hint">Values shown at the default 16px root font size.</p>
+      <ul class="spacing-scale">
+        @for (value of spacing; track value; let index = $index) {
+        <li>
+          <span
+            class="spacing-bar"
+            aria-hidden="true"
+            [style.width]="'var(--space-' + (index + 1) + ')'"
+          ></span>
+          <span>{{ value }}px</span>
+        </li>
+        }
+      </ul>
+    </div>
+
+    <div class="ds-card ds-stack">
+      <h3>Fluid typography</h3>
+      <p class="type-display">Made by Marcel</p>
+      <p class="type-heading">A considered hierarchy</p>
+      <p class="type-subheading">Mathematical proportions</p>
+      <p>Body text stays readable at every viewport width.</p>
+      <p class="ds-hint">Smaller type for supporting information.</p>
+    </div>
+
+    <div class="ds-card ds-stack">
+      <h3>Golden-ratio layout</h3>
+      <div class="golden-layout">
+        <div class="proportion">Primary · 61.8%</div>
+        <div class="proportion">Secondary · 38.2%</div>
+      </div>
+      <p class="ds-hint">The columns stack when their container becomes too narrow.</p>
+    </div>
+  </section>
+
+  <section class="ds-stack" aria-labelledby="components-heading">
+    <h2 id="components-heading">Components</h2>
+    <div class="ds-card ds-stack">
+      <h3>Buttons and states</h3>
+      <div class="ds-cluster">
+        <button
+          class="ds-button"
+          type="button"
+          [attr.aria-pressed]="pressed()"
+          (click)="pressed.set(!pressed())"
+        >
+          Toggle example
+        </button>
+        <a class="ds-button ds-button--secondary" href="#fields-heading">Field examples</a>
+        <button class="ds-button" type="button" disabled>Disabled</button>
+      </div>
+      <p role="status">Toggle is {{ pressed() ? 'on' : 'off' }}.</p>
+    </div>
+
+    <div class="ds-card ds-stack">
+      <h3 id="fields-heading">Fields and validation</h3>
+      <p class="ds-hint">Local demonstration only. No information is sent or stored.</p>
+      <form class="ds-stack" (submit)="onSubmit($event)">
+        <div class="ds-field">
+          <label for="example-name">Example name (required)</label>
+          <input
+            class="ds-input"
+            id="example-name"
+            type="text"
+            required
+            aria-describedby="example-name-hint"
+            (input)="submitted.set(false)"
+          />
+          <p class="ds-hint" id="example-name-hint">Enter any example name.</p>
+        </div>
+        <div class="ds-field">
+          <label for="example-select">Example selection</label>
+          <select class="ds-input" id="example-select">
+            <option>Option one</option>
+            <option>Option two</option>
+          </select>
+        </div>
+        <div class="ds-cluster">
+          <button class="ds-button" type="submit">Validate example</button>
+          <p class="ds-status" role="status">{{ submitted() ? 'Example validated.' : '' }}</p>
+        </div>
+      </form>
+      <div class="ds-field">
+        <label for="invalid-example">Invalid field example</label>
+        <input
+          class="ds-input"
+          id="invalid-example"
+          type="text"
+          value="Invalid"
+          readonly
+          aria-invalid="true"
+          aria-describedby="invalid-example-error"
+        />
+        <p class="ds-error" id="invalid-example-error">Example error: this value is not valid.</p>
+      </div>
+    </div>
+  </section>
+</section>

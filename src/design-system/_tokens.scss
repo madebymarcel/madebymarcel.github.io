@@ -1,0 +1,123 @@
+// Primitive values and semantic aliases are deliberately kept in this one file.
+:root {
+  // Neutral and brand palettes. The OKLCH values remain within the sRGB gamut.
+  --color-paper: oklch(97.61% 0.0041 91.45);
+  --color-white: oklch(100% 0 0);
+  --color-ink: oklch(25.07% 0.017 280.1);
+  --color-muted-light: oklch(46.66% 0.0195 278.11);
+  --color-night: oklch(19.57% 0.014 291.6);
+  --color-night-surface: oklch(24.6% 0.019 294.13);
+  --color-night-text: oklch(96.76% 0.0062 317.75);
+  --color-night-muted: oklch(81.26% 0.0188 303.35);
+  --color-violet-light: oklch(84.48% 0.083 297.81);
+  --color-violet-soft: oklch(76.49% 0.1235 297.86);
+  --color-violet: oklch(48.27% 0.1526 296.02);
+  --color-violet-deep: oklch(40.54% 0.1331 296.67);
+  --color-border-light: oklch(91.77% 0.0025 345.22);
+  --color-border-dark: oklch(32.61% 0.0216 300.42);
+  --color-control-light: oklch(56.5% 0.0156 299.57);
+  --color-control-dark: oklch(64.82% 0.0325 304.87);
+  --color-teal-deep: oklch(46.04% 0.0773 181.58);
+  --color-teal-soft: oklch(81.89% 0.0839 180.29);
+  --color-red-deep: oklch(48.62% 0.1512 16.07);
+  --color-red-soft: oklch(83.94% 0.0908 9.78);
+  --color-amber-deep: oklch(47.7% 0.0995 69.64);
+  --color-amber-soft: oklch(86.54% 0.1053 83.47);
+
+  // Semantic roles: components consume these instead of palette primitives.
+  --background: var(--color-paper);
+  --surface: var(--color-white);
+  --text: var(--color-ink);
+  --muted: var(--color-muted-light);
+  --accent: var(--color-violet);
+  --accent-hover: var(--color-violet-deep);
+  --on-accent: var(--color-white);
+  --border: var(--color-border-light);
+  --border-strong: var(--color-control-light);
+  --success: var(--color-teal-deep);
+  --danger: var(--color-red-deep);
+  --warning: var(--color-amber-deep);
+  --focus-color: var(--accent);
+  --overlay: rgb(0 0 0 / 38%);
+
+  // Fibonacci numbers in rem, equivalent to 3, 5, 8, 13, 21, 34, 55 and 89px
+  // at the default 16px root size. Respect user-selected root font sizing.
+  --space-1: 0.1875rem;
+  --space-2: 0.3125rem;
+  --space-3: 0.5rem;
+  --space-4: 0.8125rem;
+  --space-5: 1.3125rem;
+  --space-6: 2.125rem;
+  --space-7: 3.4375rem;
+  --space-8: 5.5625rem;
+  --space-page: clamp(var(--space-5), 0.75rem + 2vw, var(--space-6));
+  --space-section: clamp(var(--space-6), 1rem + 4vw, var(--space-8));
+
+  // Fluid modular type scale: 1.25 at 320px, 1.618 at 1280px.
+  --type-small: 0.875rem;
+  --type-body: 1rem;
+  --type-step-1: clamp(1.25rem, 1.1273rem + 0.6133vw, 1.618rem);
+  --type-step-2: clamp(1.5625rem, 1.2107rem + 1.7592vw, 2.618rem);
+  --type-step-3: clamp(1.9531rem, 1.1921rem + 3.8048vw, 4.236rem);
+  --font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --weight-light: 300;
+  --weight-regular: 400;
+  --weight-semibold: 600;
+  --weight-bold: 800;
+  --line-body: 1.55;
+  --line-tight: 1.12;
+  --tracking-tight: -0.035em;
+  --tracking-display: -0.055em;
+
+  // Layout, geometry and interaction. Accessibility minima are not scaled down.
+  --layout-max: 70rem;
+  --reading-max: 70ch;
+  --drawer-width: 22rem;
+  --ratio-golden: 1.618fr;
+  --target-size: 2.75rem;
+  --radius-small: var(--space-2);
+  --radius-medium: var(--space-3);
+  --radius-large: var(--space-4);
+  --radius-pill: 999px;
+  --border-width: 1px;
+  --focus-width: 3px;
+  --focus-offset: 4px;
+  --shadow-drawer: -8px 0 32px rgb(0 0 0 / 15%);
+  --duration-fast: 120ms;
+  --duration-standard: 180ms;
+  --duration-reduced: 0.01ms;
+  --ease-standard: ease-out;
+
+  // Component-level defaults.
+  --button-padding-block: var(--space-3);
+  --button-padding-inline: var(--space-4);
+  --button-radius: var(--radius-pill);
+  --card-padding: var(--space-5);
+  --card-radius: var(--radius-large);
+  --field-radius: var(--radius-medium);
+
+  // The decorative water scene keeps its independent artistic palette.
+  --water-glow: #0a4545;
+  --water-start: #052e36;
+  --water-middle: #002229;
+  --water-end: #003b3b;
+  --water-text: #f5fcfb;
+  --water-shadow: #001c25;
+  --water-title-size: clamp(1.35rem, 3vw, 2.15rem);
+}
+
+:root[data-theme='dark'] {
+  --background: var(--color-night);
+  --surface: var(--color-night-surface);
+  --text: var(--color-night-text);
+  --muted: var(--color-night-muted);
+  --accent: var(--color-violet-soft);
+  --accent-hover: var(--color-violet-light);
+  --on-accent: var(--color-night);
+  --border: var(--color-border-dark);
+  --border-strong: var(--color-control-dark);
+  --success: var(--color-teal-soft);
+  --danger: var(--color-red-soft);
+  --warning: var(--color-amber-soft);
+}
