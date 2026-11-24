@@ -2,9 +2,10 @@ import { expect, test } from '@playwright/test';
 
 test('Fibonacci spacing tokens follow the documented scale', async ({ page }) => {
   await page.goto('/lab/');
-  const sizes = await page.locator('.spacing-bar').evaluateAll((bars) =>
-    bars.map((bar) => Math.round(bar.getBoundingClientRect().width)),
-  );
+  const bars = page.locator('.spacing-bar');
+  const sizes = await bars.evaluateAll((items) => {
+    return items.map((bar) => Math.round(bar.getBoundingClientRect().width));
+  });
   expect(sizes).toEqual([3, 5, 8, 13, 21, 34, 55, 89]);
 });
 
@@ -37,29 +38,22 @@ for (const theme of ['light', 'dark']) {
         return (values[0] + 0.05) / (values[1] + 0.05);
       };
 
-      return ['--background', '--surface'].flatMap((surface) => [
-        ...['--text', '--muted', '--accent', '--success', '--warning', '--danger'].map(
-          (token) => ({ token, surface, ratio: contrast(token, surface), minimum: 4.5 }),
-        ),
-        {
-          token: '--border-strong',
-          surface,
-          ratio: contrast('--border-strong', surface),
-          minimum: 3,
-        },
-        {
-          token: '--on-accent',
-          surface: '--accent',
-          ratio: contrast('--on-accent', '--accent'),
-          minimum: 4.5,
-        },
-        {
-          token: '--on-accent',
-          surface: '--accent-hover',
-          ratio: contrast('--on-accent', '--accent-hover'),
-          minimum: 4.5,
-        },
-      ]);
+      const textTokens = ['--text', '--muted', '--accent', '--success', '--warning', '--danger'];
+      const results = [];
+      const check = (token, surface, minimum) => {
+        results.push({ token, surface, ratio: contrast(token, surface), minimum });
+      };
+
+      for (const surface of ['--background', '--surface']) {
+        for (const token of textTokens) {
+          check(token, surface, 4.5);
+        }
+        check('--border-strong', surface, 3);
+      }
+
+      check('--on-accent', '--accent', 4.5);
+      check('--on-accent', '--accent-hover', 4.5);
+      return results;
     });
 
     for (const { token, surface, ratio, minimum } of ratios) {
