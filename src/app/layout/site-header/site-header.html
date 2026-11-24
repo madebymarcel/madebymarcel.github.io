@@ -26,7 +26,9 @@
   class="navigation-drawer"
   aria-label="Menu"
   (cancel)="onCancel($event)"
-  (click)="onDrawerClick($event)"
+  (pointerdown)="onBackdropPointerDown($event)"
+  (pointerup)="onBackdropPointerUp($event)"
+  (pointercancel)="onBackdropPointerCancel()"
 >
   <div class="drawer-content">
     <button class="drawer-close menu-toggle" type="button" (click)="closeMenu()">Close</button>

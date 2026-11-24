@@ -18,6 +18,8 @@ export class SiteHeader {
   private readonly menuButton = viewChild<ElementRef<HTMLButtonElement>>('menuButton');
   private readonly drawer = viewChild<ElementRef<HTMLDialogElement>>('drawer');
 
+  private backdropPointerId: number | null = null;
+
   readonly theme = inject(ThemeService);
   readonly menuOpen = signal(false);
   readonly navigation = [
@@ -47,6 +49,7 @@ export class SiteHeader {
     const drawer = this.drawer()?.nativeElement;
     if (!drawer?.open) return;
 
+    this.backdropPointerId = null;
     drawer.close();
     this.menuOpen.set(false);
     this.menuButton()?.nativeElement.focus();
@@ -63,19 +66,34 @@ export class SiteHeader {
     this.closeMenu();
   }
 
-  onDrawerClick(event: MouseEvent): void {
+  // The backdrop is a pointer-only dismissal surface, not a keyboard control.
+  // Keyboard users have the native Escape action and the Close button.
+  onBackdropPointerDown(event: PointerEvent): void {
+    this.backdropPointerId =
+      event.isPrimary && event.button === 0 && this.isBackdrop(event) ? event.pointerId : null;
+  }
+
+  onBackdropPointerUp(event: PointerEvent): void {
+    const startedOnBackdrop = this.backdropPointerId === event.pointerId;
+    this.backdropPointerId = null;
+    if (startedOnBackdrop && this.isBackdrop(event)) this.closeMenu();
+  }
+
+  onBackdropPointerCancel(): void {
+    this.backdropPointerId = null;
+  }
+
+  private isBackdrop(event: PointerEvent): boolean {
     const drawer = this.drawer()?.nativeElement;
-    if (!drawer || event.target !== drawer) return;
+    if (!drawer || event.target !== drawer) return false;
 
     const bounds = drawer.getBoundingClientRect();
-    if (
+    return (
       event.clientX < bounds.left ||
       event.clientX > bounds.right ||
       event.clientY < bounds.top ||
       event.clientY > bounds.bottom
-    ) {
-      this.closeMenu();
-    }
+    );
   }
 
   onResize(): void {
