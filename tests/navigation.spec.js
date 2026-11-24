@@ -12,7 +12,10 @@ test('mobile menu opens, closes on Escape and restores button focus', async ({ p
 
   await menu.click();
   await expect(navigation).toBeVisible();
-  await expect(menu).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('.menu-toggle[aria-controls]')).toHaveAttribute(
+    'aria-expanded',
+    'true',
+  );
 
   await page.keyboard.press('Escape');
   await expect(navigation).toBeHidden();
@@ -51,15 +54,15 @@ test('reselecting the active mobile page restores visible keyboard focus', async
   await expect(menu).toBeFocused();
 });
 
-test('the wordmark closes mobile navigation while returning home', async ({ page }) => {
+test('the backdrop closes mobile navigation without changing routes', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/about/');
 
   const menu = page.getByRole('button', { name: 'Menu' });
   await menu.click();
-  await page.locator('.wordmark').click();
+  await page.mouse.click(8, 120);
 
-  await expect(page.getByRole('heading', { name: 'Made by Marcel' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'About' })).toBeVisible();
   await expect(menu).toHaveAttribute('aria-expanded', 'false');
   await expect(page.getByRole('navigation', { name: 'Primary' })).toBeHidden();
 });
@@ -76,4 +79,46 @@ test('desktop navigation stays visible without the menu toggle', async ({ page }
 
   await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Menu' })).toBeHidden();
+});
+
+test('desktop navigation does not move when page overflow changes', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 900 });
+  await page.goto('/');
+  const nav = page.getByRole('navigation', { name: 'Primary' });
+  await page.locator('html').evaluate((element) => {
+    element.style.overflowY = 'hidden';
+  });
+  const before = await nav.boundingBox();
+  await page.locator('html').evaluate((element) => {
+    element.style.overflowY = 'scroll';
+  });
+  const after = await nav.boundingBox();
+  expect(before).not.toBeNull();
+  expect(after).not.toBeNull();
+  expect(Math.abs(before.x - after.x)).toBeLessThanOrEqual(1);
+});
+
+test('mobile drawer overlays content and closes with its close button', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  const main = page.locator('main');
+  const before = await main.boundingBox();
+  await page.getByRole('button', { name: 'Menu' }).click();
+  const drawer = page.getByRole('dialog', { name: 'Menu' });
+  await expect(drawer).toBeVisible();
+  await expect(drawer).toHaveCSS('position', 'fixed');
+  expect(await main.boundingBox()).toEqual(before);
+  await expect(drawer.getByRole('button', { name: 'Close' })).toBeFocused();
+  await drawer.getByRole('button', { name: 'Close' }).click();
+  await expect(drawer).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Menu' })).toBeFocused();
+});
+
+test('resizing to desktop dismisses the mobile drawer', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Menu' }).click();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(page.getByRole('dialog', { name: 'Menu' })).toBeHidden();
+  await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible();
 });

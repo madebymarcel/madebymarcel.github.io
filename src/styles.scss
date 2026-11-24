@@ -1,4 +1,6 @@
 :root {
+  /* Keep centered navigation stable when routes gain or lose a scrollbar. */
+  scrollbar-gutter: stable;
   color-scheme: light;
   --background: #f8f7f4;
   --surface: #ffffff;
@@ -30,6 +32,17 @@
   --accent: #bca1f7;
   --border: #36323e;
   --border-strong: #696172;
+}
+
+/* Fallback for browsers without stable gutters. */
+@supports not (scrollbar-gutter: stable) {
+  :root {
+    overflow-y: scroll;
+  }
+}
+
+:root:has(.navigation-drawer[open]) {
+  overflow-y: hidden;
 }
 
 /* Keep native control behavior; normalize only inconsistent browser defaults. */

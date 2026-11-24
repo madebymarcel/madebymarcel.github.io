@@ -1,39 +1,60 @@
 <header class="site-header">
   <div class="header-inner">
-    <a class="wordmark" routerLink="/" (click)="onNavigate('/')"
+    <a class="wordmark" routerLink="/" (click)="onNavigate()"
       >made<span>by</span>marcel<span class="wordmark-dot">.</span></a
     >
     <button
       #menuButton
       class="menu-toggle"
       type="button"
+      aria-haspopup="dialog"
       aria-controls="header-actions"
       [attr.aria-expanded]="menuOpen()"
-      (click)="toggleMenu()"
+      (click)="openMenu()"
     >
       Menu
     </button>
-    <div id="header-actions" class="header-actions" [class.is-open]="menuOpen()">
-      <nav aria-label="Primary">
-        @for (item of navigation; track item.path) {
-        <a
-          [routerLink]="item.path"
-          routerLinkActive="active"
-          [routerLinkActiveOptions]="{ exact: true }"
-          ariaCurrentWhenActive="page"
-          (click)="onNavigate(item.path)"
-          >{{ item.label }}</a
-        >
-        }
-      </nav>
-      <button
-        class="theme-toggle"
-        type="button"
-        [attr.aria-pressed]="theme.mode() === 'dark'"
-        (click)="theme.toggle()"
-      >
-        Dark mode
-      </button>
+    <div class="header-actions">
+      <ng-container [ngTemplateOutlet]="navigationActions" />
     </div>
   </div>
 </header>
+
+<dialog
+  #drawer
+  id="header-actions"
+  class="navigation-drawer"
+  aria-label="Menu"
+  (cancel)="onCancel($event)"
+  (pointerdown)="onBackdropPointerDown($event)"
+  (pointerup)="onBackdropPointerUp($event)"
+  (pointercancel)="onBackdropPointerCancel()"
+>
+  <div class="drawer-content">
+    <button class="drawer-close menu-toggle" type="button" (click)="closeMenu()">Close</button>
+    <ng-container [ngTemplateOutlet]="navigationActions" />
+  </div>
+</dialog>
+
+<ng-template #navigationActions>
+  <nav aria-label="Primary">
+    @for (item of navigation; track item.path) {
+    <a
+      [routerLink]="item.path"
+      routerLinkActive="active"
+      [routerLinkActiveOptions]="{ exact: true }"
+      ariaCurrentWhenActive="page"
+      (click)="onNavigate()"
+      >{{ item.label }}</a
+    >
+    }
+  </nav>
+  <button
+    class="theme-toggle"
+    type="button"
+    [attr.aria-pressed]="theme.mode() === 'dark'"
+    (click)="theme.toggle()"
+  >
+    Dark mode
+  </button>
+</ng-template>
