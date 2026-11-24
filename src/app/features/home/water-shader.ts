@@ -24,12 +24,14 @@ vec2 hash2(vec2 p) {
   return vec2(hash(p), hash(p + 19.19));
 }
 
-// Voronoi boundaries make thin, organic, refracted light networks.
-float causticLines(vec2 p, float t) {
+// Approximate distance to the bisector of the two nearest Voronoi sites.
+float causticEdge(vec2 p, float t) {
   vec2 cell = floor(p);
   vec2 local = fract(p);
   float first = 8.0;
   float second = 8.0;
+  vec2 firstDelta = vec2(0.0);
+  vec2 secondDelta = vec2(0.0);
 
   for (int y = -1; y <= 1; y++) {
     for (int x = -1; x <= 1; x++) {
@@ -40,15 +42,18 @@ float causticLines(vec2 p, float t) {
       float distanceSquared = dot(delta, delta);
       if (distanceSquared < first) {
         second = first;
+        secondDelta = firstDelta;
         first = distanceSquared;
+        firstDelta = delta;
       } else if (distanceSquared < second) {
         second = distanceSquared;
+        secondDelta = delta;
       }
     }
   }
 
-  float edge = sqrt(second) - sqrt(first);
-  return 1.0 - smoothstep(0.025, 0.16, edge);
+  // Normalize by site separation so nearby sites do not create broad ribbons.
+  return (second - first) / max(2.0 * length(secondDelta - firstDelta), 0.001);
 }
 
 // Ambient waves and light bands use the same slowly moving water coordinates.
@@ -94,10 +99,21 @@ void main() {
     0.12 + depth * 0.67
   );
 
-  float caustics = causticLines(refracted * 2.0 + vec2(t * 0.065, -t * 0.037), t);
+  float edge = causticEdge(refracted * 2.0 + vec2(t * 0.065, -t * 0.037), t);
+  // Keep the core legible at the capped canvas resolution.
+  float pixel = 8.0 / uResolution.y;
+  float core = 1.0 - smoothstep(0.006, max(0.026, pixel), edge);
+  float halo = 1.0 - smoothstep(0.018, max(0.055, pixel * 2.0), edge);
+  float focus = 0.5 + 0.5 * sin(refracted.x * 3.1 + refracted.y * 1.7 + h * 4.0);
   float illuminated = smoothstep(0.18, 0.84, depth);
-  color += vec3(0.011, 0.155, 0.126) * caustics
+  float intensity = (0.08 + 0.92 * smoothstep(0.16, 0.83, focus))
     * (0.21 + illuminated * 0.77);
+  color += vec3(0.011, 0.155, 0.126) * (core * 0.86 + halo * 0.14) * intensity;
+
+  // A faint, finer light pattern from the existing wave field adds depth
+  // without a second Voronoi search per fragment.
+  float fineBand = 1.0 - smoothstep(0.015, 0.10, abs(h - 0.025));
+  color += vec3(0.011, 0.155, 0.126) * fineBand * illuminated * 0.075;
 
   // A grazing light creates broken silver-green sheen and occasional warm glints.
   vec3 halfway = normalize(vec3(0.35, 0.43, 1.0));
