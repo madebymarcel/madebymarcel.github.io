@@ -1,157 +1,227 @@
 <section class="content-page lab-page ds-stack">
   <h1>Lab</h1>
-  <p>Experiments in mathematical, accessible and fluid interface design.</p>
+  <p>Explore our design system, components and responsive layout patterns.</p>
 
-  <section class="ds-stack" aria-labelledby="foundations-heading">
-    <h2 id="foundations-heading">Design system</h2>
-    <p>
-      Fibonacci spacing, fluid typography and an OKLCH color palette form the foundations of Made by
-      Marcel. The theme control in the header changes every example.
-    </p>
-    <div class="ds-card ds-stack">
-      <h3>Semantic colors</h3>
-      <ul class="swatches ds-grid">
-        @for (color of colors; track color.token) {
-        <li>
-          <span
-            class="swatch"
-            aria-hidden="true"
-            [style.background-color]="'var(' + color.token + ')'"
-          ></span>
-          <span>{{ color.label }}</span>
-          <code>{{ color.token }}</code>
-        </li>
+  <div class="catalogue-shell">
+    <aside class="catalogue-sidebar" aria-label="Design system catalogue">
+      <p class="catalogue-heading">Catalogue</p>
+      <button
+        class="catalogue-option"
+        type="button"
+        [attr.aria-pressed]="selected() === 'foundations'"
+        aria-controls="lab-panel"
+        (click)="selected.set('foundations')"
+      >
+        Foundations &amp; components
+      </button>
+      @for (category of layoutCategories; track category.title) {
+      <p class="catalogue-heading">{{ category.title }}</p>
+      @for (pattern of category.patterns; track pattern.id) {
+      <button
+        class="catalogue-option"
+        type="button"
+        [attr.aria-pressed]="selected() === pattern.id"
+        aria-controls="lab-panel"
+        (click)="selected.set(pattern.id)"
+      >
+        {{ pattern.name }}
+      </button>
+      }
+      }
+    </aside>
+    <div class="catalogue-mobile ds-field">
+      <label for="layout-selection">Catalogue entry</label>
+      <select class="ds-input" id="layout-selection" (change)="selectFromMenu($event)">
+        <option value="foundations" [selected]="selected() === 'foundations'">
+          Foundations &amp; components
+        </option>
+        @for (category of layoutCategories; track category.title) {
+        <optgroup [label]="category.title">
+          @for (pattern of category.patterns; track pattern.id) {
+          <option [value]="pattern.id" [selected]="selected() === pattern.id">
+            {{ pattern.name }}
+          </option>
+          }
+        </optgroup>
         }
-      </ul>
+      </select>
     </div>
 
-    <div class="ds-card ds-stack">
-      <h3>Fibonacci spacing</h3>
-      <p class="ds-hint">Values shown at the default 16px root font size.</p>
-      <ul class="spacing-scale ds-stack">
-        @for (value of spacing; track value; let index = $index) {
-        <li>
-          <span
-            class="spacing-bar"
-            aria-hidden="true"
-            [style.width]="'var(--space-' + (index + 1) + ')'"
-          ></span>
-          <span>{{ value }}px</span>
-        </li>
-        }
-      </ul>
-    </div>
-
-    <div class="ds-card ds-stack">
-      <h3>Fluid Fibonacci spacing</h3>
-      <p class="ds-hint">
-        Resize the browser to see each space pair interpolate between 320px and 1280px.
-      </p>
-      <ul class="fluid-scale ds-stack">
-        @for (space of fluidSpacing; track space.token) {
-        <li class="ds-stack">
-          <span>{{ space.label }} ({{ space.min }}–{{ space.max }}px)</span>
-          <span
-            class="fluid-bar"
-            aria-hidden="true"
-            [style.inline-size]="'var(' + space.token + ')'"
-          ></span>
-          <code>{{ space.token }}</code>
-        </li>
-        }
-      </ul>
-    </div>
-
-    <div class="ds-card ds-stack">
-      <h3>Fluid typography</h3>
-      <p class="type-display">Made by Marcel</p>
-      <p class="type-heading">A considered hierarchy</p>
-      <p class="type-subheading">Mathematical proportions</p>
-      <p>Body text stays readable at every viewport width.</p>
-      <p class="ds-hint">Smaller type for supporting information.</p>
-    </div>
-
-    <div class="ds-card ds-stack">
-      <h3>Golden-ratio layout</h3>
-      <div class="ds-layout-context golden-demo">
-        <div class="ds-golden-split">
-          <div class="proportion">Primary · 61.8%</div>
-          <div class="proportion">Secondary · 38.2%</div>
-        </div>
-      </div>
-      <p class="ds-hint">The same layout inside a narrow container, even on desktop:</p>
-      <div class="ds-layout-context golden-demo-narrow">
-        <div class="ds-golden-split">
-          <div class="proportion">Primary</div>
-          <div class="proportion">Secondary</div>
-        </div>
-      </div>
-      <p class="ds-hint">
-        Both layouts use the same CSS. The columns stack when their own container is too narrow.
-      </p>
-    </div>
-  </section>
-
-  <section class="ds-stack" aria-labelledby="components-heading">
-    <h2 id="components-heading">Components</h2>
-    <div class="ds-card ds-stack">
-      <h3>Buttons and states</h3>
-      <div class="ds-cluster">
+    <div class="catalogue-panel ds-stack" id="lab-panel">
+      @if (selectedPattern(); as pattern) {
+      <h2 aria-live="polite">{{ pattern.name }}</h2>
+      <p>{{ pattern.description }}</p>
+      <p class="ds-hint">{{ pattern.responsive }}</p>
+      <div class="ds-cluster preview-controls" role="group" aria-label="Preview container width">
+        @for (width of widths; track width.id) {
         <button
-          class="ds-button"
+          class="ds-button ds-button--secondary"
           type="button"
-          [attr.aria-pressed]="pressed()"
-          (click)="pressed.set(!pressed())"
+          [attr.aria-pressed]="previewWidth() === width.id"
+          (click)="previewWidth.set(width.id)"
         >
-          Toggle example
+          {{ width.label }}
         </button>
-        <a class="ds-button ds-button--secondary" href="#fields-heading">Field examples</a>
-        <button class="ds-button" type="button" disabled>Disabled</button>
+        }
       </div>
-      <p role="status">Toggle is {{ pressed() ? 'on' : 'off' }}.</p>
-    </div>
+      <p class="ds-hint">Resize the preview container to see how the composition responds.</p>
+      <div class="preview-width" [class]="'preview-width-' + previewWidth()">
+        <app-layout-preview [pattern]="pattern" />
+      </div>
+      } @else {
+      <section class="ds-stack" aria-labelledby="foundations-heading">
+        <h2 id="foundations-heading">Design system</h2>
+        <p>
+          Fibonacci spacing, fluid typography and an OKLCH color palette form the foundations of Made by
+          Marcel. The theme control in the header changes every example.
+        </p>
+        <div class="ds-card ds-stack">
+          <h3>Semantic colors</h3>
+          <ul class="swatches ds-grid">
+            @for (color of colors; track color.token) {
+            <li>
+              <span
+                class="swatch"
+                aria-hidden="true"
+                [style.background-color]="'var(' + color.token + ')'"
+              ></span>
+              <span>{{ color.label }}</span>
+              <code>{{ color.token }}</code>
+            </li>
+            }
+          </ul>
+        </div>
 
-    <div class="ds-card ds-stack">
-      <h3 id="fields-heading">Fields and validation</h3>
-      <p class="ds-hint">Local demonstration only. No information is sent or stored.</p>
-      <form class="ds-stack" (submit)="onSubmit($event)">
-        <div class="ds-field">
-          <label for="example-name">Example name (required)</label>
-          <input
-            class="ds-input"
-            id="example-name"
-            type="text"
-            required
-            aria-describedby="example-name-hint"
-            (input)="submitted.set(false)"
-          />
-          <p class="ds-hint" id="example-name-hint">Enter any example name.</p>
+        <div class="ds-card ds-stack">
+          <h3>Fibonacci spacing</h3>
+          <p class="ds-hint">Values shown at the default 16px root font size.</p>
+          <ul class="spacing-scale ds-stack">
+            @for (value of spacing; track value; let index = $index) {
+            <li>
+              <span
+                class="spacing-bar"
+                aria-hidden="true"
+                [style.width]="'var(--space-' + (index + 1) + ')'"
+              ></span>
+              <span>{{ value }}px</span>
+            </li>
+            }
+          </ul>
         </div>
-        <div class="ds-field">
-          <label for="example-select">Example selection</label>
-          <select class="ds-input" id="example-select">
-            <option>Option one</option>
-            <option>Option two</option>
-          </select>
+
+        <div class="ds-card ds-stack">
+          <h3>Fluid Fibonacci spacing</h3>
+          <p class="ds-hint">
+            Resize the browser to see each space pair interpolate between 320px and 1280px.
+          </p>
+          <ul class="fluid-scale ds-stack">
+            @for (space of fluidSpacing; track space.token) {
+            <li class="ds-stack">
+              <span>{{ space.label }} ({{ space.min }}–{{ space.max }}px)</span>
+              <span
+                class="fluid-bar"
+                aria-hidden="true"
+                [style.inline-size]="'var(' + space.token + ')'"
+              ></span>
+              <code>{{ space.token }}</code>
+            </li>
+            }
+          </ul>
         </div>
-        <div class="ds-cluster">
-          <button class="ds-button" type="submit">Validate example</button>
-          <p class="ds-status" role="status">{{ submitted() ? 'Example validated.' : '' }}</p>
+
+        <div class="ds-card ds-stack">
+          <h3>Fluid typography</h3>
+          <p class="type-display">Made by Marcel</p>
+          <p class="type-heading">A considered hierarchy</p>
+          <p class="type-subheading">Mathematical proportions</p>
+          <p>Body text stays readable at every viewport width.</p>
+          <p class="ds-hint">Smaller type for supporting information.</p>
         </div>
-      </form>
-      <div class="ds-field">
-        <label for="invalid-example">Invalid field example</label>
-        <input
-          class="ds-input"
-          id="invalid-example"
-          type="text"
-          value="Invalid"
-          readonly
-          aria-invalid="true"
-          aria-describedby="invalid-example-error"
-        />
-        <p class="ds-error" id="invalid-example-error">Example error: this value is not valid.</p>
-      </div>
+
+        <div class="ds-card ds-stack">
+          <h3>Golden-ratio layout</h3>
+          <div class="ds-layout-context golden-demo">
+            <div class="ds-golden-split">
+              <div class="proportion">Primary · 61.8%</div>
+              <div class="proportion">Secondary · 38.2%</div>
+            </div>
+          </div>
+          <p class="ds-hint">The same layout inside a narrow container, even on desktop:</p>
+          <div class="ds-layout-context golden-demo-narrow">
+            <div class="ds-golden-split">
+              <div class="proportion">Primary</div>
+              <div class="proportion">Secondary</div>
+            </div>
+          </div>
+          <p class="ds-hint">
+            Both layouts use the same CSS. The columns stack when their own container is too narrow.
+          </p>
+        </div>
+      </section>
+
+      <section class="ds-stack" aria-labelledby="components-heading">
+        <h2 id="components-heading">Components</h2>
+        <div class="ds-card ds-stack">
+          <h3>Buttons and states</h3>
+          <div class="ds-cluster">
+            <button
+              class="ds-button"
+              type="button"
+              [attr.aria-pressed]="pressed()"
+              (click)="pressed.set(!pressed())"
+            >
+              Toggle example
+            </button>
+            <a class="ds-button ds-button--secondary" href="#fields-heading">Field examples</a>
+            <button class="ds-button" type="button" disabled>Disabled</button>
+          </div>
+          <p role="status">Toggle is {{ pressed() ? 'on' : 'off' }}.</p>
+        </div>
+
+        <div class="ds-card ds-stack">
+          <h3 id="fields-heading">Fields and validation</h3>
+          <p class="ds-hint">Local demonstration only. No information is sent or stored.</p>
+          <form class="ds-stack" (submit)="onSubmit($event)">
+            <div class="ds-field">
+              <label for="example-name">Example name (required)</label>
+              <input
+                class="ds-input"
+                id="example-name"
+                type="text"
+                required
+                aria-describedby="example-name-hint"
+                (input)="submitted.set(false)"
+              />
+              <p class="ds-hint" id="example-name-hint">Enter any example name.</p>
+            </div>
+            <div class="ds-field">
+              <label for="example-select">Example selection</label>
+              <select class="ds-input" id="example-select">
+                <option>Option one</option>
+                <option>Option two</option>
+              </select>
+            </div>
+            <div class="ds-cluster">
+              <button class="ds-button" type="submit">Validate example</button>
+              <p class="ds-status" role="status">{{ submitted() ? 'Example validated.' : '' }}</p>
+            </div>
+          </form>
+          <div class="ds-field">
+            <label for="invalid-example">Invalid field example</label>
+            <input
+              class="ds-input"
+              id="invalid-example"
+              type="text"
+              value="Invalid"
+              readonly
+              aria-invalid="true"
+              aria-describedby="invalid-example-error"
+            />
+            <p class="ds-error" id="invalid-example-error">Example error: this value is not valid.</p>
+          </div>
+        </div>
+      </section>
+      }
     </div>
-  </section>
+  </div>
 </section>

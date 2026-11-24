@@ -91,3 +91,22 @@ token scales, contrast, reflow, container behavior and example interactions. The
 ESLint, Prettier, type checking, build, browser and Lighthouse checks remain
 in place. Establish visual screenshot baselines only after reviewing the
 rendered design on supported browsers.
+
+## Layout catalogue
+
+The Lab offers 26 responsive composition examples grouped into editorial,
+creative, discovery and application categories. Foundations and components
+remain available as the first entry. The desktop catalogue uses a sidebar and
+the narrow-screen version uses a native grouped select.
+
+Each example renders actual HTML using shared composition primitives, not
+an image of a layout. Fit, 480px and 320px preview widths constrain the
+container; viewport-based typography and spacing still follow the browser
+viewport. Content and charts are illustrative, not functioning applications.
+
+Additional primitives include equal splits, sidebars, bento grids,
+independent masonry columns, workspaces, layered and sticky compositions,
+frames, reels, timeline, centering and local bleed. The latter uses the
+explicit parent inset token, not a viewport-width hack. Container queries
+enable structural changes only where space permits. The composition details
+provide selectable example markup showing how the primitives are combined.

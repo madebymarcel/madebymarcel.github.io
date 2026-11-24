@@ -43,3 +43,116 @@
 .ds-measure {
   max-inline-size: var(--reading-max);
 }
+
+// Rich composition primitives. Document order stays intact at every width.
+.ds-equal-split,
+.ds-sidebar,
+.ds-sidebar-end,
+.ds-bento,
+.ds-masonry,
+.ds-workspace,
+.ds-sticky-split,
+.ds-layer,
+.ds-timeline {
+  display: grid;
+  gap: var(--space-fluid-component);
+  min-inline-size: 0;
+}
+
+.ds-center {
+  display: grid;
+  justify-items: center;
+}
+
+.ds-center > * {
+  inline-size: min(100%, var(--reading-max));
+}
+
+.ds-frame {
+  aspect-ratio: var(--frame-ratio, var(--ratio-landscape));
+  overflow: hidden;
+}
+
+.ds-frame > :is(img, video) {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+
+.ds-bleed {
+  margin-inline: calc(-1 * var(--bleed-inset, 0px));
+}
+
+.ds-reel {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(min(100%, var(--reel-item-min)), 1fr);
+  gap: var(--space-fluid-component);
+  overflow-x: auto;
+  padding: var(--space-2);
+}
+
+.ds-timeline {
+  border-inline-start: var(--border-width) solid var(--border-strong);
+  padding-inline-start: var(--space-fluid-component);
+}
+
+@container ds-layout (min-width: 36rem) {
+  .ds-equal-split {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ds-sidebar {
+    grid-template-columns: minmax(0, 1fr) minmax(0, var(--ratio-golden));
+  }
+
+  .ds-sidebar-end {
+    grid-template-columns: minmax(0, var(--ratio-golden)) minmax(0, 1fr);
+  }
+
+  .ds-bento,
+  .ds-masonry {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .ds-bento > :first-child {
+    grid-column: span 2;
+    grid-row: span 2;
+  }
+
+  .ds-layer > :last-child {
+    position: relative;
+    margin-block-start: calc(-1 * var(--space-6));
+    margin-inline-start: var(--space-8);
+    z-index: 1;
+  }
+
+  .ds-sticky-split {
+    grid-template-columns: minmax(0, var(--ratio-golden)) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .ds-sticky-split > :first-child {
+    position: sticky;
+    inset-block-start: var(--space-4);
+  }
+
+  .ds-timeline {
+    border-inline-start: 0;
+    padding-inline-start: 0;
+  }
+
+  .ds-timeline > * {
+    inline-size: 50%;
+  }
+
+  .ds-timeline > :nth-child(even) {
+    justify-self: end;
+  }
+}
+
+@container ds-layout (min-width: 40rem) {
+  .ds-workspace {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2.618fr) minmax(0, 1fr);
+  }
+}
