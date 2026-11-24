@@ -40,25 +40,11 @@
   --focus-color: var(--accent);
   --overlay: rgb(0 0 0 / 38%);
 
-  // Fibonacci numbers in rem, equivalent to 3, 5, 8, 13, 21, 34, 55 and 89px
-  // at the default 16px root size. Respect user-selected root font sizing.
-  --space-1: 0.1875rem;
-  --space-2: 0.3125rem;
-  --space-3: 0.5rem;
-  --space-4: 0.8125rem;
-  --space-5: 1.3125rem;
-  --space-6: 2.125rem;
-  --space-7: 3.4375rem;
-  --space-8: 5.5625rem;
-  --space-page: clamp(var(--space-5), 0.75rem + 2vw, var(--space-6));
-  --space-section: clamp(var(--space-6), 1rem + 4vw, var(--space-8));
-
-  // Fluid modular type scale: 1.25 at 320px, 1.618 at 1280px.
+  // Generated scales are imported by the global stylesheet.
+  --space-page: var(--space-fluid-page);
+  --space-section: var(--space-fluid-section);
   --type-small: 0.875rem;
   --type-body: 1rem;
-  --type-step-1: clamp(1.25rem, 1.1273rem + 0.6133vw, 1.618rem);
-  --type-step-2: clamp(1.5625rem, 1.2107rem + 1.7592vw, 2.618rem);
-  --type-step-3: clamp(1.9531rem, 1.1921rem + 3.8048vw, 4.236rem);
   --font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --weight-light: 300;
@@ -73,6 +59,9 @@
   // Layout, geometry and interaction. Accessibility minima are not scaled down.
   --layout-max: 70rem;
   --reading-max: 70ch;
+  --grid-column-min: 16rem;
+  --swatch-column-min: 10rem;
+  --layout-narrow: 20rem;
   --drawer-width: 22rem;
   --ratio-golden: 1.618fr;
   --target-size: 2.75rem;
@@ -93,7 +82,7 @@
   --button-padding-block: var(--space-3);
   --button-padding-inline: var(--space-4);
   --button-radius: var(--radius-pill);
-  --card-padding: var(--space-5);
+  --card-padding: var(--space-fluid-card);
   --card-radius: var(--radius-large);
   --field-radius: var(--radius-medium);
 

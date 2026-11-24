@@ -4,16 +4,15 @@
 }
 
 .swatches,
-.spacing-scale {
+.spacing-scale,
+.fluid-scale {
   list-style: none;
   padding: 0;
   margin: 0;
-  display: grid;
-  gap: var(--space-4);
 }
 
 .swatches {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+  --grid-min: var(--swatch-column-min);
 }
 
 .swatches li {
@@ -29,7 +28,8 @@
   border-radius: var(--radius-small);
 }
 
-.swatches code {
+.swatches code,
+.fluid-scale code {
   font-size: var(--type-small);
   color: var(--muted);
   overflow-wrap: anywhere;
@@ -41,7 +41,10 @@
   gap: var(--space-4);
 }
 
-.spacing-bar {
+.spacing-bar,
+.fluid-bar {
+  flex: none;
+  max-inline-size: 100%;
   block-size: var(--space-4);
   border-radius: var(--radius-small);
   background: var(--accent);
@@ -68,21 +71,18 @@
   font-size: var(--type-step-1);
 }
 
-.golden-layout {
-  display: grid;
-  gap: var(--space-4);
+.fluid-scale li {
+  --stack-gap: var(--space-2);
+}
+
+.golden-demo-narrow {
+  max-inline-size: var(--layout-narrow);
 }
 
 .proportion {
-  padding: var(--space-5);
+  padding: var(--space-fluid-card);
   min-inline-size: 0;
   background: var(--background);
   border: var(--border-width) solid var(--border-strong);
   border-radius: var(--radius-medium);
-}
-
-@media (min-width: 48rem) {
-  .golden-layout {
-    grid-template-columns: minmax(0, var(--ratio-golden)) minmax(0, 1fr);
-  }
 }

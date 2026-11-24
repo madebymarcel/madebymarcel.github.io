@@ -1,0 +1,45 @@
+// Compose interfaces by available space rather than device categories.
+.ds-stack {
+  display: grid;
+  gap: var(--stack-gap, var(--space-fluid-stack));
+}
+
+.ds-cluster {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--cluster-gap, var(--space-fluid-component));
+}
+
+.ds-grid {
+  display: grid;
+  --grid-minimum: var(--grid-min, var(--grid-column-min));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--grid-minimum)), 1fr));
+  gap: var(--grid-gap, var(--space-fluid-component));
+}
+
+.ds-grid > *,
+.ds-golden-split > * {
+  min-inline-size: 0;
+}
+
+.ds-layout-context {
+  container: ds-layout / inline-size;
+}
+
+.ds-golden-split {
+  display: grid;
+  gap: var(--space-fluid-component);
+}
+
+// A structural breakpoint for a readable split, independent of viewport size.
+// Keep the single-column default as the fallback for older browsers.
+@container ds-layout (min-width: 36rem) {
+  .ds-golden-split {
+    grid-template-columns: minmax(0, var(--ratio-golden)) minmax(0, 1fr);
+  }
+}
+
+.ds-measure {
+  max-inline-size: var(--reading-max);
+}

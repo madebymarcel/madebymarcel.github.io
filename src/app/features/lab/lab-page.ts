@@ -1,11 +1,13 @@
 import { Component, signal } from '@angular/core';
+import { FIBONACCI_SPACING, FLUID_SPACING } from '../../../design-system/scales.generated';
 
 @Component({
   templateUrl: './lab-page.html',
   styleUrl: './lab-page.scss',
 })
 export class LabPage {
-  readonly spacing = [3, 5, 8, 13, 21, 34, 55, 89];
+  readonly spacing = FIBONACCI_SPACING;
+  readonly fluidSpacing = FLUID_SPACING;
   readonly colors = [
     { label: 'Background', token: '--background' },
     { label: 'Surface', token: '--surface' },

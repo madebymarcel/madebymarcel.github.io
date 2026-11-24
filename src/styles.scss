@@ -1,4 +1,6 @@
+@use 'design-system/scales.generated';
 @use 'design-system/tokens';
+@use 'design-system/layouts';
 @use 'design-system/components';
 
 :root {
@@ -99,7 +101,7 @@ a {
 .site-main {
   max-width: var(--layout-max);
   margin: 0 auto;
-  padding: 0 var(--space-page);
+  padding-inline: var(--space-page);
   min-height: 55vh;
   overflow-wrap: break-word;
 }
@@ -126,7 +128,7 @@ a {
 
 .content-page {
   max-width: var(--reading-max);
-  padding: var(--space-section) 0;
+  padding-block: var(--space-section);
 }
 
 .content-page h1 {

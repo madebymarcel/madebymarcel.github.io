@@ -6,7 +6,7 @@ test('Fibonacci spacing tokens follow the documented scale', async ({ page }) =>
   const sizes = await bars.evaluateAll((items) => {
     return items.map((bar) => Math.round(bar.getBoundingClientRect().width));
   });
-  expect(sizes).toEqual([3, 5, 8, 13, 21, 34, 55, 89]);
+  expect(sizes).toEqual([3, 5, 8, 13, 21, 34, 55, 89, 144]);
 });
 
 for (const theme of ['light', 'dark']) {
@@ -80,4 +80,48 @@ test('design system examples are operable and reflow at 320px', async ({ page })
       globalThis.document.documentElement.clientWidth,
   );
   expect(overflow).toBeLessThanOrEqual(1);
+});
+
+test('fluid space pairs interpolate and clamp at the configured endpoints', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 780 });
+  await page.goto('/lab/');
+
+  const bars = page.locator('.fluid-bar');
+  const widths = () => {
+    return bars.evaluateAll((items) => items.map((item) => item.offsetWidth));
+  };
+  const minimums = [5, 8, 13, 13, 21, 34, 55];
+  const maximums = [8, 13, 21, 34, 34, 89, 144];
+
+  expect(await widths()).toEqual(minimums);
+  await page.setViewportSize({ width: 800, height: 900 });
+  const middle = await widths();
+  middle.forEach((value, index) => {
+    const expected = (minimums[index] + maximums[index]) / 2;
+    expect(Math.abs(value - expected)).toBeLessThanOrEqual(2);
+  });
+
+  await page.setViewportSize({ width: 1600, height: 900 });
+  expect(await widths()).toEqual(maximums);
+});
+
+test('golden split follows container width rather than viewport width', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto('/lab/');
+
+  const wide = page.locator('.golden-demo .ds-golden-split');
+  const narrow = page.locator('.golden-demo-narrow .ds-golden-split');
+  const columns = (layout) => {
+    return layout.evaluate((element) => {
+      return globalThis.getComputedStyle(element).gridTemplateColumns.split(' ').map(parseFloat);
+    });
+  };
+
+  const wideColumns = await columns(wide);
+  expect(wideColumns).toHaveLength(2);
+  expect(wideColumns[0] / wideColumns[1]).toBeCloseTo(1.618, 2);
+  expect(await columns(narrow)).toHaveLength(1);
+
+  await page.setViewportSize({ width: 320, height: 780 });
+  expect(await columns(wide)).toHaveLength(1);
 });

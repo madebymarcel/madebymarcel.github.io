@@ -10,7 +10,7 @@
     </p>
     <div class="ds-card ds-stack">
       <h3>Semantic colors</h3>
-      <ul class="swatches">
+      <ul class="swatches ds-grid">
         @for (color of colors; track color.token) {
         <li>
           <span
@@ -28,7 +28,7 @@
     <div class="ds-card ds-stack">
       <h3>Fibonacci spacing</h3>
       <p class="ds-hint">Values shown at the default 16px root font size.</p>
-      <ul class="spacing-scale">
+      <ul class="spacing-scale ds-stack">
         @for (value of spacing; track value; let index = $index) {
         <li>
           <span
@@ -37,6 +37,26 @@
             [style.width]="'var(--space-' + (index + 1) + ')'"
           ></span>
           <span>{{ value }}px</span>
+        </li>
+        }
+      </ul>
+    </div>
+
+    <div class="ds-card ds-stack">
+      <h3>Fluid Fibonacci spacing</h3>
+      <p class="ds-hint">
+        Resize the browser to see each space pair interpolate between 320px and 1280px.
+      </p>
+      <ul class="fluid-scale ds-stack">
+        @for (space of fluidSpacing; track space.token) {
+        <li class="ds-stack">
+          <span>{{ space.label }} ({{ space.min }}–{{ space.max }}px)</span>
+          <span
+            class="fluid-bar"
+            aria-hidden="true"
+            [style.inline-size]="'var(' + space.token + ')'"
+          ></span>
+          <code>{{ space.token }}</code>
         </li>
         }
       </ul>
@@ -53,11 +73,22 @@
 
     <div class="ds-card ds-stack">
       <h3>Golden-ratio layout</h3>
-      <div class="golden-layout">
-        <div class="proportion">Primary · 61.8%</div>
-        <div class="proportion">Secondary · 38.2%</div>
+      <div class="ds-layout-context golden-demo">
+        <div class="ds-golden-split">
+          <div class="proportion">Primary · 61.8%</div>
+          <div class="proportion">Secondary · 38.2%</div>
+        </div>
       </div>
-      <p class="ds-hint">The columns stack when their container becomes too narrow.</p>
+      <p class="ds-hint">The same layout inside a narrow container, even on desktop:</p>
+      <div class="ds-layout-context golden-demo-narrow">
+        <div class="ds-golden-split">
+          <div class="proportion">Primary</div>
+          <div class="proportion">Secondary</div>
+        </div>
+      </div>
+      <p class="ds-hint">
+        Both layouts use the same CSS. The columns stack when their own container is too narrow.
+      </p>
     </div>
   </section>
 
