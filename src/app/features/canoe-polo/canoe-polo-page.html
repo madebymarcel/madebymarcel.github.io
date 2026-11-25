@@ -32,244 +32,228 @@
   </header>
 
   @if (view() === 'home') {
-    <section class="ds-card ds-stack">
-      <h2>A living league</h2>
-      <p>
-        Watch two generations compete, or volunteer computing time to train the next generation.
-        No attack or defence tactics are scripted.
-      </p>
-      <button type="button" class="ds-button" (click)="navigate('play')">Set up a match</button>
-    </section>
-  }
-  @if (view() === 'play') {
-    <section class="ds-card ds-stack" aria-labelledby="match-heading">
-      <h2 id="match-heading">Match setup</h2>
-      <div class="ds-grid">
-        <div class="ds-field">
-          <label for="polo-blue">Blue team</label>
-          <select
-            id="polo-blue"
-            class="ds-input"
-            [value]="blue()"
-            (change)="selectGeneration($event, 'blue')"
-          >
-            @for (g of generations(); track g.id) {
-              <option [value]="g.id">{{ generationLabel(g) }}</option>
-            }
-          </select>
-        </div>
-        <div class="ds-field">
-          <label for="polo-red">Red team</label>
-          <select
-            id="polo-red"
-            class="ds-input"
-            [value]="red()"
-            (change)="selectGeneration($event, 'red')"
-          >
-            @for (g of generations(); track g.id) {
-              <option [value]="g.id">{{ generationLabel(g) }}</option>
-            }
-          </select>
-        </div>
-      </div>
-      <div class="ds-cluster">
-        <button class="ds-button" type="button" (click)="startMatch()">Start new match</button>
-        <button
-          class="ds-button ds-button--secondary"
-          type="button"
-          [disabled]="match().phase === 'finished'"
-          (click)="toggleMatch()"
-        >
-          {{ playing() ? 'Pause match' : 'Resume match' }}
-        </button>
-        <label for="polo-speed">Speed</label>
+  <section class="ds-card ds-stack">
+    <h2>A living league</h2>
+    <p>
+      Watch two generations compete, or volunteer computing time to train the next generation. No
+      attack or defence tactics are scripted.
+    </p>
+    <button type="button" class="ds-button" (click)="navigate('play')">Set up a match</button>
+  </section>
+  } @if (view() === 'play') {
+  <section class="ds-card ds-stack" aria-labelledby="match-heading">
+    <h2 id="match-heading">Match setup</h2>
+    <div class="ds-grid">
+      <div class="ds-field">
+        <label for="polo-blue">Blue team</label>
         <select
-          class="ds-input speed"
-          id="polo-speed"
-          [value]="speed()"
-          (change)="changeSpeed($event)"
+          id="polo-blue"
+          class="ds-input"
+          [value]="blue()"
+          (change)="selectGeneration($event, 'blue')"
         >
-          <option value="1">1×</option>
-          <option value="4">4×</option>
-          <option value="16">16×</option>
+          @for (g of generations(); track g.id) {
+          <option [value]="g.id">{{ generationLabel(g) }}</option>
+          }
         </select>
       </div>
-      <div class="scoreboard">
-        <div class="team-score">
-          <span>Blue · {{ matchLabels()[0] }}</span>
-          <strong>{{ match().score[0] }}</strong>
-        </div>
-        <div class="match-clock">
-          <span>Half {{ match().half }}</span>
-          <strong>{{ clock() }}</strong>
-          <span>Shot: {{ shotClock() }}</span>
-        </div>
-        <div class="team-score">
-          <span>Red · {{ matchLabels()[1] }}</span>
-          <strong>{{ match().score[1] }}</strong>
-        </div>
-      </div>
-      <svg
-        class="pitch"
-        viewBox="-1 -2.5 37 26.5"
-        role="img"
-        aria-label="Top-down canoe polo pitch showing five blue players, five red players, the ball and referee"
-      >
-        <rect class="water" x="0" y="0" width="35" height="23" rx="0.25" />
-        <g class="lines" fill="none" stroke-width="0.1">
-          <rect x="0" y="0" width="35" height="23" />
-          <path d="M17.5 0V23 M4 0V23 M31 0V23" stroke-dasharray=".4 .3" />
-          <circle cx="17.5" cy="11.5" r="2" />
-          <rect x="-0.5" y="10.75" width="0.5" height="1.5" />
-          <rect x="35" y="10.75" width="0.5" height="1.5" />
-        </g>
-        @for (p of match().players; track p.id) {
-          <g
-            [attr.transform]="playerTransform(p)"
-            [class.blue]="p.team === 0"
-            [class.red]="p.team === 1"
-          >
-            <path d="M-1.5 0Q-0.9 -0.5 0.5 -0.46Q1.2 -0.3 1.5 0Q1.2 .3 .5 .46Q-.9 .5 -1.5 0Z" />
-            <path class="paddle" d="M0 -0.85V0.85" stroke-width="0.13" stroke-linecap="round" />
-            <circle class="helmet" r=".28" />
-            <text class="number" x="0" y=".12" text-anchor="middle" font-size=".36">
-              {{ (p.id % 5) + 1 }}
-            </text>
-          </g>
-        }
-        <circle
-          class="ball"
-          [attr.cx]="match().ball.x"
-          [attr.cy]="match().ball.y"
-          [attr.r]="0.16 + match().ball.z * 0.05"
-        />
-        <g [attr.transform]="'translate(' + match().ball.x + ' -1.2)'">
-          <circle class="official" r=".32" />
-          <path
-            class="official-arm"
-            [attr.d]="match().phase === 'play' ? 'M0 .32V.8' : 'M0 .32V.8M0 .45L.65 .05'"
-          />
-          <text class="official-label" x="0" y="-.55" text-anchor="middle" font-size=".45">REF</text>
-        </g>
-      </svg>
-      <p class="ds-hint">
-        Ball size indicates height. Phase: {{ match().phase }}. Fouls: blue {{ match().fouls[0] }},
-        red {{ match().fouls[1] }}.
-      </p>
-      @if (match().phase === 'finished') {
-        <p role="status">
-          Full time:
-          {{
-            match().score[0] === match().score[1]
-              ? 'Draw'
-              : match().score[0] > match().score[1]
-                ? 'Blue wins'
-                : 'Red wins'
-          }}.
-        </p>
-      }
-      <section class="ds-stack" aria-labelledby="referee-heading">
-        <h3 id="referee-heading">Referee decisions</h3>
-        <p class="ds-hint">Ruleset: {{ ruleset }}</p>
-        <ol class="events">
-          @for (event of match().events; track $index) {
-            <li>
-              <strong>{{ eventTime(event.tick) }} · {{ event.message }}</strong>
-              <span class="ds-hint">
-                {{ event.rule }}
-                @if (event.team !== undefined) {
-                  · {{ event.team === 0 ? 'Blue' : 'Red' }}
-                }
-                @if (event.player !== undefined) {
-                  · Player {{ (event.player % 5) + 1 }}
-                }
-              </span>
-            </li>
-          }
-        </ol>
-      </section>
-    </section>
-  }
-  @if (view() === 'generations') {
-    <section class="ds-card ds-stack" aria-labelledby="generations-heading">
-      <h2 id="generations-heading">Unlocked generations ({{ generations().length }})</h2>
-      <p>Immutable policy snapshots. A later generation is not necessarily a stronger player.</p>
-      <ul class="generation-list">
-        @for (g of generations(); track g.id) {
-          <li class="ds-stack">
-            <h3>{{ generationLabel(g) }}</h3>
-            <p class="ds-hint">
-              {{ g.matches }} training matches · {{ g.steps }} learning steps
-              @if (g.evaluation) {
-                · Evaluation vs parent: {{ g.evaluation[0] }}–{{ g.evaluation[1] }}
-              }
-            </p>
-            <div class="ds-cluster">
-              <button class="ds-button ds-button--secondary" type="button" (click)="exportOne(g)">
-                Export {{ generationLabel(g) }}
-              </button>
-            </div>
-          </li>
-        }
-      </ul>
-      <button class="ds-button ds-button--secondary" type="button" (click)="exportAll()">
-        Export all
-      </button>
       <div class="ds-field">
-        <label for="polo-transfer">Generation data (JSON)</label>
-        <textarea
-          id="polo-transfer"
+        <label for="polo-red">Red team</label>
+        <select
+          id="polo-red"
           class="ds-input"
-          rows="5"
-          [value]="transfer()"
-          (input)="updateTransfer($event)"
-        ></textarea>
+          [value]="red()"
+          (change)="selectGeneration($event, 'red')"
+        >
+          @for (g of generations(); track g.id) {
+          <option [value]="g.id">{{ generationLabel(g) }}</option>
+          }
+        </select>
       </div>
-      <div class="ds-cluster">
-        <button class="ds-button" type="button" [disabled]="!ready()" (click)="importData()">
-          Import
-        </button>
-        <button class="ds-button ds-button--secondary" type="button" (click)="copyExport()">
-          Copy text
-        </button>
+    </div>
+    <div class="ds-cluster">
+      <button class="ds-button" type="button" (click)="startMatch()">Start new match</button>
+      <button
+        class="ds-button ds-button--secondary"
+        type="button"
+        [disabled]="match().phase === 'finished'"
+        (click)="toggleMatch()"
+      >
+        {{ playing() ? 'Pause match' : 'Resume match' }}
+      </button>
+      <label for="polo-speed">Speed</label>
+      <select
+        class="ds-input speed"
+        id="polo-speed"
+        [value]="speed()"
+        (change)="changeSpeed($event)"
+      >
+        <option value="1">1×</option>
+        <option value="4">4×</option>
+        <option value="16">16×</option>
+      </select>
+    </div>
+    <div class="scoreboard">
+      <div class="team-score">
+        <span>Blue · {{ matchLabels()[0] }}</span>
+        <strong>{{ match().score[0] }}</strong>
       </div>
+      <div class="match-clock">
+        <span>Half {{ match().half }}</span>
+        <strong>{{ clock() }}</strong>
+        <span>Shot: {{ shotClock() }}</span>
+      </div>
+      <div class="team-score">
+        <span>Red · {{ matchLabels()[1] }}</span>
+        <strong>{{ match().score[1] }}</strong>
+      </div>
+    </div>
+    <svg
+      class="pitch"
+      viewBox="-1 -2.5 37 26.5"
+      role="img"
+      aria-label="Top-down canoe polo pitch showing five blue players, five red players, the ball and referee"
+    >
+      <rect class="water" x="0" y="0" width="35" height="23" rx="0.25" />
+      <g class="lines" fill="none" stroke-width="0.1">
+        <rect x="0" y="0" width="35" height="23" />
+        <path d="M17.5 0V23 M4 0V23 M31 0V23" stroke-dasharray=".4 .3" />
+        <circle cx="17.5" cy="11.5" r="2" />
+        <rect x="-0.5" y="10.75" width="0.5" height="1.5" />
+        <rect x="35" y="10.75" width="0.5" height="1.5" />
+      </g>
+      @for (p of match().players; track p.id) {
+      <g
+        [attr.transform]="playerTransform(p)"
+        [class.blue]="p.team === 0"
+        [class.red]="p.team === 1"
+      >
+        <path d="M-1.5 0Q-0.9 -0.5 0.5 -0.46Q1.2 -0.3 1.5 0Q1.2 .3 .5 .46Q-.9 .5 -1.5 0Z" />
+        <path class="paddle" d="M0 -0.85V0.85" stroke-width="0.13" stroke-linecap="round" />
+        <circle class="helmet" r=".28" />
+        <text class="number" x="0" y=".12" text-anchor="middle" font-size=".36">
+          {{ (p.id % 5) + 1 }}
+        </text>
+      </g>
+      }
+      <circle
+        class="ball"
+        [attr.cx]="match().ball.x"
+        [attr.cy]="match().ball.y"
+        [attr.r]="0.16 + match().ball.z * 0.05"
+      />
+      <g [attr.transform]="'translate(' + match().ball.x + ' -1.2)'">
+        <circle class="official" r=".32" />
+        <path
+          class="official-arm"
+          [attr.d]="match().phase === 'play' ? 'M0 .32V.8' : 'M0 .32V.8M0 .45L.65 .05'"
+        />
+        <text class="official-label" x="0" y="-.55" text-anchor="middle" font-size=".45">REF</text>
+      </g>
+    </svg>
+    <p class="ds-hint">
+      Ball size indicates height. Phase: {{ match().phase }}. Fouls: blue {{ match().fouls[0] }},
+      red {{ match().fouls[1] }}.
+    </p>
+    @if (match().phase === 'finished') {
+    <p role="status">
+      Full time: {{ match().score[0] === match().score[1] ? 'Draw' : match().score[0] >
+      match().score[1] ? 'Blue wins' : 'Red wins' }}.
+    </p>
+    }
+    <section class="ds-stack" aria-labelledby="referee-heading">
+      <h3 id="referee-heading">Referee decisions</h3>
+      <p class="ds-hint">Ruleset: {{ ruleset }}</p>
+      <ol class="events">
+        @for (event of match().events; track $index) {
+        <li>
+          <strong>{{ eventTime(event.tick) }} · {{ event.message }}</strong>
+          <span class="ds-hint">
+            {{ event.rule }} @if (event.team !== undefined) { · {{ event.team === 0 ? 'Blue' :
+            'Red' }} } @if (event.player !== undefined) { · Player {{ (event.player % 5) + 1 }} }
+          </span>
+        </li>
+        }
+      </ol>
     </section>
-  }
-  @if (view() === 'about') {
-    <section class="ds-card ds-stack">
-      <h2>How it works</h2>
-      <p>
-        Each team shares a policy with learned numerical weights. Every player observes their own
-        boat, the ball, other players and the match clock, then samples paddle and ball actions.
-        No pre-written formation or targeting commands are used.
-      </p>
-      <h3>Learning</h3>
-      <p>
-        A Web Worker runs the same fixed-step simulator without rendering. A linear actor-critic
-        updates its policy from experience: scoring, conceding, possession, movement and fouls.
-        After one training match, a frozen candidate plays a separate evaluation against its
-        parent. The result is saved regardless of who wins.
-      </p>
-      <h3>Rules and limitations</h3>
-      <p>
-        This prototype uses the 2025 ICF rules as a reference. It implements two ten-minute halves,
-        five players per side, elevated goal detection, the individual possession limit, shot
-        clock and basic restarts. Tied matches remain draws.
-      </p>
-      <p>
-        The referee does not yet judge kayak or hand tackles, paddle fouls, advantage, cards,
-        exclusions or goalkeeper protection. Collisions, catches, shot-clock resets and restart
-        placement are simplified; the visual referee signal is illustrative, not an official
-        signal. No claim of complete rules compliance is made.
-      </p>
-      <p><a href="https://www.canoeicf.com/rules">Official ICF rulebook and clarifications</a></p>
-      <h3>Your device, your generations</h3>
-      <p>
-        Training is opt-in and local. No data leaves this browser. Pausing retains the in-progress
-        worker; closing the page preserves completed generations only. Export them to keep a backup
-        or challenge another person's players.
-      </p>
-    </section>
+  </section>
+  } @if (view() === 'generations') {
+  <section class="ds-card ds-stack" aria-labelledby="generations-heading">
+    <h2 id="generations-heading">Unlocked generations ({{ generations().length }})</h2>
+    <p>Immutable policy snapshots. A later generation is not necessarily a stronger player.</p>
+    <ul class="generation-list">
+      @for (g of generations(); track g.id) {
+      <li class="ds-stack">
+        <h3>{{ generationLabel(g) }}</h3>
+        <p class="ds-hint">
+          {{ g.matches }} training matches · {{ g.steps }} learning steps @if (g.evaluation) { ·
+          Evaluation vs parent: {{ g.evaluation[0] }}–{{ g.evaluation[1] }} }
+        </p>
+        <div class="ds-cluster">
+          <button class="ds-button ds-button--secondary" type="button" (click)="exportOne(g)">
+            Export {{ generationLabel(g) }}
+          </button>
+        </div>
+      </li>
+      }
+    </ul>
+    <button class="ds-button ds-button--secondary" type="button" (click)="exportAll()">
+      Export all
+    </button>
+    <div class="ds-field">
+      <label for="polo-transfer">Generation data (JSON)</label>
+      <textarea
+        id="polo-transfer"
+        class="ds-input"
+        rows="5"
+        [value]="transfer()"
+        (input)="updateTransfer($event)"
+      ></textarea>
+    </div>
+    <div class="ds-cluster">
+      <button class="ds-button" type="button" [disabled]="!ready()" (click)="importData()">
+        Import
+      </button>
+      <button class="ds-button ds-button--secondary" type="button" (click)="copyExport()">
+        Copy text
+      </button>
+    </div>
+  </section>
+  } @if (view() === 'about') {
+  <section class="ds-card ds-stack">
+    <h2>How it works</h2>
+    <p>
+      Each team shares a policy with learned numerical weights. Every player observes their own
+      boat, the ball, other players and the match clock, then samples paddle and ball actions. No
+      pre-written formation or targeting commands are used.
+    </p>
+    <h3>Learning</h3>
+    <p>
+      A Web Worker runs the same fixed-step simulator without rendering. A linear actor-critic
+      updates its policy from experience: scoring, conceding, possession, movement and fouls. After
+      one training match, a frozen candidate plays a separate evaluation against its parent. The
+      result is saved regardless of who wins.
+    </p>
+    <h3>Rules and limitations</h3>
+    <p>
+      This prototype uses the 2025 ICF rules as a reference. It implements two ten-minute halves,
+      five players per side, elevated goal detection, the individual possession limit, shot clock
+      and basic restarts. Tied matches remain draws.
+    </p>
+    <p>
+      The referee does not yet judge kayak or hand tackles, paddle fouls, advantage, cards,
+      exclusions or goalkeeper protection. Collisions, catches, shot-clock resets and restart
+      placement are simplified; the visual referee signal is illustrative, not an official signal.
+      No claim of complete rules compliance is made.
+    </p>
+    <p><a href="https://www.canoeicf.com/rules">Official ICF rulebook and clarifications</a></p>
+    <h3>Your device, your generations</h3>
+    <p>
+      Training is opt-in and local. No data leaves this browser. Pausing retains the in-progress
+      worker; closing the page preserves completed generations only. Export them to keep a backup or
+      challenge another person's players.
+    </p>
+  </section>
   }
 
   <section class="ds-card ds-stack" aria-labelledby="training-heading">
@@ -287,7 +271,7 @@
         (change)="selectGeneration($event, 'parent')"
       >
         @for (g of generations(); track g.id) {
-          <option [value]="g.id">{{ generationLabel(g) }}</option>
+        <option [value]="g.id">{{ generationLabel(g) }}</option>
         }
       </select>
     </div>
@@ -300,12 +284,12 @@
       </select>
     </div>
     @if (progress(); as p) {
-      <p>{{ p.phase }} · {{ eventTime(p.ticks) }} / 20:00 · {{ p.steps }} learning steps</p>
-      <progress
-        aria-label="Current training or evaluation match"
-        [value]="p.ticks"
-        [max]="halfTicks * 2"
-      ></progress>
+    <p>{{ p.phase }} · {{ eventTime(p.ticks) }} / 20:00 · {{ p.steps }} learning steps</p>
+    <progress
+      aria-label="Current training or evaluation match"
+      [value]="p.ticks"
+      [max]="halfTicks * 2"
+    ></progress>
     }
     <button
       class="ds-button"

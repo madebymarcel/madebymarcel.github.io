@@ -33,8 +33,7 @@ function validGeneration(value: unknown): value is Generation {
   const g = value as Partial<Generation>;
   const count = (n: unknown): n is number =>
     typeof n === 'number' && Number.isSafeInteger(n) && n >= 0;
-  const id = (v: unknown): v is string =>
-    typeof v === 'string' && /^[a-zA-Z0-9-]{1,80}$/.test(v);
+  const id = (v: unknown): v is string => typeof v === 'string' && /^[a-zA-Z0-9-]{1,80}$/.test(v);
   return (
     id(g.id) &&
     (g.parentId === null || id(g.parentId)) &&

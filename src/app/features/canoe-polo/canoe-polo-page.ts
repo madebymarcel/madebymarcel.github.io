@@ -1,7 +1,22 @@
 import { Component, DestroyRef, afterNextRender, computed, inject, signal } from '@angular/core';
-import { GENESIS, exportGenerations, importGenerations, mergeGenerations, type Generation } from './generations';
+import {
+  GENESIS,
+  exportGenerations,
+  importGenerations,
+  mergeGenerations,
+  type Generation,
+} from './generations';
 import { loadGenerations, saveGenerations } from './generation-store';
-import { DT, HALF_TICKS, PITCH, RULESET, SHOT_TICKS, seededRandom, type MatchState, type Player } from './model';
+import {
+  DT,
+  HALF_TICKS,
+  PITCH,
+  RULESET,
+  SHOT_TICKS,
+  seededRandom,
+  type MatchState,
+  type Player,
+} from './model';
 import { sample } from './policy';
 import { CanoeMatch } from './simulation';
 import { type TrainingProgress } from './training';
@@ -38,9 +53,8 @@ export class CanoePoloPage {
   });
   readonly shotClock = computed(() => {
     const state = this.match();
-    return state.possessionTeam === null
-      ? '—'
-      : String(Math.max(0, Math.ceil(Math.min(SHOT_TICKS - state.shotTicks, state.half * HALF_TICKS - state.ticks) * DT)));
+    const remaining = Math.min(SHOT_TICKS - state.shotTicks, state.half * HALF_TICKS - state.ticks);
+    return state.possessionTeam === null ? '—' : String(Math.max(0, Math.ceil(remaining * DT)));
   });
   private readonly destroyRef = inject(DestroyRef);
   private worker: Worker | null = null;
@@ -137,7 +151,8 @@ export class CanoePoloPage {
   }
 
   playerTransform(player: Player): string {
-    return 'translate(' + player.x + ' ' + player.y + ') rotate(' + (player.heading * 180) / Math.PI + ')';
+    const angle = (player.heading * 180) / Math.PI;
+    return `translate(${player.x} ${player.y}) rotate(${angle})`;
   }
 
   formatSeconds(seconds: number): string {

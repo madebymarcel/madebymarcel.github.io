@@ -71,7 +71,9 @@ export function assessPlay(state: MatchState, previous: Ball): Ruling | null {
       decision: {
         tick,
         kind: 'out',
-        message: inGoal ? 'Direct goal from restricted restart disallowed.' : 'Ball over goal line.',
+        message: inGoal
+          ? 'Direct goal from restricted restart disallowed.'
+          : 'Ball over goal line.',
         rule: 'Goal-line restart',
         team: corner ? attacking : defending,
       },

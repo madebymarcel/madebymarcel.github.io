@@ -34,9 +34,7 @@ describe('Canoe polo simulation', () => {
       z: 2.5,
       restrictedThrower: 0,
     });
-    expect(
-      assessPlay(state, { ...state.ball, x: PITCH.length - 0.2 })?.goal,
-    ).toBeUndefined();
+    expect(assessPlay(state, { ...state.ball, x: PITCH.length - 0.2 })?.goal).toBeUndefined();
   });
 
   it('awards the opponent a free shot for prolonged individual possession', () => {

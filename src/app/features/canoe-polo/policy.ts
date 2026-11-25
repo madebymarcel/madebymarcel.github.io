@@ -139,11 +139,7 @@ export function estimateValue(weights: readonly number[], state: MatchState, p: 
   return dot(weights, observe(state, p), VALUE_ROW);
 }
 
-export function addGradient(
-  gradient: Float64Array,
-  decision: PolicySample,
-  target: number,
-): void {
+export function addGradient(gradient: Float64Array, decision: PolicySample, target: number): void {
   const advantage = clamp(target - decision.value, -5, 5);
   const accumulate = (row: number, scale: number): void => {
     for (let i = 0; i < INPUTS; i++) {

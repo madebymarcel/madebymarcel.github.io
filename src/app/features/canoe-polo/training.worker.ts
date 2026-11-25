@@ -8,7 +8,11 @@ interface StartTraining {
   delay: number;
 }
 
-type Command = StartTraining | { kind: 'pause' } | { kind: 'resume' } | { kind: 'pace'; delay: number };
+type Command =
+  | StartTraining
+  | { kind: 'pause' }
+  | { kind: 'resume' }
+  | { kind: 'pace'; delay: number };
 export type TrainingMessage =
   | { kind: 'progress'; progress: TrainingProgress }
   | { kind: 'generation'; generation: Generation };
