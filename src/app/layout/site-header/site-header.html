@@ -12,7 +12,8 @@
       [attr.aria-expanded]="menuOpen()"
       (click)="openMenu()"
     >
-      Menu
+      <span class="menu-icon" aria-hidden="true"><span></span><span></span></span>
+      <span class="menu-label">Menu</span>
     </button>
     <div class="header-actions">
       <ng-container [ngTemplateOutlet]="navigationActions" />
@@ -36,7 +37,8 @@
       type="button"
       (click)="closeMenu()"
     >
-      Close
+      <span class="menu-icon menu-icon--close" aria-hidden="true"><span></span><span></span></span>
+      <span class="menu-label">Close</span>
     </button>
     <ng-container [ngTemplateOutlet]="navigationActions" />
   </div>
