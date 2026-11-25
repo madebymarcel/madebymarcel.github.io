@@ -1,0 +1,107 @@
+// Native HTML components share styling; no custom control semantics are needed.
+.ds-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: var(--target-size);
+  min-block-size: var(--target-size);
+  padding: var(--button-padding-block) var(--button-padding-inline);
+  border: var(--border-width) solid var(--accent);
+  border-radius: var(--button-radius);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: var(--type-small);
+  font-weight: var(--weight-semibold);
+  line-height: var(--line-body);
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.ds-button--secondary {
+  background: transparent;
+  color: var(--text);
+  border-color: var(--border-strong);
+  font-weight: var(--weight-regular);
+}
+
+@media (hover: hover) {
+  .ds-button:not(:disabled):hover {
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
+    color: var(--on-accent);
+  }
+
+  .ds-button--secondary:not(:disabled):hover {
+    background: var(--surface);
+    border-color: var(--accent);
+    color: var(--text);
+  }
+}
+
+.ds-button:not(:disabled):active,
+.ds-button[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+.ds-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.ds-card {
+  min-inline-size: 0;
+  padding: var(--card-padding);
+  background: var(--surface);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--card-radius);
+}
+
+.ds-field {
+  display: grid;
+  gap: var(--space-fluid-small);
+}
+
+.ds-field label {
+  font-weight: var(--weight-semibold);
+}
+
+.ds-input {
+  inline-size: 100%;
+  min-inline-size: 0;
+  min-block-size: var(--target-size);
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-width) solid var(--border-strong);
+  border-radius: var(--field-radius);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.ds-input[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+.ds-hint {
+  color: var(--muted);
+  font-size: var(--type-small);
+}
+
+.ds-error {
+  color: var(--danger);
+}
+
+.ds-status {
+  color: var(--success);
+}
+
+@media (forced-colors: active) {
+  .ds-button[aria-pressed='true'] {
+    outline: var(--focus-width) solid Highlight;
+  }
+}

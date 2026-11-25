@@ -10,11 +10,11 @@ import { Component } from '@angular/core';
   styles: [
     `
       .site-footer {
-        border-top: 1px solid var(--border);
+        border-top: var(--border-width) solid var(--border);
         color: var(--muted);
-        font-size: 0.9rem;
-        margin-top: 5rem;
-        padding: 2rem 1.5rem;
+        font-size: var(--type-small);
+        margin-top: var(--space-section);
+        padding: var(--space-6) var(--space-page);
         text-align: center;
       }
     `,

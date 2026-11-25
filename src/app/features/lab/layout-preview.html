@@ -1,0 +1,45 @@
+<div class="preview-stage" [attr.data-pattern]="pattern().id">
+  <ng-container *ngTemplateOutlet="renderNode; context: { $implicit: pattern().root }" />
+</div>
+<details class="composition ds-card">
+  <summary>View layout composition</summary>
+  <pre><code [textContent]="markup()"></code></pre>
+</details>
+
+<ng-template #renderNode let-node>
+  @if (node.kind === 'group') {
+  <div class="ds-layout-context preview-context">
+    <div
+      [class]="node.layout"
+      [attr.role]="node.layout === 'ds-reel' ? 'region' : null"
+      [attr.aria-label]="node.layout === 'ds-reel' ? 'Scrollable gallery' : null"
+      [attr.tabindex]="node.layout === 'ds-reel' ? 0 : null"
+    >
+      @for (child of node.children; track $index) {
+      <ng-container *ngTemplateOutlet="renderNode; context: { $implicit: child }" />
+      }
+    </div>
+  </div>
+  } @if (node.kind === 'tile') {
+  <div class="ds-card preview-tile" [class]="'preview-' + node.appearance">
+    <p class="preview-title">{{ node.title }}</p>
+    @if (node.description) {
+    <p class="ds-hint">{{ node.description }}</p>
+    } @if (visualTypes.includes(node.appearance)) {
+    <div class="ds-frame preview-art" aria-hidden="true"></div>
+    } @if (node.appearance === 'list') {
+    <ul class="preview-list ds-stack">
+      @for (item of node.items; track $index) {
+      <li>{{ item }}</li>
+      }
+    </ul>
+    } @if (node.appearance === 'chart') {
+    <div class="preview-chart" aria-hidden="true">
+      @for (value of chart; track $index) {
+      <span [style.block-size.%]="value"></span>
+      }
+    </div>
+    }
+  </div>
+  }
+</ng-template>
