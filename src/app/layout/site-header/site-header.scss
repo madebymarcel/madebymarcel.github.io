@@ -83,7 +83,9 @@ nav a.active {
 
 .navigation-drawer::backdrop {
   background: transparent;
-  transition: background 560ms linear, display 560ms allow-discrete,
+  transition:
+    background 560ms linear,
+    display 560ms allow-discrete,
     overlay 560ms allow-discrete;
 }
 
