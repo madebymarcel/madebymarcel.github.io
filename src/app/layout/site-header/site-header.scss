@@ -82,19 +82,77 @@ nav a.active {
 }
 
 .navigation-drawer::backdrop {
+  background: transparent;
+  transition: background 560ms linear, display 560ms allow-discrete,
+    overlay 560ms allow-discrete;
+}
+
+.navigation-drawer[open]::backdrop {
   background: var(--overlay);
 }
 
-.navigation-drawer[open] {
-  animation: drawer-enter var(--duration-standard) var(--ease-standard);
+@starting-style {
+  .navigation-drawer[open]::backdrop {
+    background: transparent;
+  }
 }
 
-@keyframes drawer-enter {
-  from {
-    transform: translateX(100%);
+.navigation-drawer {
+  --drawer-motion: 560ms linear(0, 0.04 8%, 0.35 24%, 0.47 40%, 0.53 60%, 0.65 76%, 0.96 92%, 1);
+  clip-path: inset(0 0 0 100%);
+  transition:
+    clip-path var(--drawer-motion),
+    display 560ms allow-discrete,
+    overlay 560ms allow-discrete;
+}
+
+.navigation-drawer[open] {
+  clip-path: inset(0);
+}
+
+@starting-style {
+  .navigation-drawer[open] {
+    clip-path: inset(0 0 0 100%);
   }
-  to {
-    transform: translateX(0);
+}
+
+.menu-toggle {
+  min-width: 7rem;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.menu-icon {
+  position: relative;
+  width: 1rem;
+  height: 1rem;
+  display: inline-block;
+}
+
+.menu-icon span {
+  position: absolute;
+  inset: 50% 0 auto;
+  height: 2px;
+  background: currentColor;
+  transform: translateY(-4px);
+}
+
+.menu-icon span + span {
+  transform: translateY(3px);
+}
+
+.menu-icon--close span {
+  transform: rotate(45deg);
+}
+
+.menu-icon--close span + span {
+  transform: rotate(-45deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .navigation-drawer,
+  .navigation-drawer::backdrop {
+    transition: none;
   }
 }
 
@@ -117,7 +175,18 @@ nav a.active {
   }
 
   .drawer-close {
-    align-self: flex-end;
+    position: fixed;
+    top: var(--space-4);
+    right: var(--space-page);
+    z-index: 1;
+  }
+
+  .drawer-content {
+    padding-top: calc(var(--space-4) * 2 + var(--target-size));
+  }
+
+  .header-inner .menu-toggle[aria-expanded='true'] {
+    visibility: hidden;
   }
 
   nav {
