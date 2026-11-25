@@ -23,6 +23,12 @@ export const routes: Routes = [
     loadComponent: () => import('./features/projects/projects-page').then((m) => m.ProjectsPage),
   },
   {
+    path: 'projects/canoe-polo',
+    title: 'Canoe polo AI | Made by Marcel',
+    loadComponent: () =>
+      import('./features/canoe-polo/canoe-polo-page').then((m) => m.CanoePoloPage),
+  },
+  {
     path: 'lab',
     title: 'Lab | Made by Marcel',
     loadComponent: () => import('./features/lab/lab-page').then((m) => m.LabPage),

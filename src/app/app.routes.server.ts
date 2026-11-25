@@ -5,6 +5,7 @@ export const serverRoutes: ServerRoute[] = [
   { path: 'about', renderMode: RenderMode.Prerender },
   { path: 'experience', renderMode: RenderMode.Prerender },
   { path: 'projects', renderMode: RenderMode.Prerender },
+  { path: 'projects/canoe-polo', renderMode: RenderMode.Prerender },
   { path: 'lab', renderMode: RenderMode.Prerender },
   { path: 'contact', renderMode: RenderMode.Prerender },
   { path: '404', renderMode: RenderMode.Prerender },
