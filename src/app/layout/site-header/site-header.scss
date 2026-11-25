@@ -188,7 +188,7 @@ nav a.active {
   }
 
   .header-inner .menu-toggle[aria-expanded='true'] {
-    visibility: hidden;
+    opacity: 0;
   }
 
   nav {
