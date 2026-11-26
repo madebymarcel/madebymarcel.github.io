@@ -105,7 +105,7 @@ export function validRun(sim: Walker) {
     !sim.fell &&
     sim.done &&
     sim.steps >= 8 &&
-    sim.alternatingFlights >= 4 &&
+    sim.runningGait.qualifies(4) &&
     sim.flightTime / time <= 0.55 &&
     sim.slipDistance <= sim.distance * 0.25
   );
@@ -121,6 +121,7 @@ export class TaskProgress {
   private lastSlip = 0;
   private lastSteps = 0;
   private lastFlights = 0;
+  private lastOtherFlights = 0;
   private lastAir = 0;
   private lastUpright = 0;
   private readonly stairs = new StairProgress(STAIR_X);
@@ -145,9 +146,11 @@ export class TaskProgress {
     const cost = 0.00018 * work + 0.65 * slip;
     if (skill === 'run') {
       const time = sim.ticks * CONTROL_DT;
+      const otherFlights = sim.runningGait.otherFlights - this.lastOtherFlights;
+      this.lastOtherFlights = sim.runningGait.otherFlights;
       const running = validRun(sim);
       this.passed = running && sim.distance / time >= 1.55;
-      return dx + 0.1 * steps + 0.22 * flights - cost - (sim.fell ? 1.2 : 0);
+      return dx + 0.1 * steps + 0.35 * flights - 0.3 * otherFlights - cost - (sim.fell ? 1.2 : 0);
     }
     if (skill === 'recover') {
       const tilt = sim.torso.getAngle();

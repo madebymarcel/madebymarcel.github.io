@@ -1,4 +1,5 @@
 import { Box, RevoluteJoint, Vec2, World, type Body, type Vec2Value } from 'planck';
+import { RunningGait } from './running-gait';
 
 export const RADIANS_PER_DEGREE = Math.PI / 180;
 const radians = RADIANS_PER_DEGREE;
@@ -78,10 +79,16 @@ export class Walker {
   private contactX = [0, 0];
   private lifted = [false, false];
   readonly ground: readonly Ground[];
-  alternatingFlights = 0;
-  private airborneFor = 0;
-  private launchSide: number | null = null;
-  private supportSide: number | null = null;
+  private gait = new RunningGait();
+  get runningGait() {
+    return this.gait;
+  }
+  get alternatingFlights() {
+    return this.gait.alternating;
+  }
+  resetRunningGait() {
+    this.gait = new RunningGait();
+  }
   private previous: Contacts = [false, false, false, false];
 
   constructor(
@@ -291,21 +298,8 @@ export class Walker {
   private recordFlight() {
     const left = this.contacts[0] || this.contacts[1];
     const right = this.contacts[2] || this.contacts[3];
-    if (!left && !right) {
-      if (this.airborneFor === 0) this.launchSide = this.supportSide;
-      this.airborneFor += PHYSICS_DT;
-      this.flightTime += PHYSICS_DT;
-      return;
-    }
-    this.supportSide = left === right ? null : Number(right);
-    if (
-      this.airborneFor >= 0.055 &&
-      this.launchSide !== null &&
-      this.supportSide !== null &&
-      this.launchSide !== this.supportSide
-    )
-      this.alternatingFlights++;
-    this.airborneFor = 0;
+    if (!left && !right) this.flightTime += PHYSICS_DT;
+    this.gait.observe(left, right);
   }
 
   private countSteps() {
