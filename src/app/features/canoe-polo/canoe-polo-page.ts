@@ -86,7 +86,13 @@ export class CanoePoloPage {
   readonly halfTicks = HALF_TICKS;
   readonly cos = Math.cos;
   readonly sin = Math.sin;
-  readonly matchLabels = signal(['Generation 0', 'Generation 0']);
+  private readonly matchGenerations = computed(
+    () => [this.find(this.blue()), this.find(this.red())] as const,
+  );
+  private readonly finishedMatchLabels = signal<string[] | null>(null);
+  readonly matchLabels = computed(
+    () => this.finishedMatchLabels() ?? this.matchGenerations().map((g) => this.generationLabel(g)),
+  );
   readonly clock = computed(() => {
     const state = this.match();
     return this.formatSeconds((state.half * HALF_TICKS - state.ticks) * DT);
@@ -101,7 +107,6 @@ export class CanoePoloPage {
   private timer: ReturnType<typeof setInterval> | undefined;
   private engine = new CanoeMatch(1);
   private random = seededRandom(1);
-  private policies = [GENESIS.weights, GENESIS.weights];
   private workerParent: string | null = null;
   readonly saving = signal(false);
   private destroyed = false;
@@ -150,10 +155,7 @@ export class CanoePoloPage {
   }
 
   startMatch(): void {
-    const blue = this.find(this.blue());
-    const red = this.find(this.red());
-    this.policies = [blue.weights, red.weights];
-    this.matchLabels.set([this.generationLabel(blue), this.generationLabel(red)]);
+    this.finishedMatchLabels.set(null);
     const seed = Math.floor(Math.random() * 4294967296);
     this.engine = new CanoeMatch(seed);
     this.random = seededRandom(seed + 1);
@@ -171,18 +173,22 @@ export class CanoePoloPage {
 
   private advance(): void {
     if (!this.playing()) return;
+    const generations = this.matchGenerations();
     for (let i = 0; i < this.speed() && this.engine.state.phase !== 'finished'; i++) {
       const state = this.engine.state;
       this.engine.step(
         state.players.map((p) =>
           state.phase === 'play'
-            ? sample(this.policies[p.team], state, p, this.random).action
+            ? sample(generations[p.team].weights, state, p, this.random).action
             : { paddle: 0, ball: 0 },
         ),
       );
     }
     this.publishMatch();
-    if (this.engine.state.phase === 'finished') this.playing.set(false);
+    if (this.engine.state.phase === 'finished') {
+      this.finishedMatchLabels.set(this.matchLabels());
+      this.playing.set(false);
+    }
   }
 
   private publishMatch(): void {
@@ -383,8 +389,7 @@ export class CanoePoloPage {
       this.playing.set(false);
       this.engine = new CanoeMatch(1);
       this.random = seededRandom(1);
-      this.policies = [GENESIS.weights, GENESIS.weights];
-      this.matchLabels.set([this.generationLabel(GENESIS), this.generationLabel(GENESIS)]);
+      this.finishedMatchLabels.set(null);
       this.publishMatch();
       this.status.set('');
       this.libraryStatus.set('Saved generations deleted. Back to Generation 0.');

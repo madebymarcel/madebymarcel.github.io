@@ -14,6 +14,60 @@ async function downloadGeneration(page, name) {
   };
 }
 
+test('switches either team policy without restarting the match', async ({ page }) => {
+  await page.goto('/projects/canoe-polo/');
+  const { data } = await downloadGeneration(page, 'Download Generation 0');
+  const [genesis] = data.generations;
+  const fixture = (id, number, stroke) => {
+    const weights = genesis.weights.map(() => 0);
+    // Each v3 action row has 72 weights. Bias the requested stroke (0 = coast, 1 = forward).
+    weights[stroke * 72] = 20;
+    return { ...genesis, id, number, weights, parentId: genesis.id };
+  };
+  const coast = fixture('coast-fixture', 1, 0);
+  const paddle = fixture('paddle-fixture', 2, 1);
+  const input = page.getByLabel('Generation file (JSON)');
+  await expect(input).toBeEnabled();
+  await input.setInputFiles({
+    name: 'team-policies.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify({ ...data, generations: [coast, paddle] })),
+  });
+  await expect(page.getByText(/Imported 2 generations\. Saved on this device/)).toBeVisible();
+
+  const blue = page.getByLabel('Blue team');
+  const red = page.getByLabel('Red team');
+  const blueBoat = page.locator('.pitch g.blue').first();
+  const redBoat = page.locator('.pitch g.red').first();
+  const clock = page.locator('.match-clock strong');
+  await blue.selectOption(coast.id);
+  await red.selectOption(coast.id);
+  await page.getByLabel('Speed', { exact: true }).selectOption('16');
+  await page.getByRole('button', { name: 'Start new match' }).click();
+  await expect(clock).not.toHaveText('10:00');
+  const blueBefore = await blueBoat.getAttribute('transform');
+  const redBefore = await redBoat.getAttribute('transform');
+
+  await blue.selectOption(paddle.id);
+  await expect(page.locator('.team-score').first()).toContainText('Blue · Generation 2');
+  await expect(blueBoat).not.toHaveAttribute('transform', blueBefore);
+  await expect(redBoat).toHaveAttribute('transform', redBefore);
+
+  await page.getByRole('button', { name: 'Pause match' }).click();
+  const clockBeforeSwap = await clock.textContent();
+  const pitchBeforeSwap = await page.locator('.pitch').innerHTML();
+  const scoresBeforeSwap = await page.locator('.team-score strong').allTextContents();
+  await red.selectOption(paddle.id);
+  await expect(page.locator('.team-score').last()).toContainText('Red · Generation 2');
+  await expect(page.getByRole('button', { name: 'Resume match' })).toBeVisible();
+  await expect(clock).toHaveText(clockBeforeSwap);
+  expect(await page.locator('.pitch').innerHTML()).toBe(pitchBeforeSwap);
+  expect(await page.locator('.team-score strong').allTextContents()).toEqual(scoresBeforeSwap);
+
+  await page.getByRole('button', { name: 'Resume match' }).click();
+  await expect(redBoat).not.toHaveAttribute('transform', redBefore);
+});
+
 test('canoe polo match and portable generation library', async ({ page }) => {
   await page.goto('/projects/canoe-polo/');
   await expect(page.getByRole('heading', { name: 'Canoe polo AI' })).toBeVisible();
