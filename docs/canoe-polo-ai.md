@@ -55,3 +55,6 @@ improves performance. Generation 0 is intentionally weak; early matches may be s
 
 The developer-only drills in `skills-drills.ts` run seeded collection, shooting, and save
 scenarios without modifying policies. The unit suite exercises their reproducibility.
+
+The [shooting experiment](canoe-polo-training-experiment.md) compares full matches with short
+practice attempts under the same tick budget, then tests both on unseen starts and full matches.

@@ -17,7 +17,8 @@
     "format:check": "prettier --check . || (prettier src/app/features/lab/layout-preview.html && exit 1)",
     "test:unit": "ng test --watch=false",
     "test:e2e": "playwright test",
-    "lighthouse": "lhci autorun"
+    "lighthouse": "lhci autorun",
+    "experiment:canoe-polo": "node --experimental-transform-types scripts/canoe-polo-experiment.mjs"
   },
   "dependencies": {
     "@angular/common": "22.3.0",
