@@ -52,7 +52,6 @@ export class Parkour {
   private index = 0;
   private entered = 0;
   private stepsAtEntry = 0;
-  private flightsAtEntry = 0;
   private slipAtEntry = 0;
   private jumped = false;
   private gapViolation = false;
@@ -81,7 +80,7 @@ export class Parkour {
     this.index++;
     this.entered = this.sim.ticks;
     this.stepsAtEntry = this.sim.steps;
-    this.flightsAtEntry = this.sim.alternatingFlights;
+    if (this.index === 1) this.sim.resetRunningGait();
     this.slipAtEntry = this.sim.slipDistance;
     this.held = 0;
   }
@@ -115,7 +114,7 @@ export class Parkour {
           if (
             (RUN_END - WALK_END) / elapsed < 1.55 ||
             sim.steps - this.stepsAtEntry < 4 ||
-            sim.alternatingFlights - this.flightsAtEntry < 2 ||
+            !sim.runningGait.qualifies(2) ||
             sim.slipDistance - this.slipAtEntry > 1.25
           ) {
             this.failure = 'Not enough speed or alternating running strides';

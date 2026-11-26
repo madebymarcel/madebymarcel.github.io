@@ -4,14 +4,15 @@ import { better, fastestRun, type Checkpoint, type Trial } from './training';
 import { CONTROL_DT, EPISODE_SECONDS, Walker } from './walker';
 
 function completedRun() {
-  return Object.assign(new Walker(), {
+  const sim = Object.assign(new Walker(), {
     ticks: EPISODE_SECONDS / CONTROL_DT,
     done: true,
     distance: 24,
     steps: 15,
     flightTime: 3,
-    alternatingFlights: 7,
   });
+  Object.assign(sim.runningGait, { alternating: 7, longestStreak: 7 });
+  return sim;
 }
 
 function checkpoint(...trials: [speed: number, valid: boolean][]): Checkpoint {
@@ -43,9 +44,9 @@ describe('Run training', () => {
   it('rejects a walk or a falling lunge, even if either is fast', () => {
     const sim = completedRun();
     expect(validRun(sim)).toBe(true);
-    sim.alternatingFlights = 0;
+    sim.runningGait.longestStreak = 0;
     expect(validRun(sim)).toBe(false);
-    sim.alternatingFlights = 7;
+    sim.runningGait.longestStreak = 7;
     sim.fell = true;
     expect(validRun(sim)).toBe(false);
   });

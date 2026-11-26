@@ -72,7 +72,13 @@ Run keeps training for the full batch even after five passes. Its reward gives c
 uncapped forward progress and alternating airborne strides. Checkpoints rank by passes,
 then valid runs, then median speed across valid runs. The viewer defaults to the fastest
 valid start in the selected checkpoint; a fast walk or fall is not a valid run. The
-1.55 m/s cutoff is a test threshold, not a reward cap.
+1.55 m/s cutoff is a test threshold, not a reward cap. A stride requires at least four
+consecutive physics samples (33 ms) on one foot, an airborne phase, then four samples on the
+opposite foot before the first foot touches down. A near-simultaneous two-foot hop does
+not count. Run needs a streak of at least four alternating strides, and at least twice
+as many qualified flights as other flights; that check is also used in the parkour Run
+segment with a two-stride minimum. Run rewards qualified transfers and penalizes the
+other flights. This does not prescribe joint angles or a step sequence to the policy.
 The remaining trainers start from zero. Each lab has its own independent rollouts and five
 fixed test starts.
 
