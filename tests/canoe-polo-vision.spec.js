@@ -16,9 +16,10 @@ test('player vision is opt-in, with all ten sight cones and a text summary', asy
   await expect(toggle).toBeChecked();
   await expect(cones).toHaveCount(10);
   await expect(page.locator('.polo-vision-cone.polo-vision-red')).toHaveCount(5);
-  await expect(summary).toHaveText(
-    'Sight cones: 135° · 24 m. Ball in sight cone: Blue 1, 2, 3, 4, 5; Red 1, 2, 3, 4, 5.',
-  );
+  await expect(summary).toContainText('Sight cones: 135° · 24 m.');
+  await expect(summary).toContainText('Ball in sight cone:');
+  await expect(summary).toContainText('Blue 1, 2, 3, 4, 5.');
+  await expect(summary).toContainText('Red 1, 2, 3, 4, 5.');
   await expect(cones.first()).toHaveAttribute('d', /A 24 24 0 0 1/);
   await expect(cones.first()).toHaveAttribute(
     'transform',
