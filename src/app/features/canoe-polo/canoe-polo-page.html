@@ -213,20 +213,14 @@
       {{ training() ? 'Running' : 'Paused' }} · {{ generations().length }} unlocked snapshots
     </p>
     <div class="ds-grid training-controls">
-      <div class="ds-field">
-        <label for="polo-parent">Train from</label>
-        <select
-          id="polo-parent"
-          class="ds-input"
-          [disabled]="training() || saving() || !ready()"
-          [value]="parent()"
-          (change)="selectGeneration($event, 'parent')"
-        >
-          @for (g of generations(); track g.id) {
-          <option [value]="g.id">{{ generationLabel(g) }}</option>
-          }
-        </select>
-      </div>
+      <app-stable-select
+        controlId="polo-parent"
+        label="Train from"
+        [options]="generationOptions()"
+        [value]="parent()"
+        [disabled]="training() || saving() || !ready()"
+        (valueChange)="parent.set($event)"
+      />
       <div class="ds-field">
         <label for="polo-pace">Resource usage</label>
         <select id="polo-pace" class="ds-input" [value]="pace()" (change)="setPace($event)">
@@ -287,32 +281,20 @@
 </ng-template>
 <ng-template #teams>
   <div class="ds-grid">
-    <div class="ds-field">
-      <label for="polo-blue">Blue team</label>
-      <select
-        id="polo-blue"
-        class="ds-input"
-        [value]="blue()"
-        (change)="selectGeneration($event, 'blue')"
-      >
-        @for (g of generations(); track g.id) {
-        <option [value]="g.id">{{ generationLabel(g) }}</option>
-        }
-      </select>
-    </div>
-    <div class="ds-field">
-      <label for="polo-red">Red team</label>
-      <select
-        id="polo-red"
-        class="ds-input"
-        [value]="red()"
-        (change)="selectGeneration($event, 'red')"
-      >
-        @for (g of generations(); track g.id) {
-        <option [value]="g.id">{{ generationLabel(g) }}</option>
-        }
-      </select>
-    </div>
+    <app-stable-select
+      controlId="polo-blue"
+      label="Blue team"
+      [options]="generationOptions()"
+      [value]="blue()"
+      (valueChange)="blue.set($event)"
+    />
+    <app-stable-select
+      controlId="polo-red"
+      label="Red team"
+      [options]="generationOptions()"
+      [value]="red()"
+      (valueChange)="red.set($event)"
+    />
   </div>
   <div class="ds-cluster">
     <button class="ds-button" type="button" [disabled]="!ready()" (click)="startMatch()">

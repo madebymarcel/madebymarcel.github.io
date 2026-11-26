@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import { chooseGeneration, generationPicker } from './generation-picker.js';
 
 async function downloadGeneration(page, name) {
   const pending = page.waitForEvent('download');
@@ -35,20 +36,18 @@ test('switches either team policy without restarting the match', async ({ page }
   });
   await expect(page.getByText(/Imported 2 generations\. Saved on this device/)).toBeVisible();
 
-  const blue = page.getByLabel('Blue team');
-  const red = page.getByLabel('Red team');
   const blueBoat = page.locator('.pitch g.blue').first();
   const redBoat = page.locator('.pitch g.red').first();
   const clock = page.locator('.match-clock strong');
-  await blue.selectOption(coast.id);
-  await red.selectOption(coast.id);
+  await chooseGeneration(page, 'Blue team', coast);
+  await chooseGeneration(page, 'Red team', coast);
   await page.getByLabel('Speed', { exact: true }).selectOption('16');
   await page.getByRole('button', { name: 'Start new match' }).click();
   await expect(clock).not.toHaveText('10:00');
   const blueBefore = await blueBoat.getAttribute('transform');
   const redBefore = await redBoat.getAttribute('transform');
 
-  await blue.selectOption(paddle.id);
+  await chooseGeneration(page, 'Blue team', paddle);
   await expect(page.locator('.team-score').first()).toContainText('Blue · Generation 2');
   await expect(blueBoat).not.toHaveAttribute('transform', blueBefore);
   await expect(redBoat).toHaveAttribute('transform', redBefore);
@@ -57,7 +56,7 @@ test('switches either team policy without restarting the match', async ({ page }
   const clockBeforeSwap = await clock.textContent();
   const pitchBeforeSwap = await page.locator('.pitch').innerHTML();
   const scoresBeforeSwap = await page.locator('.team-score strong').allTextContents();
-  await red.selectOption(paddle.id);
+  await chooseGeneration(page, 'Red team', paddle);
   await expect(page.locator('.team-score').last()).toContainText('Red · Generation 2');
   await expect(page.getByRole('button', { name: 'Resume match' })).toBeVisible();
   await expect(clock).toHaveText(clockBeforeSwap);
@@ -74,8 +73,8 @@ test('canoe polo match and portable generation library', async ({ page }) => {
   const training = page.getByRole('region', { name: 'Background training' });
   const match = page.getByRole('region', { name: 'Match setup' });
   expect((await training.boundingBox()).y).toBeLessThan((await match.boundingBox()).y);
-  await expect(page.getByLabel('Blue team')).toHaveValue('genesis-v1');
-  await expect(page.getByLabel('Red team')).toHaveValue('genesis-v1');
+  await expect(generationPicker(page, 'Blue team')).toContainText('Generation 0');
+  await expect(generationPicker(page, 'Red team')).toContainText('Generation 0');
   await page.getByRole('button', { name: 'Start new match' }).click();
   await expect(page.getByRole('button', { name: 'Pause match' })).toBeVisible();
   await page.getByRole('button', { name: 'Pause match' }).click();
@@ -211,13 +210,13 @@ test('starts from scratch only after confirmation and leaves unrelated browser d
   await expect(page.getByRole('heading', { name: 'Generations (2)', exact: true })).toBeVisible();
   await page.evaluate(() => globalThis.localStorage.setItem('unrelated-setting', 'keep'));
 
-  await page.getByLabel('Red team').selectOption(snapshot.id);
+  await chooseGeneration(page, 'Red team', snapshot);
   await page.getByLabel('Find a generation').fill(snapshot.id);
   const reset = page.getByRole('button', { name: 'Start from scratch' });
   page.once('dialog', (dialog) => dialog.dismiss());
   await reset.click();
   await expect(page.getByRole('heading', { name: 'Generations (2)', exact: true })).toBeVisible();
-  await expect(page.getByLabel('Red team')).toHaveValue(snapshot.id);
+  await expect(generationPicker(page, 'Red team')).toContainText('Generation 1');
 
   await page.getByRole('button', { name: 'Start or resume training' }).click();
   await expect(page.getByRole('button', { name: 'Pause training' })).toBeVisible();
@@ -226,14 +225,17 @@ test('starts from scratch only after confirmation and leaves unrelated browser d
   await expect(page.getByText('Saved generations deleted. Back to Generation 0.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Start or resume training' })).toBeEnabled();
   await expect(page.getByLabel('Find a generation')).toHaveValue('');
-  await expect(page.getByLabel('Train from')).toHaveValue('genesis-v1');
-  await expect(page.getByLabel('Blue team')).toHaveValue('genesis-v1');
-  await expect(page.getByLabel('Red team')).toHaveValue('genesis-v1');
+  await expect(generationPicker(page, 'Train from')).toContainText('Generation 0');
+  await expect(generationPicker(page, 'Blue team')).toContainText('Generation 0');
+  await expect(generationPicker(page, 'Red team')).toContainText('Generation 0');
 
   await page.reload();
-  await expect(page.getByLabel('Train from')).toBeEnabled();
+  await expect(generationPicker(page, 'Train from')).toBeEnabled();
   await expect(page.getByRole('heading', { name: 'Generations (1)', exact: true })).toBeVisible();
-  await expect(page.getByLabel('Red team').locator('option')).toHaveCount(1);
+  await generationPicker(page, 'Red team').click();
+  const picker = page.getByRole('dialog', { name: 'Choose Red team' });
+  await expect(picker.getByRole('listitem')).toHaveCount(1);
+  await picker.getByRole('button', { name: 'Cancel' }).click();
   expect(await page.evaluate(() => globalThis.localStorage.getItem('unrelated-setting'))).toBe(
     'keep',
   );
