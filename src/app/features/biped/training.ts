@@ -1,7 +1,9 @@
+import { labWalker, recoveryStart, TaskProgress, type Skill } from './tasks';
 import { ACTIONS, CONTROL_DT, OBSERVATIONS, TRACK_GOAL, Walker, type Start } from './walker';
 
 export const DEFAULT_SEED = 3;
 export const MAX_SEED = 0xffffffff;
+const TERRAIN_INPUTS = 4;
 export const POLICY_SIZE = (ACTIONS / 2) * OBSERVATIONS;
 const POPULATION = 12;
 const ELITES = 5;
@@ -19,7 +21,12 @@ const TRAINING_STARTS: readonly Start[] = [
   { tilt: -0.025, vx: -0.04, friction: 0.94 },
 ];
 
-export type Evaluation = { medianDistance: number; passes: number; results: Trial[] };
+export type Evaluation = {
+  medianDistance: number;
+  passes: number;
+  medianReward: number;
+  results: Trial[];
+};
 export type Trial = {
   distance: number;
   steps: number;
@@ -28,67 +35,188 @@ export type Trial = {
   fell: boolean;
   seconds: number;
   reward: number;
+  passed: boolean;
 };
 export type Checkpoint = { iteration: number; policy: number[]; evaluation: Evaluation };
 
 export function act(
   observation: Float64Array,
   weights: ArrayLike<number>,
-  out = new Float64Array(ACTIONS),
+  out: Float64Array = new Float64Array(ACTIONS),
 ): Float64Array {
+  const stride = observation.length;
   for (let motor = 0; motor < ACTIONS; motor++) {
     let target = 0;
-    for (let i = 0; i < OBSERVATIONS; i++) {
+    for (let i = 0; i < stride; i++) {
       // Share a controller across both legs, with own-leg and opposite-leg inputs swapped.
       let input = i;
       if (motor >= 3 && i >= 4 && i < 16) input = 4 + ((i - 4 + 6) % 12);
       if (motor >= 3 && i >= 16 && i < 20) input = 16 + ((i - 16 + 2) % 4);
-      target += weights[(motor % 3) * OBSERVATIONS + i] * observation[input];
+      target += weights[(motor % 3) * stride + i] * observation[input];
     }
     out[motor] = Math.tanh(target);
   }
   return out;
 }
 
-export function trial(weights: ArrayLike<number>, start: Start): Trial {
-  const walker = new Walker(start);
-  const observation = new Float64Array(OBSERVATIONS);
-  const action = new Float64Array(ACTIONS);
-  let reward = 0;
-  while (!walker.done) reward += walker.step(act(walker.observe(observation), weights, action));
-  const seconds = walker.ticks * CONTROL_DT;
+export function policyInputs(
+  sim: Walker,
+  skill: Skill,
+  weights: ArrayLike<number>,
+  outputs: Float64Array,
+  inputs: Float64Array,
+): Float64Array {
+  sim.observe(inputs);
+  if (skill !== 'walk') {
+    const x = sim.distance;
+    const current = sim.groundHeight(x);
+    inputs[21] = current;
+    inputs[22] = sim.groundHeight(x + 0.3) - current;
+    inputs[23] = sim.groundHeight(x + 0.65) - current;
+    inputs[24] = sim.torso.getPosition().y - current - 1;
+  }
+  return act(inputs, weights, outputs);
+}
+
+export function inputBuffer(skill: Skill) {
+  return new Float64Array(OBSERVATIONS + (skill === 'walk' ? 0 : TERRAIN_INPUTS));
+}
+
+export function walkPassed(sim: Walker) {
+  const time = sim.ticks * CONTROL_DT;
+  return (
+    !sim.fell &&
+    sim.distance >= TRACK_GOAL &&
+    sim.steps >= 6 &&
+    sim.flightTime / time <= 0.15 &&
+    sim.slipDistance <= sim.distance * 0.25
+  );
+}
+
+export class Practice {
+  readonly sim: Walker;
+  private readonly progress: TaskProgress;
+  private readonly observation: Float64Array;
+  private readonly action = new Float64Array(ACTIONS);
+  reward = 0;
+
+  constructor(
+    readonly skill: Skill,
+    start: Start,
+    private readonly weights: ArrayLike<number>,
+    speed?: number,
+  ) {
+    this.sim = labWalker(skill, start);
+    this.progress = new TaskProgress(skill, speed);
+    this.observation = inputBuffer(skill);
+  }
+
+  get passed() {
+    return this.skill === 'walk' ? this.sim.done && walkPassed(this.sim) : this.progress.passed;
+  }
+  get done() {
+    return this.sim.done || this.passed;
+  }
+
+  step() {
+    if (!this.done) {
+      const walkReward = this.sim.step(
+        policyInputs(this.sim, this.skill, this.weights, this.action, this.observation),
+      );
+      this.reward += this.progress.update(this.sim, walkReward);
+    }
+  }
+}
+
+export function startFor(skill: Skill, index: number, training = false, iteration = 0): Start {
+  const start = (training ? TRAINING_STARTS : EVALUATION_STARTS)[index];
+  if (skill === 'recover') {
+    const offset = training ? 0 : 3;
+    const pose = recoveryStart(start, index + offset);
+    const difficulty = training ? Math.min(1, iteration / 65) : 1;
+    return {
+      ...pose,
+      tilt: (pose.tilt ?? 0) * (0.82 + 0.18 * difficulty) + (training ? 0 : 0.025),
+      crouch: training ? 0.42 : 0.32 + index * 0.04,
+    };
+  }
+  if (skill === 'jump') {
+    const speed = training
+      ? 0.25 + (index === 2 ? Math.min(0.55, iteration * 0.008) : 0)
+      : [0.21, 0.34, 0.52, 0.72, 0.92][index];
+    return {
+      ...start,
+      crouch: training ? 0.23 : 0.18 + index * 0.035,
+      vx: speed + (start.vx ?? 0),
+    };
+  }
+  return start;
+}
+
+export function trial(
+  weights: ArrayLike<number>,
+  start: Start,
+  skill: Skill = 'walk',
+  speed?: number,
+): Trial {
+  const practice = new Practice(skill, start, weights, speed);
+  const { sim } = practice;
+  while (!practice.done) practice.step();
+  const seconds = sim.ticks * CONTROL_DT;
   return {
-    distance: walker.distance,
-    steps: walker.steps,
-    flightFraction: walker.flightTime / seconds,
-    slipDistance: walker.slipDistance,
-    fell: walker.fell,
+    distance: sim.distance,
+    steps: sim.steps,
+    flightFraction: sim.flightTime / seconds,
+    slipDistance: sim.slipDistance,
+    fell: sim.fell,
     seconds,
-    reward,
+    reward: practice.reward,
+    passed: practice.passed,
   };
 }
 
-export function evaluate(weights: ArrayLike<number>): Evaluation {
-  const results = EVALUATION_STARTS.map((start) => trial(weights, start));
-  const sorted = results.map((item) => item.distance).sort((a, b) => a - b);
-  const passes = results.filter(
-    (item) =>
-      !item.fell &&
-      item.distance >= TRACK_GOAL &&
-      item.steps >= 6 &&
-      item.flightFraction <= 0.15 &&
-      item.slipDistance <= item.distance * 0.25,
-  ).length;
-  return { medianDistance: sorted[Math.floor(sorted.length / 2)], passes, results };
+function median(values: number[]) {
+  const sorted = values.sort((a, b) => a - b);
+  return sorted[Math.floor(sorted.length / 2)];
+}
+
+export function evaluate(weights: ArrayLike<number>, skill: Skill = 'walk'): Evaluation {
+  const results = EVALUATION_STARTS.map((_, index) =>
+    trial(weights, startFor(skill, index), skill),
+  );
+  return {
+    medianDistance: median(results.map((item) => item.distance)),
+    medianReward: median(results.map((item) => item.reward)),
+    passes: results.filter((item) => item.passed).length,
+    results,
+  };
+}
+
+export function better(candidate: Checkpoint, best: Checkpoint | undefined, skill: Skill) {
+  if (!best) return true;
+  const a = candidate.evaluation;
+  const b = best.evaluation;
+  if (a.passes !== b.passes) return a.passes > b.passes;
+  return skill === 'walk' ? a.medianDistance > b.medianDistance : a.medianReward > b.medianReward;
 }
 
 export class Trainer {
   private seed: number;
-  private readonly weights = new Float64Array(POLICY_SIZE);
+  private readonly weights: Float64Array;
   iteration = 0;
 
-  constructor(seed: number) {
+  constructor(
+    seed: number,
+    readonly skill: Skill = 'walk',
+    walkPolicy?: number[],
+  ) {
     this.seed = seed >>> 0 || 1;
+    const stride = inputBuffer(skill).length;
+    this.weights = new Float64Array(3 * stride);
+    if (skill === 'run' && walkPolicy?.length === POLICY_SIZE) {
+      for (let i = 0; i < 3; i++)
+        this.weights.set(walkPolicy.slice(i * OBSERVATIONS, (i + 1) * OBSERVATIONS), i * stride);
+    }
   }
 
   private random(): number {
@@ -102,16 +230,26 @@ export class Trainer {
 
   // Symmetric parameter perturbations. The policy gets only episode rewards, no target gait.
   train(): void {
-    const start = TRAINING_STARTS[this.iteration % TRAINING_STARTS.length];
+    const start = startFor(
+      this.skill,
+      this.iteration % TRAINING_STARTS.length,
+      true,
+      this.iteration,
+    );
+    const speed = Math.min(1.85, 1.15 + this.iteration * 0.014);
     const candidates = Array.from({ length: POPULATION }, () => {
       const direction = this.weights.map(() => Math.sqrt(12) * (this.random() - 0.5));
       const positive = trial(
         this.weights.map((weight, i) => weight + NOISE * direction[i]),
         start,
+        this.skill,
+        speed,
       ).reward;
       const negative = trial(
         this.weights.map((weight, i) => weight - NOISE * direction[i]),
         start,
+        this.skill,
+        speed,
       ).reward;
       return { direction, positive, negative };
     });
@@ -136,6 +274,6 @@ export class Trainer {
 
   checkpoint(): Checkpoint {
     const policy = Array.from(this.weights);
-    return { iteration: this.iteration, policy, evaluation: evaluate(policy) };
+    return { iteration: this.iteration, policy, evaluation: evaluate(policy, this.skill) };
   }
 }

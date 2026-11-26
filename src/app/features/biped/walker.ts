@@ -32,6 +32,9 @@ export type Frame = {
   angles: number[];
 };
 export type Start = { tilt?: number; vx?: number; friction?: number; crouch?: number };
+export type Ground = { from: number; to: number; height: number };
+export const FLAT_GROUND: readonly Ground[] = [{ from: -100, to: 100, height: 0 }];
+export type WorldOptions = { ground?: readonly Ground[]; seconds?: number; allowFalls?: boolean };
 type Motor = { joint: RevoluteJoint; neutral: number; index: number };
 
 function clamp(value: number, min: number, max: number): number {
@@ -62,15 +65,27 @@ export class Walker {
   private lastLanded: number | null = null;
   private contactX = [0, 0];
   private lifted = [false, false];
+  readonly ground: readonly Ground[];
+  alternatingFlights = 0;
+  private airborneFor = 0;
+  private launchSide: number | null = null;
+  private supportSide: number | null = null;
   private previous: Contacts = [false, false, false, false];
 
-  constructor(start: Start = {}) {
-    const ground = this.world.createBody({ position: Vec2(0, -0.25) });
-    ground.createFixture(Box(100, 0.25), {
-      friction: start.friction ?? 0.9,
-      filterCategoryBits: FLOOR,
-      filterMaskBits: ROBOT,
-    });
+  constructor(
+    start: Start = {},
+    private readonly options: WorldOptions = {},
+  ) {
+    this.ground = options.ground ?? FLAT_GROUND;
+    for (const { from, to, height } of this.ground) {
+      const depth = 0.5 + height;
+      const body = this.world.createBody({ position: Vec2((from + to) / 2, height - depth / 2) });
+      body.createFixture(Box((to - from) / 2, depth / 2), {
+        friction: start.friction ?? 0.9,
+        filterCategoryBits: FLOOR,
+        filterMaskBits: ROBOT,
+      });
+    }
     const tilt = start.tilt ?? 0;
     const crouch = start.crouch ?? 0;
     const hip = rotate(0, HIP, tilt);
@@ -84,7 +99,9 @@ export class Walker {
         ankle.y + Math.min(rotate(HEEL, SOLE, footAngle).y, rotate(TOE, SOLE, footAngle).y);
       return { thighAngle, shinAngle, footAngle, knee, ankle, lowest };
     });
-    const floorOffset = 0.015 - Math.min(...poses.map(({ lowest }) => lowest));
+    const bodyBottom = -0.19 * (Math.abs(Math.sin(tilt)) + Math.abs(Math.cos(tilt)));
+    const minY = Math.min(...poses.map(({ lowest }) => lowest), bodyBottom);
+    const floorOffset = 0.015 - minY;
     hip.y += floorOffset;
     this.torso = this.body(Vec2(0, floorOffset), tilt, Box(0.19, 0.19), 220, start.vx ?? 0);
 
@@ -114,7 +131,7 @@ export class Walker {
       if (side === undefined) return;
       const foot = this.legs[side].foot;
       const manifold = contact.getWorldManifold(null);
-      if (!manifold) return;
+      if (!manifold || manifold.normal.y * (this.feet.has(a) ? -1 : 1) < 0.55) return;
       for (let i = 0; i < manifold.pointCount; i++) {
         if (impulse.normalImpulses[i] > 0.01) {
           const point = manifold.points[i];
@@ -170,9 +187,12 @@ export class Walker {
     this.motors.push({ joint, neutral: START_ANGLES[index], index });
   }
 
-  observe(out = new Float64Array(OBSERVATIONS)): Float64Array {
+  observe(out: Float64Array = new Float64Array(OBSERVATIONS)): Float64Array {
     const v = this.torso.getLinearVelocity();
-    out[0] = clamp(this.torso.getAngle(), -2, 2);
+    const angle = this.torso.getAngle();
+    out[0] = this.options.allowFalls
+      ? Math.atan2(Math.sin(angle), Math.cos(angle))
+      : clamp(angle, -2, 2);
     out[1] = clamp(this.torso.getAngularVelocity() / 5, -2, 2);
     out[2] = clamp(v.x / 3, -2, 2);
     out[3] = clamp(v.y / 3, -2, 2);
@@ -184,6 +204,16 @@ export class Walker {
     for (let i = 0; i < 4; i++) out[16 + i] = Number(this.contacts[i]);
     out[20] = 1; // Policy bias, not a clock or gait phase.
     return out;
+  }
+
+  groundHeight(x: number): number {
+    return this.ground.find(({ from, to }) => x >= from && x < to)?.height ?? -0.5;
+  }
+
+  // A reproducible disturbance for the get-up segment, not a policy action.
+  trip(): void {
+    this.torso.applyAngularImpulse(-24);
+    this.torso.applyLinearImpulse(Vec2(-18, -9), this.torso.getWorldCenter());
   }
 
   step(action: ArrayLike<number>): number {
@@ -209,15 +239,19 @@ export class Walker {
         effort +=
           Math.abs(joint.getMotorTorque(1 / PHYSICS_DT) * joint.getJointSpeed()) * PHYSICS_DT;
       }
-      if (!this.contacts.some(Boolean)) this.flightTime += PHYSICS_DT;
+      this.recordFlight();
       this.countSteps();
     }
     this.ticks++;
     const torso = this.torso.getPosition();
     this.distance = torso.x;
     this.work += effort;
-    this.fell = torso.y < 0.55 || Math.abs(this.torso.getAngle()) > 1.15;
-    this.done = this.fell || this.ticks >= EPISODE_SECONDS / CONTROL_DT;
+    this.fell =
+      torso.y < Math.max(0, this.groundHeight(torso.x)) + 0.55 ||
+      Math.abs(Math.atan2(Math.sin(this.torso.getAngle()), Math.cos(this.torso.getAngle()))) > 1.15;
+    this.done =
+      (this.fell && !this.options.allowFalls) ||
+      this.ticks >= (this.options.seconds ?? EPISODE_SECONDS) / CONTROL_DT;
     return (
       Math.min(torso.x - before, 0.85 * CONTROL_DT) -
       0.00025 * effort -
@@ -228,14 +262,38 @@ export class Walker {
     );
   }
 
+  private recordFlight() {
+    const left = this.contacts[0] || this.contacts[1];
+    const right = this.contacts[2] || this.contacts[3];
+    if (!left && !right) {
+      if (this.airborneFor === 0) this.launchSide = this.supportSide;
+      this.airborneFor += PHYSICS_DT;
+      this.flightTime += PHYSICS_DT;
+      return;
+    }
+    this.supportSide = left === right ? null : Number(right);
+    if (
+      this.airborneFor >= 0.055 &&
+      this.launchSide !== null &&
+      this.supportSide !== null &&
+      this.launchSide !== this.supportSide
+    )
+      this.alternatingFlights++;
+    this.airborneFor = 0;
+  }
+
   private countSteps() {
     for (let side = 0; side < 2; side++) {
       const i = side * 2;
       const foot = this.legs[side].foot;
       if (!(this.contacts[i] || this.contacts[i + 1])) {
+        const heel = foot.getWorldPoint(Vec2(HEEL, SOLE));
+        const toe = foot.getWorldPoint(Vec2(TOE, SOLE));
         if (
-          Math.min(foot.getWorldPoint(Vec2(HEEL, SOLE)).y, foot.getWorldPoint(Vec2(TOE, SOLE)).y) >
-          0.028
+          Math.min(
+            heel.y - Math.max(0, this.groundHeight(heel.x)),
+            toe.y - Math.max(0, this.groundHeight(toe.x)),
+          ) > 0.028
         ) {
           this.lifted[side] = true;
         }

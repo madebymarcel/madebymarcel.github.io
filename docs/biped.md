@@ -38,9 +38,36 @@ Seed 42 at iteration 55 passed all five, with 10.19 m median travel and 25–26 
 steps per trial. The untrained median was −1.05 m, with zero passes. Seeds 43 and 44 did
 not reproduce five passes within 120 iterations. This establishes that the model can
 learn a walking gait on the test track, not that learning is yet robust across runs or
-terrain. Sprinting, terrain changes, and training to jump are outside this first task.
+terrain. Those results are from the original flat-ground walking experiment.
 
 The learner explores different trajectories between JavaScript engines. Chromium seed 3 reached
 5/5 at iteration 85 (13.40 m median) and seed 2 did so at iteration 90. Chromium seed 42 did
 not pass from scratch even though the Node-trained checkpoint passed 5/5 when evaluated in
 Chromium. Seed settings make runs repeatable within the same environment, not across engines.
+
+## Skill training and parkour
+
+**Train all skills** runs up to 100 new iterations per skill, in order, keeping the best tested
+checkpoint for each. Individual skills can be resumed or restarted with a separate seed.
+A fresh Run trainer copies the best Walk weights when available; it does not modify Walk.
+The remaining trainers start from zero. Each lab has its own independent rollouts and five
+fixed test starts.
+
+| Skill        | What the test checks                                                                       |
+| ------------ | ------------------------------------------------------------------------------------------ |
+| Walk         | Five metres with alternating steps, little slip or airtime, and no fall.                   |
+| Run          | Average at least 1.55 m/s over 12 s, alternating airborne strides, and no fall.            |
+| Jump         | Airborne crossing of a real gap, no foot below the lip, and a controlled landing.          |
+| Climb stairs | Upward foot contact on each of three treads in order, then both feet on top.               |
+| Get up       | Physical fallen starts in both directions; upright and stable for one second on both feet. |
+
+**Run parkour** snapshots the five best checkpoints after each skill has trained. It evaluates
+walk → run → jump and land → climb → recover from a standard trip impulse → walk to the finish,
+in a single physics world with no resets or further training. A failure identifies the section
+that blocked the remainder. A lab pass does not guarantee a parkour pass: each stage inherits
+the position, joint motion and velocity left by the previous policy. The walking policy is
+reused after recovery. No controller is nudged into a scripted pose at a transition.
+
+Developer check: `npm run experiment:biped -- 100 42 --parkour` logs each lab's test results
+and the combined course result. Not all labs are solved, and the course is intended to expose
+the weakest skill or handoff rather than to demo a preprogrammed finish.
