@@ -30,25 +30,30 @@
   <!-- Paired limbs, behind the neck and trunk. -->
   <use href="#hindlimb"/>
   <use href="#hindlimb" transform="translate(420 0) scale(-1 1)"/>
+  <!-- Separate tail artwork so its longitudinal projection can follow the physical joint. -->
+  <g id="trex-tail">
+    <path fill="url(#body)" stroke="#344e35" stroke-width="3" stroke-linejoin="round"
+      d="M 176,342 L 178,357 C 190,369 192,390 191,416 C 189,471 207,520 250,553
+        C 280,576 319,598 340,634
+        C 345,643 350,643 346,631 C 333,585 299,560 274,535
+        C 242,502 232,458 233,416 C 234,389 234,369 244,357 L 246,342 Z"/>
+    <path fill="none" stroke="#486540" stroke-width="2" stroke-linecap="round" opacity=".65"
+      d="M 212,350 C 212,382 211,401 212,423 C 213,482 240,524 271,549 C 300,574 328,600 342,631"/>
+  </g>
   <g id="trex-top">
   <use href="#forelimb"/>
   <use href="#forelimb" transform="translate(420 0) scale(-1 1)"/>
-  <!-- Neck, trunk, hips and tail form one continuous dorsal silhouette. -->
+  <!-- Trunk overlaps the articulated tail at its base. -->
   <path fill="url(#body)" stroke="#344e35" stroke-width="3" stroke-linejoin="round"
     d="M 184,131 C 179,160 166,181 163,204
       C 158,231 151,249 148,279 C 145,311 158,340 178,357
-      C 190,369 192,390 191,416 C 189,471 207,520 250,553
-      C 280,576 319,598 340,634
-      C 345,643 350,643 346,631 C 333,585 299,560 274,535
-      C 242,502 232,458 233,416 C 234,389 234,369 244,357
-      C 265,338 276,308 272,279 C 269,249 262,231 257,204
+      Q 210,367 244,357 C 265,338 276,308 272,279 C 269,249 262,231 257,204
       C 254,181 241,160 236,131 Z"/>
   <path fill="#a5b986" opacity=".48" d="M 202,151
     C 191,195 179,232 178,270 C 176,311 195,344 207,357
     C 220,342 243,312 242,270 C 241,232 229,195 218,151 Z"/>
   <path fill="none" stroke="#486540" stroke-width="2" stroke-linecap="round" opacity=".65"
-    d="M 210,166 C 207,210 211,255 210,298 C 208,351 211,383 212,423
-      C 213,482 240,524 271,549 C 300,574 328,600 342,631"/>
+    d="M 210,166 C 207,210 211,255 210,298 Q 208,335 212,359"/>
   <g fill="#486540" opacity=".48">
     <path d="M 175,222 Q 190,230 204,227 Q 190,240 171,236 Z"/>
     <path d="M 245,222 Q 230,230 216,227 Q 230,240 249,236 Z"/>

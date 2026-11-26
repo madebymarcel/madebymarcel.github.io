@@ -45,3 +45,37 @@
   stroke-width: 2.5;
   stroke-linejoin: round;
 }
+
+.side-rig {
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-medium);
+}
+
+.rig-ground,
+.rig-leg,
+.rig-tail,
+.rig-torso {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.rig-ground {
+  stroke: var(--border-strong);
+  stroke-width: 2;
+}
+
+.rig-leg {
+  stroke: var(--muted);
+  stroke-width: 5;
+}
+
+.rig-tail {
+  stroke: var(--accent);
+  stroke-width: 9;
+}
+
+.rig-torso {
+  stroke: var(--text);
+  stroke-width: 16;
+}
