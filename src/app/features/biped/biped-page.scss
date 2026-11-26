@@ -196,3 +196,52 @@ svg {
 .run-result:empty {
   display: none;
 }
+
+.hinge.probed {
+  fill: var(--color-amber-soft);
+  stroke: var(--color-white);
+}
+
+.joint-debug,
+.joint-grid {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.joint-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+}
+
+.joint-reading {
+  padding: var(--space-4);
+}
+
+.joint-reading h3 {
+  font-size: var(--type-body);
+}
+
+.joint-reading dl {
+  display: grid;
+  gap: var(--space-2);
+  margin-block: var(--space-2) 0;
+  font-size: var(--type-small);
+}
+
+.joint-reading dd {
+  margin-inline-start: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.joint-reading dt {
+  color: var(--muted);
+}
+
+.joint-leg {
+  padding-block-start: var(--space-2);
+  border-block-start: var(--border-width) solid var(--border);
+}
+
+.probed-reading dt {
+  color: var(--text);
+  font-weight: var(--weight-semibold);
+}

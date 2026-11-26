@@ -29,6 +29,19 @@ progress and alternating forward foot placements. It penalizes falls, motor work
 while loaded, and time with both feet off the floor. A counted step requires sole clearance
 and a forward landing rather than a flickering contact.
 
+## Joint debug
+
+**Joint debug** pins the torso in a separate, gravity-free simulation with the same motors
+and hard joint limits. It sweeps the minimum and maximum of each joint on each leg, then
+visits all 64 combinations of the six endpoints, changing one endpoint at a time.
+Pause and use **Next pose** to inspect the angles without waiting for the full sweep.
+
+Hard limits and policy target ranges are separate: the current policy does not command
+the full hip flexion or knee bend, although the solver allows both. The 12 rad/s motor
+command ceiling (about 688°/s) is not a hard cap on measured joint velocity. Other
+bodies can drive a joint faster, and this unloaded sweep does not measure running speed.
+It does not change training or the normal replay.
+
 ## Verification
 
 `npm run experiment:biped -- 120 42 43 44` runs the same trainer headlessly on Node 24.

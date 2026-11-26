@@ -1,6 +1,7 @@
 import { Box, RevoluteJoint, Vec2, World, type Body, type Vec2Value } from 'planck';
 
-const radians = Math.PI / 180;
+export const RADIANS_PER_DEGREE = Math.PI / 180;
+const radians = RADIANS_PER_DEGREE;
 export const JOINT_LIMITS = [
   [-20 * radians, 120 * radians],
   [-140 * radians, 0],
@@ -9,6 +10,8 @@ export const JOINT_LIMITS = [
 export const START_ANGLES = [4 * radians, -8 * radians, 4 * radians] as const;
 export const JOINT_NAMES = ['Hip', 'Knee', 'Ankle'] as const;
 const MOTOR_TORQUES = [140, 130, 85];
+export const MOTOR_SPEED = 12; // rad/s commanded ceiling, not a physical angular-velocity clamp
+const POLICY_TRAVEL = 1.6;
 export const CONTROL_DT = 1 / 30;
 const PHYSICS_DT = CONTROL_DT / 4;
 export const TRACK_GOAL = 5;
@@ -39,6 +42,15 @@ type Motor = { joint: RevoluteJoint; neutral: number; index: number };
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+export function policyJointTarget(index: number, command: number): number {
+  const [min, max] = JOINT_LIMITS[index];
+  return clamp(START_ANGLES[index] + POLICY_TRAVEL * clamp(command, -1, 1), min, max);
+}
+
+function drive(joint: RevoluteJoint, target: number) {
+  joint.setMotorSpeed(clamp(14 * (target - joint.getJointAngle()), -MOTOR_SPEED, MOTOR_SPEED));
 }
 
 function rotate(x: number, y: number, angle: number): Vec2 {
@@ -216,6 +228,22 @@ export class Walker {
     this.torso.applyLinearImpulse(Vec2(-18, -9), this.torso.getWorldCenter());
   }
 
+  // Diagnostic only: bypass the policy target range, not the solver or motor limits.
+  probeJoints(targets: readonly number[], sample: () => void) {
+    for (let substep = 0; substep < 4; substep++) {
+      this.motors.forEach(({ joint, index }, i) => {
+        const [min, max] = JOINT_LIMITS[index];
+        drive(joint, clamp(targets[i], min, max));
+      });
+      this.stepWorld();
+      sample();
+    }
+  }
+
+  private stepWorld() {
+    this.world.step(PHYSICS_DT, 10, 4);
+  }
+
   step(action: ArrayLike<number>): number {
     if (this.done) return 0;
     const before = this.torso.getPosition().x;
@@ -225,14 +253,12 @@ export class Walker {
     let effort = 0;
     for (let substep = 0; substep < 4; substep++) {
       for (let i = 0; i < ACTIONS; i++) {
-        const { joint, neutral, index } = this.motors[i];
-        const [min, max] = JOINT_LIMITS[index];
-        const target = clamp(neutral + 1.6 * clamp(action[i], -1, 1), min, max);
-        joint.setMotorSpeed(clamp(14 * (target - joint.getJointAngle()), -12, 12));
+        const { joint, index } = this.motors[i];
+        drive(joint, policyJointTarget(index, action[i]));
       }
       this.forces = [false, false, false, false];
       this.slipSpeed = 0;
-      this.world.step(PHYSICS_DT, 10, 4);
+      this.stepWorld();
       this.contacts = this.forces;
       this.slipDistance += this.slipSpeed * PHYSICS_DT;
       for (const { joint } of this.motors) {

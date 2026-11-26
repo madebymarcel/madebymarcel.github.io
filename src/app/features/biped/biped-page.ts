@@ -10,6 +10,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
+import { JointDebug, JOINT_DEBUG_SPECS } from './joint-debug';
 import { CONTROL_DT, JOINT_NAMES, TRACK_GOAL } from './walker';
 import { Parkour, SECTIONS, type CourseResult, type PolicyBook } from './course';
 import { GOALS, NAMES, SKILLS, type Skill } from './tasks';
@@ -34,6 +35,7 @@ export class BipedPage {
   private readonly viewerHeading =
     viewChild.required<ElementRef<HTMLHeadingElement>>('viewerHeading');
   private worker?: Worker;
+  private jointBench?: JointDebug;
   private simulation: Practice | Parkour = this.practice('walk', null, 0);
   private replayKind: 'baseline' | 'best' = 'best';
   private hasPlayed = false;
@@ -63,7 +65,11 @@ export class BipedPage {
   readonly finish = signal('');
   readonly course = signal<CourseResult | null>(null);
   readonly showSensors = signal(false);
-  readonly viewing = computed(() => (this.course() ? 'Parkour' : NAMES[this.selected()]));
+  readonly jointDebug = signal<ReturnType<JointDebug['snapshot']> | null>(null);
+  readonly jointSpecs = JOINT_DEBUG_SPECS;
+  readonly viewing = computed(() =>
+    this.jointDebug() ? 'Joint debug' : this.course() ? 'Parkour' : NAMES[this.selected()],
+  );
   readonly trainingError = signal('');
   readonly jointNames = JOINT_NAMES;
   readonly trackGoal = TRACK_GOAL;
@@ -198,8 +204,35 @@ export class BipedPage {
     );
   }
 
+  toggleJointDebug() {
+    this.pause();
+    if (this.jointBench) {
+      this.jointBench = undefined;
+      this.jointDebug.set(null);
+    } else {
+      this.beginJointDebug();
+    }
+  }
+
+  nextJointPose() {
+    const bench = this.jointBench;
+    if (!bench) return;
+    bench.next(!this.playing());
+    this.jointDebug.set(bench.snapshot());
+    if (bench.done) this.pause();
+  }
+
+  private beginJointDebug() {
+    const bench = new JointDebug();
+    this.jointBench = bench;
+    this.jointDebug.set(bench.snapshot());
+    this.resume();
+  }
+
   private load(simulation: Practice | Parkour) {
     this.pause();
+    this.jointBench = undefined;
+    this.jointDebug.set(null);
     this.hasPlayed = false;
     this.simulation = simulation;
     this.frame.set(simulation.sim.frame());
@@ -213,6 +246,9 @@ export class BipedPage {
   togglePlayback() {
     if (this.playing()) {
       this.pause();
+    } else if (this.jointBench) {
+      if (this.jointBench.done) this.beginJointDebug();
+      else this.resume();
     } else if (this.course() && this.simulation.done) {
       this.runCourse();
     } else {
@@ -232,8 +268,8 @@ export class BipedPage {
   }
 
   private resume() {
-    if (this.simulation.done || this.playing()) return;
-    this.hasPlayed = true;
+    if ((this.jointBench?.done ?? this.simulation.done) || this.playing()) return;
+    if (!this.jointBench) this.hasPlayed = true;
     this.playing.set(true);
     this.animation = requestAnimationFrame(this.tick);
   }
@@ -242,6 +278,19 @@ export class BipedPage {
     const simulation = this.simulation;
     this.accumulator += Math.min(0.15, (now - (this.lastFrame ?? now)) / 1000);
     this.lastFrame = now;
+    const bench = this.jointBench;
+    if (bench) {
+      let advanced = false;
+      while (!bench.done && this.accumulator >= CONTROL_DT) {
+        this.accumulator -= CONTROL_DT;
+        bench.step();
+        advanced = true;
+      }
+      if (advanced) this.jointDebug.set(bench.snapshot());
+      if (bench.done) this.pause();
+      else this.animation = requestAnimationFrame(this.tick);
+      return;
+    }
     let advanced = false;
     while (!simulation.done && this.accumulator >= CONTROL_DT) {
       this.accumulator -= CONTROL_DT;
