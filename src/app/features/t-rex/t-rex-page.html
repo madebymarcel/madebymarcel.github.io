@@ -1,0 +1,84 @@
+<section class="content-page ds-stack">
+  <h1>T. rex</h1>
+  <p>Top-down SVG study and a walking simulation.</p>
+  <div class="ds-card ds-stack">
+    <div class="ds-cluster">
+      <button type="button" class="ds-button" (click)="toggleTraining()">
+        {{ training() ? 'Pause training' : 'Start training' }}
+      </button>
+      <button type="button" class="ds-button ds-button--secondary" (click)="playDemo()">
+        Watch learned demo
+      </button>
+      <button
+        type="button"
+        class="ds-button ds-button--secondary"
+        [disabled]="!best()"
+        (click)="playBest()"
+      >
+        Watch your best
+      </button>
+      @if (playing()) {
+      <button type="button" class="ds-button ds-button--secondary" (click)="stopReplay()">
+        Stop replay
+      </button>
+      }
+    </div>
+    <p>
+      Your training: {{ iteration() }} iterations · {{ best()?.evaluation?.passes ?? 0 }}/5 walk
+      tests passed
+    </p>
+    @if (trainingError()) {
+    <p role="status">{{ trainingError() }}</p>
+    } @if (limbs(); as legs) {
+    <svg
+      class="artwork"
+      style="--rex-outline: #344e35; --rex-shin: #739161; --rex-thigh: #62835a"
+      viewBox="0 0 420 660"
+      role="img"
+      aria-label="Tyrannosaurus rex walking, seen from above"
+    >
+      <defs>
+        <pattern
+          id="rex-track"
+          patternUnits="userSpaceOnUse"
+          width="420"
+          height="72"
+          [attr.y]="distance() * 162"
+        >
+          <path class="track-mark" d="M 15,36 h 8 M 397,36 h 8" />
+        </pattern>
+      </defs>
+      <rect width="420" height="660" fill="url(#rex-track)" />
+      @for (leg of legs; track $index) {
+      <g class="rex-lower-leg">
+        <path class="shin-outline" [attr.d]="leg.shin" />
+        <path class="shin" [attr.d]="leg.shin" />
+        <path
+          class="toe"
+          d="M -10,31 Q -16,20 -12,9 L -19,0 Q -21,-5 -16,-6 L -6,4 L -5,-10 Q -3,-16 2,-11 L 4,4 L 13,-5 Q 18,-8 19,-3 L 12,10 Q 16,21 10,30 Q 1,36 -10,31 Z"
+          [attr.transform]="leg.foot"
+        />
+      </g>
+      } @for (leg of legs; track $index) {
+      <g class="rex-upper-leg">
+        <path class="thigh-outline" [attr.d]="leg.thigh" />
+        <path class="thigh" [attr.d]="leg.thigh" />
+      </g>
+      }
+      <use href="trex.svg#trex-top" />
+    </svg>
+    <p>
+      Distance: {{ distance().toFixed(2) }} m · Alternating steps: {{ steps() }} @if
+      (replayResult()) { · {{ replayResult() }} }
+    </p>
+    } @else {
+    <img
+      class="artwork"
+      src="trex.svg"
+      alt="Tyrannosaurus rex seen from above, with a broad skull, tiny arms, powerful legs and a long curved tail."
+      width="420"
+      height="660"
+    />
+    }
+  </div>
+</section>

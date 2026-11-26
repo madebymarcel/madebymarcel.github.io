@@ -38,16 +38,44 @@ export type Frame = {
 export type Start = { tilt?: number; vx?: number; friction?: number; crouch?: number };
 export type Ground = { from: number; to: number; height: number };
 export const FLAT_GROUND: readonly Ground[] = [{ from: -100, to: 100, height: 0 }];
-export type WorldOptions = { ground?: readonly Ground[]; seconds?: number; allowFalls?: boolean };
+type Collider = { x: number; y: number; halfWidth: number; halfHeight: number; density: number };
+export type Morphology = {
+  torso: readonly [Collider, ...Collider[]];
+  hip: number;
+  upper: number;
+  lower: number;
+  heel: number;
+  toe: number;
+  sole: number;
+  neutral: readonly [number, number, number];
+  limits: readonly (readonly [number, number])[];
+};
+const BIPED: Morphology = {
+  torso: [{ x: 0, y: 0, halfWidth: 0.19, halfHeight: 0.19, density: 220 }],
+  hip: HIP,
+  upper: UPPER,
+  lower: LOWER,
+  heel: HEEL,
+  toe: TOE,
+  sole: SOLE,
+  neutral: START_ANGLES,
+  limits: JOINT_LIMITS,
+};
+export type WorldOptions = {
+  ground?: readonly Ground[];
+  seconds?: number;
+  allowFalls?: boolean;
+  morphology?: Morphology;
+};
 type Motor = { joint: RevoluteJoint; neutral: number; index: number };
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-export function policyJointTarget(index: number, command: number): number {
-  const [min, max] = JOINT_LIMITS[index];
-  return clamp(START_ANGLES[index] + POLICY_TRAVEL * clamp(command, -1, 1), min, max);
+export function policyJointTarget(index: number, command: number, body = BIPED): number {
+  const [min, max] = body.limits[index];
+  return clamp(body.neutral[index] + POLICY_TRAVEL * clamp(command, -1, 1), min, max);
 }
 
 function drive(joint: RevoluteJoint, target: number) {
@@ -79,6 +107,7 @@ export class Walker {
   private contactX = [0, 0];
   private lifted = [false, false];
   readonly ground: readonly Ground[];
+  private readonly morphology: Morphology;
   private gait = new RunningGait();
   get runningGait() {
     return this.gait;
@@ -96,6 +125,8 @@ export class Walker {
     private readonly options: WorldOptions = {},
   ) {
     this.ground = options.ground ?? FLAT_GROUND;
+    this.morphology = options.morphology ?? BIPED;
+    const { hip: hipOffset, upper, lower, heel, toe, sole, neutral, torso } = this.morphology;
     for (const { from, to, height } of this.ground) {
       const depth = 0.5 + height;
       const body = this.world.createBody({ position: Vec2((from + to) / 2, height - depth / 2) });
@@ -107,41 +138,53 @@ export class Walker {
     }
     const tilt = start.tilt ?? 0;
     const crouch = start.crouch ?? 0;
-    const hip = rotate(0, HIP, tilt);
+    const hip = rotate(0, hipOffset, tilt);
     const poses = [-0.045, 0.045].map((split) => {
-      const thighAngle = tilt + START_ANGLES[0] + crouch * 0.5 + split;
-      const shinAngle = thighAngle + START_ANGLES[1] - crouch;
-      const footAngle = shinAngle + START_ANGLES[2] + crouch * 0.5 - split;
-      const knee = Vec2.add(hip, rotate(0, -UPPER, thighAngle));
-      const ankle = Vec2.add(knee, rotate(0, -LOWER, shinAngle));
+      const thighAngle = tilt + neutral[0] + crouch * 0.5 + split;
+      const shinAngle = thighAngle + neutral[1] - crouch;
+      const footAngle = shinAngle + neutral[2] + crouch * 0.5 - split;
+      const knee = Vec2.add(hip, rotate(0, -upper, thighAngle));
+      const ankle = Vec2.add(knee, rotate(0, -lower, shinAngle));
       const lowest =
-        ankle.y + Math.min(rotate(HEEL, SOLE, footAngle).y, rotate(TOE, SOLE, footAngle).y);
+        ankle.y + Math.min(rotate(heel, sole, footAngle).y, rotate(toe, sole, footAngle).y);
       return { thighAngle, shinAngle, footAngle, knee, ankle, lowest };
     });
-    const bodyBottom = -0.19 * (Math.abs(Math.sin(tilt)) + Math.abs(Math.cos(tilt)));
+    const bodyBottom = Math.min(
+      ...torso.map(
+        ({ x, y, halfWidth, halfHeight }) =>
+          rotate(x, y, tilt).y -
+          halfWidth * Math.abs(Math.sin(tilt)) -
+          halfHeight * Math.abs(Math.cos(tilt)),
+      ),
+    );
     const minY = Math.min(...poses.map(({ lowest }) => lowest), bodyBottom);
     const floorOffset = 0.015 - minY;
     hip.y += floorOffset;
-    this.torso = this.body(Vec2(0, floorOffset), tilt, Box(0.19, 0.19), 220, start.vx ?? 0);
+    const [core, ...extensions] = torso;
+    const collider = ({ x, y, halfWidth, halfHeight }: Collider) =>
+      Box(halfWidth, halfHeight, Vec2(x, y));
+    this.torso = this.body(Vec2(0, floorOffset), tilt, collider(core), core.density, start.vx ?? 0);
+    for (const part of extensions) this.attach(this.torso, collider(part), part.density);
+    this.torso.setLinearVelocity(Vec2(start.vx ?? 0, 0));
 
     for (let side = 0; side < 2; side++) {
       const { thighAngle, shinAngle, footAngle, knee, ankle } = poses[side];
       knee.y += floorOffset;
       ankle.y += floorOffset;
-      const thigh = this.body(hip, thighAngle, Box(0.047, UPPER / 2, Vec2(0, -UPPER / 2)), 135);
-      const shin = this.body(knee, shinAngle, Box(0.04, LOWER / 2, Vec2(0, -LOWER / 2)), 82);
+      const thigh = this.body(hip, thighAngle, Box(0.047, upper / 2, Vec2(0, -upper / 2)), 135);
+      const shin = this.body(knee, shinAngle, Box(0.04, lower / 2, Vec2(0, -lower / 2)), 82);
       const foot = this.body(
         ankle,
         footAngle,
-        Box((TOE - HEEL) / 2, 0.029, Vec2((TOE + HEEL) / 2, SOLE + 0.029)),
+        Box((toe - heel) / 2, 0.029, Vec2((toe + heel) / 2, sole + 0.029)),
         105,
       );
       for (const body of [thigh, shin, foot]) body.setLinearVelocity(Vec2(start.vx ?? 0, 0));
       this.legs.push({ thigh, shin, foot });
       this.feet.set(foot, side);
-      this.hinge(0, this.torso, thigh, Vec2(0, HIP));
-      this.hinge(1, thigh, shin, Vec2(0, -UPPER));
-      this.hinge(2, shin, foot, Vec2(0, -LOWER));
+      this.hinge(0, this.torso, thigh, Vec2(0, hipOffset));
+      this.hinge(1, thigh, shin, Vec2(0, -upper));
+      this.hinge(2, shin, foot, Vec2(0, -lower));
     }
     this.world.on('post-solve', (contact, impulse) => {
       const a = contact.getFixtureA().getBody();
@@ -177,6 +220,11 @@ export class Walker {
       linearVelocity: Vec2(vx, 0),
       angularDamping: 0.06,
     });
+    this.attach(body, shape, density);
+    return body;
+  }
+
+  private attach(body: Body, shape: ReturnType<typeof Box>, density: number) {
     // The two legs occupy different lateral lanes, projected into one side-view plane.
     body.createFixture(shape, {
       density,
@@ -185,11 +233,10 @@ export class Walker {
       filterCategoryBits: ROBOT,
       filterMaskBits: FLOOR,
     });
-    return body;
   }
 
   private hinge(index: number, parent: Body, child: Body, anchor: Vec2Value) {
-    const [lowerAngle, upperAngle] = JOINT_LIMITS[index];
+    const [lowerAngle, upperAngle] = this.morphology.limits[index];
     const joint = new RevoluteJoint({
       bodyA: parent,
       bodyB: child,
@@ -203,7 +250,7 @@ export class Walker {
       maxMotorTorque: MOTOR_TORQUES[index],
     });
     this.world.createJoint(joint);
-    this.motors.push({ joint, neutral: START_ANGLES[index], index });
+    this.motors.push({ joint, neutral: this.morphology.neutral[index], index });
   }
 
   observe(out: Float64Array = new Float64Array(OBSERVATIONS)): Float64Array {
@@ -239,7 +286,7 @@ export class Walker {
   probeJoints(targets: readonly number[], sample: () => void) {
     for (let substep = 0; substep < 4; substep++) {
       this.motors.forEach(({ joint, index }, i) => {
-        const [min, max] = JOINT_LIMITS[index];
+        const [min, max] = this.morphology.limits[index];
         drive(joint, clamp(targets[i], min, max));
       });
       this.stepWorld();
@@ -261,7 +308,7 @@ export class Walker {
     for (let substep = 0; substep < 4; substep++) {
       for (let i = 0; i < ACTIONS; i++) {
         const { joint, index } = this.motors[i];
-        drive(joint, policyJointTarget(index, action[i]));
+        drive(joint, policyJointTarget(index, action[i], this.morphology));
       }
       this.forces = [false, false, false, false];
       this.slipSpeed = 0;
@@ -303,12 +350,13 @@ export class Walker {
   }
 
   private countSteps() {
+    const { heel: back, toe: front, sole } = this.morphology;
     for (let side = 0; side < 2; side++) {
       const i = side * 2;
       const foot = this.legs[side].foot;
       if (!(this.contacts[i] || this.contacts[i + 1])) {
-        const heel = foot.getWorldPoint(Vec2(HEEL, SOLE));
-        const toe = foot.getWorldPoint(Vec2(TOE, SOLE));
+        const heel = foot.getWorldPoint(Vec2(back, sole));
+        const toe = foot.getWorldPoint(Vec2(front, sole));
         if (
           Math.min(
             heel.y - Math.max(0, this.groundHeight(heel.x)),
@@ -336,6 +384,7 @@ export class Walker {
   }
 
   frame(): Frame {
+    const { heel: back, toe: front, sole } = this.morphology;
     const { x, y } = this.torso.getPosition();
     return {
       torso: { x, y, angle: this.torso.getAngle() },
@@ -343,8 +392,8 @@ export class Walker {
         hip: { ...thigh.getPosition() },
         knee: { ...shin.getPosition() },
         ankle: { ...foot.getPosition() },
-        toe: foot.getWorldPoint(Vec2(TOE, SOLE)),
-        heel: foot.getWorldPoint(Vec2(HEEL, SOLE)),
+        toe: foot.getWorldPoint(Vec2(front, sole)),
+        heel: foot.getWorldPoint(Vec2(back, sole)),
       })),
       contacts: [...this.contacts],
       angles: this.motors.map(({ joint }) => joint.getJointAngle() / radians),

@@ -1,0 +1,47 @@
+.artwork {
+  display: block;
+  inline-size: min(100%, 26.25rem);
+  block-size: auto;
+  margin-inline: auto;
+}
+
+.track-mark {
+  stroke: var(--border-strong);
+  stroke-width: 2;
+}
+
+.shin,
+.shin-outline,
+.thigh,
+.thigh-outline {
+  fill: none;
+  stroke-linecap: round;
+}
+
+.shin,
+.thigh {
+  stroke: var(--rex-shin);
+  stroke-width: 16;
+}
+
+.shin-outline,
+.thigh-outline {
+  stroke: var(--rex-outline);
+  stroke-width: 20;
+}
+
+.thigh {
+  stroke: var(--rex-thigh);
+  stroke-width: 34;
+}
+
+.thigh-outline {
+  stroke-width: 38;
+}
+
+.toe {
+  fill: var(--rex-shin);
+  stroke: var(--rex-outline);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+}
