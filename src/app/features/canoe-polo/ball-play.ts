@@ -1,4 +1,13 @@
-import { clamp, type Action, type MatchState, type Player } from './model';
+import {
+  attackDirection,
+  BALL_RADIUS,
+  clamp,
+  DT,
+  PITCH,
+  type Action,
+  type MatchState,
+  type Player,
+} from './model';
 
 export const HOLD = 0;
 export const COLLECT = 1;
@@ -15,6 +24,24 @@ export interface Launch {
   vy: number;
   vz: number;
   target: number | null;
+}
+
+function assistedGoalLaunch(state: MatchState, player: Player, maxSpeed: number): Launch | null {
+  const direction = attackDirection(player.team, state.half);
+  const goalX = direction === 1 ? PITCH.length + BALL_RADIUS : -BALL_RADIUS;
+  const goalZ = (PITCH.goalBottom + PITCH.goalTop) / 2;
+  // Search at whole flight ticks because the simulation integrates vertical velocity discretely.
+  // Give the ball a legal trajectory, never a goal or possession award.
+  for (let ticks = 2; ticks <= 24; ticks++) {
+    const time = ticks * DT;
+    const vx = (goalX - player.x) / time;
+    const vy = (PITCH.width / 2 - player.y) / time;
+    const vz = (goalZ - 1.1) / time + (9.81 * (time - DT)) / 2;
+    if (Math.hypot(vx - 0.35 * player.vx, vy - 0.35 * player.vy, vz) <= maxSpeed) {
+      return { vx, vy, vz, target: null };
+    }
+  }
+  return null;
 }
 
 export function launchBall(state: MatchState, player: Player, action: Action): Launch | null {
@@ -45,7 +72,12 @@ export function launchBall(state: MatchState, player: Player, action: Action): L
     };
   }
 
-  // Aim and loft are expressed relative to the boat, not relative to the goal.
+  if (action.ball === FREE_THROW && action.goalAssist && state.ball.restrictedThrower === null) {
+    const assisted = assistedGoalLaunch(state, player, maxSpeed);
+    if (assisted) return assisted;
+  }
+
+  // Manual throws and out-of-range assisted attempts use the original hull-relative release.
   const offset = clamp(action.aim ?? 0, -1.3, 1.3);
   const aim = player.heading + offset + player.yawRate * 0.07 + (dominant ? 0 : hand * 0.065);
   const power = clamp(action.power ?? 0.75, 0, 1);

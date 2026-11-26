@@ -98,6 +98,46 @@ describe('Loose-ball pickups', () => {
 });
 
 describe('Aimed ball play', () => {
+  it('guides an AI shot to the attacking goal without awarding an instant goal', () => {
+    const match = new CanoeMatch(42);
+    const s = match.state;
+    Object.assign(s.players[0], { x: PITCH.length - 7, y: PITCH.width / 2, heading: Math.PI });
+    Object.assign(s.ball, { owner: 0, lastTouch: 0 });
+    match.step(
+      s.players.map((p) => ({ paddle: 0, ball: p.id === 0 ? FREE_THROW : 0, goalAssist: true })),
+    );
+    expect(s.score).toEqual([0, 0]);
+    expect(s.ball.owner).toBeNull();
+    expect(Math.hypot(s.ball.vx, s.ball.vy, s.ball.vz)).toBeLessThanOrEqual(11);
+    for (let i = 0; i < 24 && s.phase === 'play'; i++) play(match, {});
+    expect(s.score).toEqual([1, 0]);
+  });
+
+  it('still lets a defender intercept an assisted shot', () => {
+    const match = new CanoeMatch(42);
+    const s = match.state;
+    Object.assign(s.players[0], { x: PITCH.length - 7, y: PITCH.width / 2 });
+    Object.assign(s.players[5], { x: PITCH.length - 4, y: PITCH.width / 2, heading: Math.PI });
+    Object.assign(s.ball, { owner: 0, lastTouch: 0 });
+    match.step(
+      s.players.map((p) => ({ paddle: 0, ball: p.id === 0 ? FREE_THROW : 0, goalAssist: true })),
+    );
+    for (let i = 0; i < 10 && s.ball.owner === null; i++) play(match, { 5: 1 });
+    expect(s.ball.owner).toBe(5);
+    expect(s.score).toEqual([0, 0]);
+  });
+
+  it('does not assist restricted restart throws or shots outside physical range', () => {
+    const { s } = setup();
+    const p = s.players[0];
+    const shot = { paddle: 0, ball: FREE_THROW, aim: 0.7, loft: 0.4, power: 0.5 };
+    // Too far away to reach the goal even with assistance.
+    expect(launchBall(s, p, { ...shot, goalAssist: true })).toEqual(launchBall(s, p, shot));
+    p.x = PITCH.length - 3;
+    s.ball.restrictedThrower = 0;
+    expect(launchBall(s, p, { ...shot, goalAssist: true })).toEqual(launchBall(s, p, shot));
+  });
+
   it('aims at a moving teammate without rounding to a fixed direction', () => {
     const { match, s } = setup();
     const pass = launchBall(s, s.players[0], { paddle: 0, ball: FIRST_PASS })!;

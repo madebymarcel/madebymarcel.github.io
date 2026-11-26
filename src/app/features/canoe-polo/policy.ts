@@ -135,6 +135,7 @@ export function sample(
   state: MatchState,
   player: Player,
   random: () => number,
+  goalAssist = false,
 ): PolicySample {
   const observation = observe(state, player);
   const choices: PolicySample['choices'] = [];
@@ -169,9 +170,13 @@ export function sample(
   if (holding && ball >= FIRST_PASS) {
     action.hand = draw(3) === 0 ? player.dominantHand : player.dominantHand === 1 ? -1 : 1;
     if (ball === FREE_THROW) {
-      action.aim = SHOT_AIM[draw(4)];
-      action.power = SHOT_POWER[draw(5)];
-      action.loft = SHOT_LOFT[draw(6)];
+      if (goalAssist) {
+        action.goalAssist = true;
+      } else {
+        action.aim = SHOT_AIM[draw(4)];
+        action.power = SHOT_POWER[draw(5)];
+        action.loft = SHOT_LOFT[draw(6)];
+      }
     } else {
       action.passTo = player.seenPlayers[squad[ball - FIRST_PASS].id] ?? undefined;
     }

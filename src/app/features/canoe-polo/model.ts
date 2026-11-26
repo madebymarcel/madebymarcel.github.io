@@ -54,6 +54,7 @@ export interface Action {
   aim?: number;
   power?: number;
   loft?: number;
+  goalAssist?: boolean;
   look?: number;
   hand?: -1 | 1;
   passTo?: Sighting;

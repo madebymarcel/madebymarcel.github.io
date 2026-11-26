@@ -274,7 +274,7 @@ export class CanoePoloPage {
           state.players.map((p) =>
             p.id === manualId
               ? this.manualAction(p, state)
-              : sample(generations[p.team].weights, state, p, this.random).action,
+              : sample(generations[p.team].weights, state, p, this.random, true).action,
           ),
         );
       }

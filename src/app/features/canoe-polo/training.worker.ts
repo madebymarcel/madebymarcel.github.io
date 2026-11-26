@@ -46,7 +46,7 @@ function run(): void {
 scope.onmessage = ({ data }) => {
   if (data.kind === 'start') {
     stop();
-    trainer = new GenerationTrainer(data.parent, data.seed, data.rewards);
+    trainer = new GenerationTrainer(data.parent, data.seed, data.rewards, true);
     delay = data.delay;
     running = true;
     run();
