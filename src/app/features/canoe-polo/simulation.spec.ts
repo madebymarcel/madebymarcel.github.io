@@ -1,4 +1,5 @@
 import { GENESIS, exportGenerations, importGenerations, mergeGenerations } from './generations';
+import { FREE_THROW } from './ball-play';
 import { HALF_TICKS, PITCH, POSSESSION_TICKS, SHOT_TICKS, seededRandom } from './model';
 import { INPUTS, observe, sample } from './policy';
 import { assessPlay } from './referee';
@@ -89,6 +90,17 @@ describe('Canoe polo simulation', () => {
 });
 
 describe('Canoe polo learning and generations', () => {
+  it('uses goal assistance only when enabled and only on a selected shot', () => {
+    const { state } = new CanoeMatch(42);
+    const p = state.players[0];
+    state.ball.owner = p.id;
+    expect(sample(GENESIS.weights, state, p, () => 0, true).action.goalAssist).toBeUndefined();
+    const assisted = sample(GENESIS.weights, state, p, () => 0.999, true).action;
+    expect(assisted).toMatchObject({ ball: FREE_THROW, goalAssist: true });
+    expect(assisted.aim).toBeUndefined();
+    expect(sample(GENESIS.weights, state, p, () => 0.999).action.goalAssist).toBeUndefined();
+  });
+
   it('encodes a fixed-size observation and masks physically impossible ball actions', () => {
     const { state } = new CanoeMatch(42);
     const random = seededRandom(123);

@@ -26,6 +26,11 @@ Route: /projects/canoe-polo/
   leaving the experiment. Only completed generations persist across reloads.
 - Team generation selectors change the policy used from the next simulation tick without
   resetting the match. Leave both selections unchanged for a full-match comparison.
+- AI match play and browser background training use goal-assisted shots. The policy chooses
+  whether to throw; the launcher aims at the attacking goal's center if reachable within its current
+  throw strength. The normal ball physics, defenders and referee still decide the outcome.
+  Assisted mode leaves manual throws, existing v3 snapshots, and the unassisted developer
+  shooting benchmark compatible.
 - In a spectator match, enable Show player vision to see all ten current fields of view and
   which cones contain the ball. This shows current geometry, not each player's memory.
   Player controls can replace one policy with manual paddle, look, pickup and throw commands.

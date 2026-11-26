@@ -45,6 +45,7 @@ export class GenerationTrainer {
     private readonly parent: Generation,
     private readonly seed: number,
     private readonly rewards: Readonly<TrainingRewards> = DEFAULT_REWARDS,
+    private readonly goalAssist = false,
   ) {
     this.weights = [...parent.weights];
     this.random = seededRandom(seed);
@@ -84,7 +85,13 @@ export class GenerationTrainer {
       }
 
       const decisions = s.players.map((p) =>
-        sample(p.team === this.learner ? this.weights : this.parent.weights, s, p, this.random),
+        sample(
+          p.team === this.learner ? this.weights : this.parent.weights,
+          s,
+          p,
+          this.random,
+          this.goalAssist,
+        ),
       );
       const before = indices.map((id) => this.rewardPotential(s, id));
       const nearest =
