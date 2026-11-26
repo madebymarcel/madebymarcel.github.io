@@ -15,7 +15,10 @@ test('canoe polo match and portable generation library', async ({ page }) => {
   await page.getByRole('button', { name: 'Generations', exact: true }).click();
   await page.getByRole('button', { name: 'Export Generation 0' }).click();
   const transfer = page.getByLabel('Generation data (JSON)');
+  await expect(transfer).toHaveValue(/^\{"format":"canoe-polo-generations-v1",/);
   const data = JSON.parse(await transfer.inputValue());
+  expect(data.generations).toHaveLength(1);
+  expect(data.generations[0].id).toBe('genesis-v1');
   expect(data.generations[0].weights.length).toBeGreaterThan(1000);
   await page.getByRole('button', { name: 'Import', exact: true }).click();
   await expect(page.getByText(/Import complete/)).toBeVisible();
