@@ -55,6 +55,11 @@ Chromium. Seed settings make runs repeatable within the same environment, not ac
 **Train all skills** runs up to 100 new iterations per skill, in order, keeping the best tested
 checkpoint for each. Individual skills can be resumed or restarted with a separate seed.
 A fresh Run trainer copies the best Walk weights when available; it does not modify Walk.
+Run keeps training for the full batch even after five passes. Its reward gives credit for
+uncapped forward progress and alternating airborne strides. Checkpoints rank by passes,
+then valid runs, then median speed across valid runs. The viewer defaults to the fastest
+valid start in the selected checkpoint; a fast walk or fall is not a valid run. The
+1.55 m/s cutoff is a test threshold, not a reward cap.
 The remaining trainers start from zero. Each lab has its own independent rollouts and five
 fixed test starts.
 

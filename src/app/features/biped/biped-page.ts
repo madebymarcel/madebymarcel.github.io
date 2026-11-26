@@ -12,10 +12,11 @@ import {
 import { DecimalPipe } from '@angular/common';
 import { CONTROL_DT, JOINT_NAMES, TRACK_GOAL } from './walker';
 import { Parkour, SECTIONS, type CourseResult, type PolicyBook } from './course';
-import { GOALS, NAMES, SKILLS, type Skill } from './tasks';
+import { GOALS, NAMES, SKILLS, validRun, type Skill } from './tasks';
 import {
   DEFAULT_SEED,
   EVALUATION_STARTS,
+  fastestRun,
   inputBuffer,
   MAX_SEED,
   Practice,
@@ -37,6 +38,7 @@ export class BipedPage {
   private simulation: Practice | Parkour = this.practice('walk', null, 0);
   private replayKind: 'baseline' | 'best' = 'best';
   private hasPlayed = false;
+  private manualStart = false;
   private animation?: number;
   private lastFrame?: number;
   private accumulator = 0;
@@ -53,6 +55,7 @@ export class BipedPage {
   readonly selected = signal<Skill>('walk');
   readonly checkpoints = signal<Partial<Record<Skill, TrainingUpdate>>>({});
   readonly current = computed(() => this.checkpoints()[this.selected()]);
+  readonly bestRun = computed(() => fastestRun(this.checkpoints().run?.best?.evaluation));
   readonly allTrained = computed(() => SKILLS.every((skill) => !!this.checkpoints()[skill]?.best));
   readonly replayIteration = signal(0);
   readonly trialIndex = signal(0);
@@ -60,6 +63,8 @@ export class BipedPage {
   readonly ground = signal(this.simulation.sim.ground);
   readonly distance = signal(0);
   readonly steps = signal(0);
+  readonly averageSpeed = signal(0);
+  readonly flights = signal(0);
   readonly finish = signal('');
   readonly course = signal<CourseResult | null>(null);
   readonly showSensors = signal(false);
@@ -129,6 +134,7 @@ export class BipedPage {
   select(skill: Skill) {
     this.selected.set(skill);
     this.seedInput.set(String(this.checkpoints()[skill]?.seed ?? DEFAULT_SEED));
+    this.manualStart = false;
     this.trialIndex.set(0);
     this.replay('best');
     this.revealViewer();
@@ -146,6 +152,7 @@ export class BipedPage {
   setTrial(event: Event) {
     const index = Number((event.target as HTMLSelectElement).value);
     if (!EVALUATION_STARTS[index]) return;
+    this.manualStart = true;
     this.trialIndex.set(index);
     const wasPlaying = this.playing();
     this.initReplay(this.replayKind);
@@ -168,6 +175,9 @@ export class BipedPage {
   private initReplay(which: 'baseline' | 'best') {
     this.replayKind = which;
     const current = this.current();
+    if (this.selected() === 'run' && !this.manualStart) {
+      this.trialIndex.set(which === 'best' ? (this.bestRun()?.index ?? 0) : 0);
+    }
     const checkpoint = (which === 'best' ? current?.best : undefined) ?? current?.baseline;
     this.replayIteration.set(checkpoint?.iteration ?? 0);
     this.load(this.practice(this.selected(), checkpoint?.policy ?? null, this.trialIndex()));
@@ -206,6 +216,8 @@ export class BipedPage {
     this.ground.set(simulation.sim.ground);
     this.distance.set(0);
     this.steps.set(0);
+    this.flights.set(0);
+    this.averageSpeed.set(0);
     this.finish.set('');
     this.course.set(simulation instanceof Parkour ? simulation.result() : null);
   }
@@ -252,6 +264,8 @@ export class BipedPage {
       this.frame.set(simulation.sim.frame());
       this.distance.set(simulation.sim.distance);
       this.steps.set(simulation.sim.steps);
+      this.flights.set(simulation.sim.alternatingFlights);
+      this.averageSpeed.set(simulation.sim.distance / (simulation.sim.ticks * CONTROL_DT));
       if (simulation instanceof Parkour) this.course.set(simulation.result());
     }
     if (simulation.done) {
@@ -259,6 +273,10 @@ export class BipedPage {
         const result = simulation.result();
         this.finish.set(
           result.finished ? 'Course complete' : result.active + ': ' + result.failure,
+        );
+      } else if (simulation.skill === 'run') {
+        this.finish.set(
+          simulation.sim.fell ? 'Fell' : validRun(simulation.sim) ? 'Run recorded' : 'No valid run',
         );
       } else {
         this.finish.set(

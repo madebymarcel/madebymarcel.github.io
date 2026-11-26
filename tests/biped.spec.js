@@ -90,6 +90,11 @@ test('switches scenes immediately, counts isolated training, and plays parkour i
     await expect(skill).toHaveAttribute('aria-pressed', 'true');
     const scene = page.getByRole('img', { name: new RegExp(name + ' scene') });
     await expect(scene.locator('rect.floor')).toHaveCount(tiles);
+    if (name === 'Run') {
+      await expect(skill).toHaveAccessibleDescription(/No valid run yet/);
+      await expect(page.getByTestId('biped-replay-summary')).toContainText('m/s avg');
+      await expect(page.getByTestId('biped-replay-summary')).toContainText('airborne strides');
+    }
     await expect(skill).toHaveAccessibleDescription(/0 training sessions$/);
     await train.click();
     await expect(skill).toHaveAccessibleDescription(/High score:\s*\d\/5 passed/, {

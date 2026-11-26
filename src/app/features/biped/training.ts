@@ -1,4 +1,4 @@
-import { labWalker, recoveryStart, TaskProgress, type Skill } from './tasks';
+import { labWalker, recoveryStart, TaskProgress, validRun, type Skill } from './tasks';
 import { ACTIONS, CONTROL_DT, OBSERVATIONS, TRACK_GOAL, Walker, type Start } from './walker';
 
 export const DEFAULT_SEED = 3;
@@ -31,6 +31,8 @@ export type Trial = {
   distance: number;
   steps: number;
   flightFraction: number;
+  alternatingFlights: number;
+  validRun: boolean;
   slipDistance: number;
   fell: boolean;
   seconds: number;
@@ -104,10 +106,9 @@ export class Practice {
     readonly skill: Skill,
     start: Start,
     private readonly weights: ArrayLike<number>,
-    speed?: number,
   ) {
     this.sim = labWalker(skill, start);
-    this.progress = new TaskProgress(skill, speed);
+    this.progress = new TaskProgress(skill);
     this.observation = inputBuffer(skill);
   }
 
@@ -153,13 +154,8 @@ export function startFor(skill: Skill, index: number, training = false, iteratio
   return start;
 }
 
-export function trial(
-  weights: ArrayLike<number>,
-  start: Start,
-  skill: Skill = 'walk',
-  speed?: number,
-): Trial {
-  const practice = new Practice(skill, start, weights, speed);
+export function trial(weights: ArrayLike<number>, start: Start, skill: Skill = 'walk'): Trial {
+  const practice = new Practice(skill, start, weights);
   const { sim } = practice;
   while (!practice.done) practice.step();
   const seconds = sim.ticks * CONTROL_DT;
@@ -167,6 +163,8 @@ export function trial(
     distance: sim.distance,
     steps: sim.steps,
     flightFraction: sim.flightTime / seconds,
+    alternatingFlights: sim.alternatingFlights,
+    validRun: skill === 'run' && validRun(sim),
     slipDistance: sim.slipDistance,
     fell: sim.fell,
     seconds,
@@ -192,11 +190,32 @@ export function evaluate(weights: ArrayLike<number>, skill: Skill = 'walk'): Eva
   };
 }
 
+function runSpeeds(evaluation: Evaluation) {
+  return evaluation.results.flatMap((item) =>
+    item.validRun ? [item.distance / item.seconds] : [],
+  );
+}
+
+export function fastestRun(evaluation?: Evaluation): { index: number; speed: number } | undefined {
+  let best: { index: number; speed: number } | undefined;
+  evaluation?.results.forEach((item, index) => {
+    const speed = item.distance / item.seconds;
+    if (item.validRun && (!best || speed > best.speed)) best = { index, speed };
+  });
+  return best;
+}
+
 export function better(candidate: Checkpoint, best: Checkpoint | undefined, skill: Skill) {
   if (!best) return true;
   const a = candidate.evaluation;
   const b = best.evaluation;
   if (a.passes !== b.passes) return a.passes > b.passes;
+  if (skill === 'run') {
+    const speedsA = runSpeeds(a);
+    const speedsB = runSpeeds(b);
+    if (speedsA.length !== speedsB.length) return speedsA.length > speedsB.length;
+    if (speedsA.length) return median(speedsA) > median(speedsB);
+  }
   return skill === 'walk' ? a.medianDistance > b.medianDistance : a.medianReward > b.medianReward;
 }
 
@@ -236,20 +255,17 @@ export class Trainer {
       true,
       this.iteration,
     );
-    const speed = Math.min(1.85, 1.15 + this.iteration * 0.014);
     const candidates = Array.from({ length: POPULATION }, () => {
       const direction = this.weights.map(() => Math.sqrt(12) * (this.random() - 0.5));
       const positive = trial(
         this.weights.map((weight, i) => weight + NOISE * direction[i]),
         start,
         this.skill,
-        speed,
       ).reward;
       const negative = trial(
         this.weights.map((weight, i) => weight - NOISE * direction[i]),
         start,
         this.skill,
-        speed,
       ).reward;
       return { direction, positive, negative };
     });
