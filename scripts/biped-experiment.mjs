@@ -36,7 +36,7 @@ for (const seed of seeds) {
         const current = trainer.checkpoint();
         console.log(JSON.stringify({ seed, skill, iteration, ...current.evaluation }));
         if (better(current, book[skill], skill)) book[skill] = current;
-        if (course && current.evaluation.passes === 5) break;
+        if (course && skill !== 'run' && current.evaluation.passes === 5) break;
       }
       if (iteration < iterations) trainer.train();
     }

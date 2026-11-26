@@ -88,8 +88,10 @@
         <p class="ds-hint" data-testid="biped-replay-summary">
           @if (course(); as result) { {{ result.completed.length }}/{{ sections.length }} stages ·
           {{ result.active }} } @else { {{ replayIteration() ? 'Iteration ' + replayIteration() :
-          'Baseline' }} } · {{ distance() | number: '1.2-2' }} m @if (!course() && (selected() ===
-          'walk' || selected() === 'run')) { · {{ steps() }} alternating steps }
+          'Baseline' }} } · {{ distance() | number: '1.2-2' }} m @if (!course() && selected() ===
+          'run') { · {{ averageSpeed() | number: '1.2-2' }} m/s avg · {{ flights() }} airborne
+          strides } @else if (!course() && selected() === 'walk') { · {{ steps() }} alternating
+          steps }
         </p>
         <p class="run-result" role="status" data-testid="biped-result">{{ finish() }}</p>
         @if (active(); as training) {
@@ -214,6 +216,12 @@
                 High score: @if (progress?.best; as checkpoint) { {{ checkpoint.evaluation.passes
                 }}/{{ trials.length }} passed } @else { — }
               </span>
+              @if (skill === 'run') {
+              <span>
+                @if (bestRun(); as run) { Best replay: {{ run.speed | number: '1.2-2' }} m/s } @else
+                { No valid run yet }
+              </span>
+              }
               <span
                 >{{ progress?.sessions ?? 0 }} training {{ progress?.sessions === 1 ? 'session' :
                 'sessions' }}</span

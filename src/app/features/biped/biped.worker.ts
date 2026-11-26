@@ -69,8 +69,7 @@ function advance() {
   if (job.trainer.iteration % 5 === 0 || job.trainer.iteration >= until) {
     const latest = recordBest(active, job);
     const complete =
-      Number.isFinite(until) &&
-      (job.trainer.iteration >= until || job.best?.evaluation.passes === 5);
+      Number.isFinite(until) && (job.trainer.iteration >= until || mastered(active, job));
     if (complete) job.sessions++;
     publish(active, job, latest);
     if (complete) {
@@ -81,9 +80,13 @@ function advance() {
   scheduled = setTimeout(advance, 0);
 }
 
+function mastered(skill: Skill, job: Job | undefined) {
+  return skill !== 'run' && job?.best?.evaluation.passes === 5;
+}
+
 function startNext() {
   active = batch.shift() ?? null;
-  while (active && jobs.get(active)?.best?.evaluation.passes === 5) active = batch.shift() ?? null;
+  while (active && mastered(active, jobs.get(active))) active = batch.shift() ?? null;
   status();
   if (active) {
     startedAt = jobFor(active).trainer.iteration;

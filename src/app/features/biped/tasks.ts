@@ -29,7 +29,7 @@ const STAIR_GROUND = [{ from: -100, to: STAIR_X, height: 0 }, ...staircase(STAIR
 
 export const GOALS: Record<Skill, string> = {
   walk: 'Walk 5 m without falling or shuffling.',
-  run: 'Average 1.55 m/s with repeated alternating airborne strides.',
+  run: 'Run as fast as possible without falling.',
   jump: 'Clear the gap and stay upright after landing.',
   stairs: 'Climb all three steps and finish with both feet on top.',
   recover: 'Stand from a fallen pose and hold it for one second.',
@@ -99,6 +99,18 @@ export class StairProgress {
   }
 }
 
+export function validRun(sim: Walker) {
+  const time = sim.ticks * CONTROL_DT;
+  return (
+    !sim.fell &&
+    sim.done &&
+    sim.steps >= 8 &&
+    sim.alternatingFlights >= 4 &&
+    sim.flightTime / time <= 0.55 &&
+    sim.slipDistance <= sim.distance * 0.25
+  );
+}
+
 export class TaskProgress {
   passed = false;
   settled = 0;
@@ -113,10 +125,7 @@ export class TaskProgress {
   private lastUpright = 0;
   private readonly stairs = new StairProgress(STAIR_X);
 
-  constructor(
-    readonly skill: Skill,
-    private readonly speed = 1.85,
-  ) {}
+  constructor(readonly skill: Skill) {}
 
   update(sim: Walker, walkReward: number): number {
     const { skill } = this;
@@ -136,21 +145,9 @@ export class TaskProgress {
     const cost = 0.00018 * work + 0.65 * slip;
     if (skill === 'run') {
       const time = sim.ticks * CONTROL_DT;
-      this.passed =
-        !sim.fell &&
-        sim.done &&
-        sim.distance / time >= 1.55 &&
-        sim.steps >= 8 &&
-        sim.alternatingFlights >= 4 &&
-        sim.flightTime / time <= 0.55 &&
-        sim.slipDistance <= sim.distance * 0.25;
-      return (
-        Math.min(dx, this.speed * CONTROL_DT) +
-        0.1 * steps +
-        0.22 * flights -
-        cost -
-        (sim.fell ? 1.2 : 0)
-      );
+      const running = validRun(sim);
+      this.passed = running && sim.distance / time >= 1.55;
+      return dx + 0.1 * steps + 0.22 * flights - cost - (sim.fell ? 1.2 : 0);
     }
     if (skill === 'recover') {
       const tilt = sim.torso.getAngle();
