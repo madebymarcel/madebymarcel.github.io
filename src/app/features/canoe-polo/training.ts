@@ -6,8 +6,8 @@ import { type Generation } from './generations';
 import { addGradient, estimateValue, sample, WEIGHT_COUNT, type PolicySample } from './policy';
 
 const BATCH_STEPS = 96;
-const DISCOUNT = 0.99;
-const LEARNING_RATE = 0.035;
+export const DISCOUNT = 0.99;
+export const LEARNING_RATE = 0.035;
 
 export function ballControlReward(
   play: BallPlay | null,
