@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('T. rex is the third project and its SVG loads without horizontal overflow', async ({ page }) => {
+test('T. rex is third and its SVG fits the viewport', async ({ page }) => {
   await page.goto('/projects/');
   const projects = page.locator('main article');
   await expect(projects.nth(2).getByRole('heading')).toHaveText('T. rex');
