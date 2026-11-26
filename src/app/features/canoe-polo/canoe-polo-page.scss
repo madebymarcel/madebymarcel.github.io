@@ -99,7 +99,6 @@ progress {
 }
 
 .dashboard-match,
-.dashboard-side,
 .generation-layout,
 .generation-panel,
 .training-controls {
@@ -115,6 +114,11 @@ progress {
 summary {
   cursor: pointer;
   font-weight: var(--weight-semibold);
+}
+
+#polo-import {
+  inline-size: 100%;
+  min-inline-size: 0;
 }
 
 .generation-scroll {

@@ -24,7 +24,7 @@ export const GENESIS: Generation = {
 };
 
 const FORMAT = 'canoe-polo-generations-v1';
-const MAX_IMPORT = 20_000_000;
+export const MAX_GENERATION_IMPORT_BYTES = 64_000_000;
 
 export function exportGenerations(generations: readonly Generation[]): string {
   return JSON.stringify({ format: FORMAT, ruleset: RULESET, policy: POLICY_VERSION, generations });
@@ -53,9 +53,18 @@ function validGeneration(value: unknown): value is Generation {
 }
 
 export function importGenerations(source: string): Generation[] {
-  if (source.length > MAX_IMPORT) throw new Error('Generation export is too large.');
-  const data: unknown = JSON.parse(source);
-  if (typeof data !== 'object' || data === null) throw new Error('Invalid generation export.');
+  if (source.length > MAX_GENERATION_IMPORT_BYTES) {
+    throw new Error('Generation data exceeds the 64 MB import limit.');
+  }
+  let data: unknown;
+  try {
+    data = JSON.parse(source);
+  } catch {
+    throw new Error('The generation file is not valid JSON.');
+  }
+  if (typeof data !== 'object' || data === null) {
+    throw new Error('This is not a Canoe Polo generation export.');
+  }
   const envelope = data as {
     format?: unknown;
     ruleset?: unknown;
@@ -64,15 +73,18 @@ export function importGenerations(source: string): Generation[] {
   };
   if (
     envelope.format !== FORMAT ||
-    envelope.ruleset !== RULESET ||
-    envelope.policy !== POLICY_VERSION ||
     !Array.isArray(envelope.generations) ||
-    envelope.generations.length === 0 ||
-    !envelope.generations.every(validGeneration)
+    envelope.generations.length === 0
   ) {
-    throw new Error('Invalid or incompatible generation export.');
+    throw new Error('This is not a Canoe Polo generation export.');
   }
-  const generations = envelope.generations as Generation[];
+  if (envelope.ruleset !== RULESET || envelope.policy !== POLICY_VERSION) {
+    throw new Error('This simulator imports v3 generation exports only.');
+  }
+  if (!envelope.generations.every(validGeneration)) {
+    throw new Error('The export contains invalid generation data.');
+  }
+  const generations: Generation[] = envelope.generations;
   if (new Set(generations.map((g) => g.id)).size !== generations.length) {
     throw new Error('Export contains duplicate generation IDs.');
   }

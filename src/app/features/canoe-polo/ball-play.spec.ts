@@ -1,5 +1,5 @@
 import { FIRST_PASS, FREE_THROW, launchBall } from './ball-play';
-import { PITCH } from './model';
+import { BALL_RADIUS, PITCH } from './model';
 import { CanoeMatch } from './simulation';
 import { ballControlReward } from './training';
 
@@ -18,6 +18,48 @@ function setup() {
 function play(match: CanoeMatch, actions: Record<number, number>) {
   return match.step(match.state.players.map((p) => ({ paddle: 0, ball: actions[p.id] ?? 0 })));
 }
+
+describe('Loose-ball pickups', () => {
+  function crossing() {
+    const match = new CanoeMatch(42);
+    const { ball, players } = match.state;
+    const p = players[0];
+    Object.assign(p, { x: 10, y: 11.5, heading: 0, vx: 3.5 });
+    Object.assign(ball, { x: 10.25, y: 11.5, z: BALL_RADIUS });
+    return { match, ball, p };
+  }
+
+  it('allows an intentional reach before a coasting boat overshoots a water ball in one tick', () => {
+    const { match, ball, p } = crossing();
+    play(match, { 0: 1 });
+    expect(p.x).toBeGreaterThan(10.25);
+    expect(ball.owner).toBe(p.id);
+    expect(match.lastBallPlay).toMatchObject({ kind: 'claim', receiver: p.id });
+  });
+
+  it('does not collect the ball just by running over it', () => {
+    const { match, ball, p } = crossing();
+    play(match, {});
+    expect(p.x).toBeGreaterThan(ball.x);
+    expect(ball.owner).toBeNull();
+  });
+
+  it('does not grant the early reach to a paddler committed to a stroke', () => {
+    const { match, ball, p } = crossing();
+    Object.assign(p, { stroke: 1, strokeTicks: 3 });
+    play(match, { 0: 1 });
+    expect(p.x).toBeGreaterThan(ball.x);
+    expect(ball.owner).toBeNull();
+  });
+
+  it('does not turn a ball that goes out in the same tick into possession', () => {
+    const { match, ball, p } = crossing();
+    Object.assign(p, { y: 0.65 });
+    Object.assign(ball, { y: 0.08, vy: -2 });
+    expect(play(match, { 0: 1 })?.kind).toBe('out');
+    expect(match.lastBallPlay).toBeNull();
+  });
+});
 
 describe('Aimed ball play', () => {
   it('aims at a moving teammate without rounding to a fixed direction', () => {

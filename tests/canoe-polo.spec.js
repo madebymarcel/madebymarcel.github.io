@@ -1,4 +1,18 @@
 import { expect, test } from '@playwright/test';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
+
+async function downloadGeneration(page, name) {
+  const pending = page.waitForEvent('download');
+  await page.getByRole('button', { name }).click();
+  const download = await pending;
+  const path = await download.path();
+  return {
+    data: JSON.parse(await readFile(path, 'utf8')),
+    path,
+    name: download.suggestedFilename(),
+  };
+}
 
 test('canoe polo match and portable generation library', async ({ page }) => {
   await page.goto('/projects/canoe-polo/');
@@ -14,15 +28,20 @@ test('canoe polo match and portable generation library', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Resume match' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Referee decisions' })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Export Generation 0' }).click();
-  const transfer = page.getByLabel('Generation data (JSON)');
-  await expect(transfer).toHaveValue(/^\{"format":"canoe-polo-generations-v1",/);
-  const data = JSON.parse(await transfer.inputValue());
-  expect(data.generations).toHaveLength(1);
-  expect(data.generations[0].id).toBe('genesis-v1');
-  expect(data.generations[0].weights.length).toBeGreaterThan(1000);
-  await page.getByRole('button', { name: 'Import', exact: true }).click();
-  await expect(page.getByText(/Import complete/)).toBeVisible();
+  const download = await downloadGeneration(page, 'Download Generation 0');
+  expect(download.name).toBe('canoe-polo-generation-0-genesis-v1.json');
+  expect(download.data.format).toBe('canoe-polo-generations-v1');
+  expect(download.data.generations).toHaveLength(1);
+  expect(download.data.generations[0].id).toBe('genesis-v1');
+  expect(download.data.generations[0].weights.length).toBeGreaterThan(1000);
+  const input = page.getByLabel('Generation file (JSON)');
+  await expect(input).toBeEnabled();
+  await input.setInputFiles({
+    name: download.name,
+    mimeType: 'application/json',
+    buffer: await readFile(download.path),
+  });
+  await expect(page.getByText(/Imported 1 generation\. Saved on this device/)).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Generations (1)' })).toBeVisible();
 
   await page.getByText('Training rewards', { exact: true }).click();
@@ -41,32 +60,39 @@ test('canoe polo match and portable generation library', async ({ page }) => {
   await page.getByRole('button', { name: 'Reset reward defaults' }).click();
   await expect(goal).toHaveValue('5');
 
-  await page.getByRole('button', { name: 'Run skills drills' }).click();
-  await expect(page.getByText('Generation 0 results')).toBeVisible();
-  await expect(page.getByText(/Turn and collect under control:.+8/)).toBeVisible();
-  await expect(page.getByText(/Aim and score:.+8/)).toBeVisible();
-  await expect(page.getByText(/Save a goal-bound shot:.+8/)).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Skills drills' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Export all' })).toHaveCount(0);
 
   await expect(page.getByText('About and rules', { exact: true })).toBeVisible();
 });
 
-test('keeps import and export outside a long searchable generation list', async ({ page }) => {
+test('imports a legacy collection and downloads only the selected generation', async ({
+  page,
+}, testInfo) => {
   await page.goto('/projects/canoe-polo/');
-  await page.getByRole('button', { name: 'Export Generation 0' }).click();
-  const transfer = page.getByLabel('Generation data (JSON)');
-  await expect(transfer).toHaveValue(/canoe-polo-generations-v1/);
-  const data = JSON.parse(await transfer.inputValue());
-  const zeroWeights = data.generations[0].weights.map(() => 0);
-  data.generations = Array.from({ length: 120 }, (_, index) => ({
-    ...data.generations[0],
+  const { data } = await downloadGeneration(page, 'Download Generation 0');
+  const [genesis] = data.generations;
+  data.generations = Array.from({ length: 360 }, (_, index) => ({
+    ...genesis,
     id: 'test-generation-' + (index + 1),
     number: index + 1,
     parentId: 'genesis-v1',
-    weights: zeroWeights,
   }));
-  await transfer.fill(JSON.stringify(data));
-  await page.getByRole('button', { name: 'Import', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Generations (121)' })).toBeVisible();
+  const backup = Buffer.from(JSON.stringify(data));
+  expect(backup.byteLength).toBeGreaterThan(20_000_000);
+  const path = testInfo.outputPath('v3-collection.json');
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, backup);
+  const input = page.getByLabel('Generation file (JSON)');
+  await expect(input).toBeEnabled();
+  await input.setInputFiles(path);
+  await expect(page.getByText(/Imported 360 generations\. Saved on this device/)).toBeVisible({
+    timeout: 15_000,
+  });
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Generations (361)' })).toBeVisible({
+    timeout: 15_000,
+  });
 
   const list = page.getByRole('region', { name: 'Generation list' });
   const geometry = await list.evaluate((node) => ({
@@ -76,11 +102,34 @@ test('keeps import and export outside a long searchable generation list', async 
   }));
   expect(geometry.height).toBeLessThan(geometry.viewport);
   expect(geometry.scroll).toBeGreaterThan(geometry.height);
-  await expect(list.getByRole('button', { name: 'Export all' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Export all' })).toBeVisible();
+  await expect(list.getByLabel('Generation file (JSON)')).toHaveCount(0);
 
-  await page.getByLabel('Find a generation').fill('test-generation-120');
+  await page.getByLabel('Find a generation').fill('test-generation-360');
   await expect(list.getByRole('listitem')).toHaveCount(1);
-  await list.getByRole('button', { name: /Export Generation 120/ }).click();
-  await expect(transfer).toHaveValue(/test-generation-120/);
+  const download = await downloadGeneration(page, /Download Generation 360/);
+  expect(download.data.generations).toEqual([data.generations.at(-1)]);
+});
+
+test('explains malformed and incompatible imports without changing generations', async ({
+  page,
+}) => {
+  await page.goto('/projects/canoe-polo/');
+  const input = page.getByLabel('Generation file (JSON)');
+  await expect(input).toBeEnabled();
+  await input.setInputFiles({
+    name: 'invalid.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from('not JSON'),
+  });
+  await expect(page.getByText('The generation file is not valid JSON.')).toBeVisible();
+
+  const { data } = await downloadGeneration(page, 'Download Generation 0');
+  await expect(input).toBeEnabled();
+  await input.setInputFiles({
+    name: 'old.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify({ ...data, policy: 'linear-actor-critic-v2' })),
+  });
+  await expect(page.getByText('This simulator imports v3 generation exports only.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Generations (1)' })).toBeVisible();
 });
