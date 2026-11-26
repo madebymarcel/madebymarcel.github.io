@@ -33,6 +33,13 @@ test('canoe polo match and portable generation library', async ({ page }) => {
   await page.getByRole('button', { name: 'Reset reward defaults' }).click();
   await expect(passBonus).toHaveValue('0.18');
 
+  await page.getByRole('button', { name: 'Skills drills', exact: true }).click();
+  await page.getByRole('button', { name: 'Run skills drills' }).click();
+  await expect(page.getByText('Generation 0 results')).toBeVisible();
+  await expect(page.getByText(/Turn and collect under control:.+8/)).toBeVisible();
+  await expect(page.getByText(/Aim and score:.+8/)).toBeVisible();
+  await expect(page.getByText(/Save a goal-bound shot:.+8/)).toBeVisible();
+
   await page.getByRole('button', { name: 'About', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Rules and limitations' })).toBeVisible();
 });

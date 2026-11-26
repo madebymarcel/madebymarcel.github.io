@@ -11,19 +11,24 @@ import {
   type MatchState,
   type Player,
 } from './model';
-import { BALL_ACTIONS, FIRST_PASS, FIRST_SHOT, FREE_THROW, teammates } from './ball-play';
+import { BALL_ACTIONS, FIRST_PASS, FREE_THROW, teammates } from './ball-play';
 import { PADDLE_ACTIONS, STROKE_TICKS } from './paddle';
 
-export const INPUTS = 65;
-const VALUE_ROW = PADDLE_ACTIONS + BALL_ACTIONS;
+export const INPUTS = 72;
+const look = [-1, 0, 1];
+const aim = [-1.3, -0.85, -0.48, -0.24, -0.1, 0, 0.1, 0.24, 0.48, 0.85, 1.3];
+const power = [0.45, 0.65, 0.82, 1];
+const loft = [0.24, 0.4, 0.55, 0.72, 0.9];
+const sizes = [PADDLE_ACTIONS, BALL_ACTIONS, look.length, 2, aim.length, power.length, loft.length];
+const offsets = sizes.map((_, i) => sizes.slice(0, i).reduce((a, b) => a + b, 0));
+const VALUE_ROW = sizes.reduce((a, b) => a + b, 0);
 export const WEIGHT_COUNT = (VALUE_ROW + 1) * INPUTS;
-export const POLICY_VERSION = 'linear-actor-critic-v2';
+export const POLICY_VERSION = 'linear-actor-critic-v3';
 
 export interface PolicySample {
   observation: number[];
   action: Action;
-  paddles: number[];
-  balls: number[];
+  choices: { probabilities: number[]; picked: number; offset: number }[];
   value: number;
 }
 
@@ -34,54 +39,50 @@ export function initialWeights(seed = 42): number[] {
 
 export function observe(state: MatchState, player: Player): number[] {
   const direction = attackDirection(player.team, state.half);
-  const ball = state.ball;
-  const owner = ball.owner === null ? null : state.players[ball.owner];
-  const attackX = direction === 1 ? player.x : PITCH.length - player.x;
-  const attackY = direction === 1 ? player.y : PITCH.width - player.y;
+  const ball = player.seenBall;
+  const holding = state.ball.owner === player.id;
+  const goalOffset =
+    Math.atan2(PITCH.width / 2 - player.y, (direction === 1 ? PITCH.length : 0) - player.x) -
+    player.heading;
+  const squad = teammates(state, player);
+  const roster = [...squad, ...state.players.filter((p) => p.team !== player.team)];
   const input = [
     1,
-    attackX / PITCH.length,
-    attackY / PITCH.width,
+    (direction === 1 ? player.x : PITCH.length - player.x) / PITCH.length,
+    (direction === 1 ? player.y : PITCH.width - player.y) / PITCH.width,
     Math.cos(player.heading) * direction,
     Math.sin(player.heading) * direction,
     (player.vx * direction) / 3.5,
     (player.vy * direction) / 3.5,
-    ((ball.x - player.x) * direction) / PITCH.length,
-    ((ball.y - player.y) * direction) / PITCH.width,
-    ball.z / 4,
-    (ball.vx * direction) / 11,
-    (ball.vy * direction) / 11,
-    Number(owner?.id === player.id),
-    Number(owner?.team === player.team),
-    Number(owner !== null && owner.team !== player.team),
-    owner?.id === player.id ? state.possessionTicks / POSSESSION_TICKS : 0,
-    state.shotTicks / SHOT_TICKS,
-    clamp((state.score[player.team] - state.score[player.team === 0 ? 1 : 0]) / 5, -1, 1),
-    1 - state.ticks / (2 * HALF_TICKS),
-    Number(ball.restrictedThrower === player.id),
-  ];
-  const relative = (x: number, y: number): number => {
-    const angle = Math.atan2(y - player.y, x - player.x) - player.heading;
-    return Math.sin(angle);
-  };
-  const squad = teammates(state, player);
-  const opponents = state.players.filter((p) => p.team !== player.team);
-  input.push(
     player.yawRate / 3.5,
     player.strokeTicks / STROKE_TICKS,
-    relative(ball.x, ball.y),
-    relative(direction === 1 ? PITCH.length : 0, PITCH.width / 2),
-    Number(ball.lastTouch === player.id),
-    ...squad.map((p) => Math.min(1, Math.min(...opponents.map((o) => distance(p, o))) / 6)),
-  );
-  // Teammates first, then opponents, in stable roster order.
-  const others = [...squad, ...opponents];
-  for (const p of others) {
+    player.headTurn / 1.25,
+    player.dominantHand,
+    Math.sin(goalOffset),
+    Math.cos(goalOffset),
+    Number(holding),
+    Number(state.ball.restrictedThrower === player.id),
+    holding ? state.possessionTicks / POSSESSION_TICKS : 0,
+    state.shotTicks / SHOT_TICKS,
+    clamp((state.score[player.team] - state.score[1 - player.team]) / 5, -1, 1),
+    1 - state.ticks / (2 * HALF_TICKS),
+    ball ? 1 - (state.ticks - ball.tick) / 11 : 0,
+    Number(ball?.owner != null && state.players[ball.owner].team === player.team),
+    Number(ball?.owner != null && state.players[ball.owner].team !== player.team),
+    ball ? ((ball.x - player.x) * direction) / PITCH.length : 0,
+    ball ? ((ball.y - player.y) * direction) / PITCH.width : 0,
+    ball ? ball.z / 4 : 0,
+    ball ? (ball.vx * direction) / 11 : 0,
+    ball ? (ball.vy * direction) / 11 : 0,
+  ];
+  for (const { id } of roster) {
+    const seen = player.seenPlayers[id];
     input.push(
-      ((p.x - player.x) * direction) / PITCH.length,
-      ((p.y - player.y) * direction) / PITCH.width,
-      (p.vx * direction) / 3.5,
-      (p.vy * direction) / 3.5,
+      seen ? 1 - (state.ticks - seen.tick) / 11 : 0,
+      seen ? ((seen.x - player.x) * direction) / PITCH.length : 0,
+      seen ? ((seen.y - player.y) * direction) / PITCH.width : 0,
+      seen ? (seen.vx * direction) / 3.5 : 0,
+      seen ? (seen.vy * direction) / 3.5 : 0,
     );
   }
   return input;
@@ -116,9 +117,7 @@ function choose(probability: readonly number[], random: () => number): number {
     remaining -= probability[i];
     if (remaining < 0) return i;
   }
-  for (let i = probability.length - 1; i >= 0; i--) {
-    if (probability[i] > 0) return i;
-  }
+  for (let i = probability.length - 1; i >= 0; i--) if (probability[i] > 0) return i;
   return 0;
 }
 
@@ -129,30 +128,45 @@ export function sample(
   random: () => number,
 ): PolicySample {
   const observation = observe(state, player);
-  const paddles =
-    player.strokeTicks > 0
-      ? []
-      : probabilities(weights, observation, 0, PADDLE_ACTIONS, () => true);
-  const hasBall = state.ball.owner === player.id;
-  const squad = hasBall ? teammates(state, player) : [];
-  const shotRange = Math.hypot(
-    (attackDirection(player.team, state.half) === 1 ? PITCH.length : 0) - player.x,
-    PITCH.width / 2 - player.y,
-  );
-  const balls = probabilities(weights, observation, PADDLE_ACTIONS, BALL_ACTIONS, (i) => {
-    if (i === 0) return true;
-    if (!hasBall) return i === 1;
-    if (i < FIRST_PASS) return false;
-    if (i < FIRST_SHOT) return distance(player, squad[i - FIRST_PASS]) <= 10;
-    return i === FREE_THROW || (shotRange <= 12 && state.ball.restrictedThrower === null);
-  });
-  return {
-    observation,
-    paddles,
-    balls,
-    action: { paddle: paddles.length ? choose(paddles, random) : 0, ball: choose(balls, random) },
-    value: dot(weights, observation, VALUE_ROW),
+  const choices: PolicySample['choices'] = [];
+  const draw = (i: number, allowed: (index: number) => boolean = () => true): number => {
+    const offset = offsets[i];
+    const distribution = probabilities(weights, observation, offset, sizes[i], allowed);
+    const picked = choose(distribution, random);
+    choices.push({ probabilities: distribution, picked, offset });
+    return picked;
   };
+  const holding = state.ball.owner === player.id;
+  const paddle = holding || player.strokeTicks ? 0 : draw(0);
+  const squad = holding ? teammates(state, player) : [];
+  const ball = draw(1, (i) => {
+    if (i === 0) return true;
+    if (!holding) {
+      return (
+        i === 1 &&
+        !paddle &&
+        !player.strokeTicks &&
+        !!player.seenBall &&
+        distance(player, player.seenBall) < 2.8
+      );
+    }
+    if (i === 1) return false;
+    if (i === FREE_THROW) return true;
+    const seen = player.seenPlayers[squad[i - FIRST_PASS].id];
+    return !!seen && distance(player, seen) <= 10;
+  });
+  const action: Action = { paddle, ball, look: look[draw(2)] };
+  if (holding && ball >= FIRST_PASS) {
+    action.hand = draw(3) === 0 ? player.dominantHand : player.dominantHand === 1 ? -1 : 1;
+    if (ball === FREE_THROW) {
+      action.aim = aim[draw(4)];
+      action.power = power[draw(5)];
+      action.loft = loft[draw(6)];
+    } else {
+      action.passTo = player.seenPlayers[squad[ball - FIRST_PASS].id] ?? undefined;
+    }
+  }
+  return { observation, action, choices, value: dot(weights, observation, VALUE_ROW) };
 }
 
 export function estimateValue(weights: readonly number[], state: MatchState, p: Player): number {
@@ -166,11 +180,10 @@ export function addGradient(gradient: Float64Array, decision: PolicySample, targ
       gradient[row * INPUTS + i] += scale * decision.observation[i];
     }
   };
-  decision.paddles.forEach((prob, i) => {
-    accumulate(i, advantage * (Number(i === decision.action.paddle) - prob));
-  });
-  decision.balls.forEach((prob, i) => {
-    accumulate(PADDLE_ACTIONS + i, advantage * (Number(i === decision.action.ball) - prob));
-  });
+  for (const choice of decision.choices) {
+    choice.probabilities.forEach((prob, i) => {
+      accumulate(choice.offset + i, advantage * (Number(i === choice.picked) - prob));
+    });
+  }
   accumulate(VALUE_ROW, 0.5 * advantage);
 }

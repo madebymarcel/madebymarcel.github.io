@@ -113,7 +113,13 @@ describe('Canoe polo learning and generations', () => {
       id: 'round-trip-v2',
       parentId: GENESIS.id,
       number: 1,
-      rewards: { winBall: 0, usefulPass: 0.42, receivePass: 0.12 },
+      rewards: {
+        winBall: 0,
+        usefulPass: 0.42,
+        receivePass: 0.12,
+        saveGoal: 0.35,
+        ignoreLooseBall: 0.02,
+      },
     };
     expect(importGenerations(exportGenerations([generation]))).toEqual([generation]);
     expect(() =>
@@ -127,7 +133,7 @@ describe('Canoe polo learning and generations', () => {
     const encoded = exportGenerations([GENESIS]);
     expect(importGenerations(encoded)).toEqual([GENESIS]);
     expect(() =>
-      importGenerations(encoded.replace('linear-actor-critic-v2', 'linear-actor-critic-v1')),
+      importGenerations(encoded.replace('linear-actor-critic-v3', 'linear-actor-critic-v2')),
     ).toThrow();
     expect(() => importGenerations('{"format":"invalid"}')).toThrow();
     expect(mergeGenerations([GENESIS], [GENESIS])).toEqual([GENESIS]);

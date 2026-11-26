@@ -18,13 +18,14 @@ import {
   type Player,
 } from './model';
 import { sample } from './policy';
+import { TRIALS, type Drill } from './skills-drills';
 import { paddlePose } from './paddle';
 import { CanoeMatch } from './simulation';
 import { type TrainingProgress } from './training';
 import { type TrainingMessage } from './training.worker';
 import { DEFAULT_REWARDS, type RewardKey, type TrainingRewards } from './training-rewards';
 
-type View = 'home' | 'play' | 'generations' | 'about';
+type View = 'home' | 'play' | 'generations' | 'drills' | 'about';
 
 @Component({
   templateUrl: './canoe-polo-page.html',
@@ -47,6 +48,8 @@ export class CanoePoloPage {
     { key: 'winBall', label: 'Win a loose ball or intercept' },
     { key: 'usefulPass', label: 'Make a useful pass' },
     { key: 'receivePass', label: 'Receive a useful pass' },
+    { key: 'saveGoal', label: 'Save a goal-bound shot' },
+    { key: 'ignoreLooseBall', label: 'Ignore a reachable loose ball (penalty)' },
   ];
   readonly progress = signal<TrainingProgress | null>(null);
   readonly transfer = signal('');
@@ -55,6 +58,13 @@ export class CanoePoloPage {
   readonly pitch = PITCH;
   readonly paddlePose = paddlePose;
   readonly halfTicks = HALF_TICKS;
+  readonly drillTrials = TRIALS;
+  readonly drillResults = signal<Record<Drill, number> | null>(null);
+  readonly drillBusy = signal(false);
+  readonly drillLabel = signal('');
+  readonly drillCandidate = signal(GENESIS.id);
+  readonly cos = Math.cos;
+  readonly sin = Math.sin;
   readonly matchLabels = signal(['Generation 0', 'Generation 0']);
   readonly clock = computed(() => {
     const state = this.match();
@@ -67,6 +77,7 @@ export class CanoePoloPage {
   });
   private readonly destroyRef = inject(DestroyRef);
   private worker: Worker | null = null;
+  private drillWorker: Worker | null = null;
   private timer: ReturnType<typeof setInterval> | undefined;
   private engine = new CanoeMatch(1);
   private random = seededRandom(1);
@@ -84,6 +95,7 @@ export class CanoePoloPage {
       this.destroyed = true;
       clearInterval(this.timer);
       this.worker?.terminate();
+      this.drillWorker?.terminate();
     });
   }
 
@@ -107,7 +119,7 @@ export class CanoePoloPage {
     if (view !== 'play') this.playing.set(false);
   }
 
-  selectGeneration(event: Event, field: 'blue' | 'red' | 'parent'): void {
+  selectGeneration(event: Event, field: 'blue' | 'red' | 'parent' | 'drillCandidate'): void {
     const id = (event.target as HTMLSelectElement).value;
     this[field].set(id);
   }
@@ -118,6 +130,37 @@ export class CanoePoloPage {
 
   private find(id: string): Generation {
     return this.generations().find((g) => g.id === id) ?? GENESIS;
+  }
+
+  runDrills(): void {
+    if (this.drillBusy()) return;
+    const candidate = this.find(this.drillCandidate());
+    this.drillResults.set(null);
+    this.drillLabel.set(this.generationLabel(candidate));
+    this.drillBusy.set(true);
+    const finish = () => {
+      this.drillWorker?.terminate();
+      this.drillWorker = null;
+      this.drillBusy.set(false);
+    };
+    try {
+      const worker = new Worker(new URL('./skills-drills.worker', import.meta.url), {
+        type: 'module',
+      });
+      this.drillWorker = worker;
+      worker.onmessage = ({ data }: MessageEvent<Record<Drill, number>>) => {
+        this.drillResults.set(data);
+        finish();
+      };
+      worker.onerror = () => {
+        this.status.set('The drills could not finish in this browser.');
+        finish();
+      };
+      worker.postMessage(candidate.weights);
+    } catch {
+      this.status.set('The drills could not start in this browser.');
+      finish();
+    }
   }
 
   startMatch(): void {
@@ -299,7 +342,7 @@ export class CanoePoloPage {
       await this.addGenerations(importGenerations(this.transfer()));
       this.status.update((message) => 'Import complete. ' + message);
     } catch {
-      this.status.set('Could not import. This simulator requires a v2 policy export.');
+      this.status.set('Could not import. This simulator requires a v3 policy export.');
     }
   }
 }

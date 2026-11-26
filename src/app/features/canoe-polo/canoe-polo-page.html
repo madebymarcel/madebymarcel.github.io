@@ -23,6 +23,14 @@
       <button
         type="button"
         class="ds-button ds-button--secondary"
+        [attr.aria-pressed]="view() === 'drills'"
+        (click)="navigate('drills')"
+      >
+        Skills drills
+      </button>
+      <button
+        type="button"
+        class="ds-button ds-button--secondary"
         [attr.aria-pressed]="view() === 'about'"
         (click)="navigate('about')"
       >
@@ -130,7 +138,12 @@
       >
         <path d="M-1.5 0Q-0.9 -0.5 0.5 -0.46Q1.2 -0.3 1.5 0Q1.2 .3 .5 .46Q-.9 .5 -1.5 0Z" />
         <path class="paddle" [attr.d]="paddlePose(p)" stroke-width="0.13" stroke-linecap="round" />
-        <circle class="helmet" r=".28" />
+        <circle
+          class="helmet"
+          r=".28"
+          [attr.cx]="0.14 * cos(p.headTurn)"
+          [attr.cy]="0.14 * sin(p.headTurn)"
+        />
         <text class="number" x="0" y=".12" text-anchor="middle" font-size=".36">
           {{ (p.id % 5) + 1 }}
         </text>
@@ -225,14 +238,54 @@
       </button>
     </div>
   </section>
+  } @if (view() === 'drills') {
+  <section class="ds-card ds-stack" aria-labelledby="skill-drills-heading">
+    <h2 id="skill-drills-heading">Skills drills</h2>
+    <p>
+      Test each skill on the same starting scenarios. Drills measure a frozen generation; they don't
+      train it.
+    </p>
+    <div class="ds-field">
+      <label for="polo-drill-candidate">Generation to test</label>
+      <select
+        id="polo-drill-candidate"
+        class="ds-input"
+        [disabled]="!ready() || drillBusy()"
+        [value]="drillCandidate()"
+        (change)="selectGeneration($event, 'drillCandidate')"
+      >
+        @for (g of generations(); track g.id) {
+        <option [value]="g.id">{{ generationLabel(g) }}</option>
+        }
+      </select>
+    </div>
+    <button
+      class="ds-button"
+      type="button"
+      [disabled]="!ready() || drillBusy()"
+      (click)="runDrills()"
+    >
+      {{ drillBusy() ? 'Running drills…' : 'Run skills drills' }}
+    </button>
+    @if (drillResults(); as results) {
+    <div role="status">
+      <p>{{ drillLabel() }} results</p>
+      <ul>
+        <li>Turn and collect under control: {{ results.collect }} / {{ drillTrials }}</li>
+        <li>Aim and score: {{ results.shoot }} / {{ drillTrials }}</li>
+        <li>Save a goal-bound shot: {{ results.save }} / {{ drillTrials }}</li>
+      </ul>
+    </div>
+    }
+  </section>
   } @if (view() === 'about') {
   <section class="ds-card ds-stack">
     <h2>How it works</h2>
     <p>
       Each team shares a policy with learned numerical weights. Every player observes their own
-      boat, the ball, other players and the match clock. It chooses a paddle stroke and lets the
-      stroke finish instead of steering directly every tick. Players select whom to pass to; the
-      ball travels through the air and can be intercepted.
+      boat, the match clock and what it can see or briefly remember. It chooses a paddle stroke and
+      lets the stroke finish instead of steering directly every tick. Players select whom to pass
+      to; the ball travels through the air and can be intercepted.
     </p>
     <h3>Learning</h3>
     <p>
@@ -258,8 +311,8 @@
     <p>
       Training is opt-in and local. No data leaves this browser. Pausing retains the in-progress
       worker; closing the page preserves completed generations only. Export them to keep a backup or
-      challenge another person's players. This simulator uses a new policy format. Earlier v1
-      generations remain in their original browser storage but are not used by v2.
+      challenge another person's players. This simulator uses a new policy format. Earlier v1 and v2
+      generations remain in their original browser storage but are not used by v3.
     </p>
   </section>
   }
@@ -294,8 +347,8 @@
     <details class="ds-card">
       <summary>Training rewards</summary>
       <p class="ds-hint">
-        Set a bonus from 0 (off) to 1. Goals still count for more. Changes apply to the next new
-        generation, not a paused match that you resume.
+        Set each reward or penalty from 0 (off) to 1. Goals carry the biggest individual reward.
+        Changes apply to the next new generation, not a paused match that you resume.
       </p>
       <div class="ds-grid">
         @for (control of rewardControls; track control.key) {

@@ -1,6 +1,6 @@
 export const PITCH = { length: 35, width: 23, goalWidth: 1.5, goalBottom: 2, goalTop: 3 };
 export const DT = 0.1;
-export const RULESET = 'icf-2025-prototype-v2';
+export const RULESET = 'icf-2025-prototype-v3';
 export const HALF_TICKS = 600 / DT;
 export const SHOT_TICKS = 60 / DT;
 export const POSSESSION_TICKS = 5 / DT;
@@ -15,10 +15,22 @@ export interface Point {
   y: number;
 }
 
+export interface Sighting extends Point {
+  vx: number;
+  vy: number;
+  z: number;
+  tick: number;
+  owner: number | null;
+}
+
 export interface Player extends Point {
   id: number;
   team: Team;
   heading: number;
+  headTurn: number;
+  dominantHand: -1 | 1;
+  seenBall: Sighting | null;
+  seenPlayers: (Sighting | null)[];
   yawRate: number;
   stroke: number;
   strokeTicks: number;
@@ -41,6 +53,10 @@ export interface Action {
   ball: number;
   aim?: number;
   power?: number;
+  loft?: number;
+  look?: number;
+  hand?: -1 | 1;
+  passTo?: Sighting;
 }
 
 export interface Decision {
@@ -69,6 +85,7 @@ export interface MatchState {
   restart: Restart | null;
   pauseTicks: number;
   possessionTicks: number;
+  looseTicks: number;
   possessionTeam: Team | null;
   shotTicks: number;
   events: Decision[];
