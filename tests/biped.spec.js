@@ -1,72 +1,110 @@
 /* global document, window */
 import { expect, test } from '@playwright/test';
 
-test('portfolio opens biped, trains off the replay thread, and plays a checkpoint', async ({
+test('opens biped, pauses playback, trains, and plays the selected skill’s best attempt', async ({
   page,
 }) => {
   await page.goto('/projects/');
   await page.getByRole('link', { name: 'Explore biped robot' }).click();
   await expect(page.getByRole('heading', { name: 'Biped robot' })).toBeVisible();
-  await expect(
-    page.getByRole('img', { name: 'Side view of the biped robot and terrain' }),
-  ).toBeVisible();
-  await page.getByRole('checkbox', { name: 'Show sensors' }).check();
-  await expect(page.getByText(/Far leg:/)).toBeVisible();
-  await page.getByRole('button', { name: 'Watch baseline' }).click();
-  const start = page.getByRole('button', { name: 'Start training' });
-  await expect(start).toBeEnabled();
+  const viewer = page.getByRole('region', { name: 'Walk' });
+  const walk = page.getByRole('button', { name: 'Walk', exact: true });
+  await expect(viewer.getByRole('img', { name: /Walk scene/ })).toBeVisible();
+  await expect(walk).toHaveAccessibleDescription(/High score:\s*—.*0 training sessions/);
+
+  await viewer.getByRole('button', { name: 'Play', exact: true }).click();
+  await viewer.getByRole('button', { name: 'Pause', exact: true }).click();
+  const summary = viewer.getByTestId('biped-replay-summary');
+  await expect(summary).toContainText('Baseline');
+  await expect(viewer.getByRole('button', { name: 'Play', exact: true })).toBeEnabled();
+
+  const start = viewer.getByRole('button', { name: 'Start training' });
   await start.click();
-  await expect(page.getByRole('button', { name: 'Watch best' })).toBeEnabled({ timeout: 20000 });
-  await page.getByRole('button', { name: 'Pause training' }).click();
-  await page.getByLabel('Test start').selectOption('1');
-  await page.getByRole('button', { name: 'Watch best' }).click();
-  await expect(page.getByTestId('biped-replay-summary')).toContainText(/Iteration\s*[1-9]\d*/);
-  const restart = page.getByRole('button', { name: 'Restart selected skill' });
-  await page.getByRole('spinbutton', { name: 'Restart seed' }).fill('0');
+  await expect(walk).toHaveAccessibleDescription(/High score:\s*\d\/5 passed/, {
+    timeout: 20000,
+  });
+  await viewer.getByRole('button', { name: 'Pause training' }).click();
+  await expect(walk).toHaveAccessibleDescription(/1 training session$/);
+  await walk.click();
+  await expect(summary).toContainText(/Iteration\s*[1-9]\d*/);
+
+  await viewer.getByText('Training & replay options', { exact: true }).click();
+  await viewer.getByRole('checkbox', { name: 'Show sensors' }).check();
+  await expect(viewer.getByText(/Far leg:/)).toBeVisible();
+  await viewer.getByLabel('Test start').selectOption('1');
+  const restart = viewer.getByRole('button', { name: 'Restart selected skill' });
+  await viewer.getByRole('spinbutton', { name: 'Restart seed' }).fill('0');
   await expect(restart).toBeDisabled();
-  await page.getByRole('spinbutton', { name: 'Restart seed' }).fill('2');
+  await viewer.getByRole('spinbutton', { name: 'Restart seed' }).fill('2');
   await restart.click();
-  await expect(page.getByText('Iteration 0 (seed 2)', { exact: false })).toBeVisible();
-  await expect(start).toBeEnabled();
-  await expect(page.getByRole('button', { name: 'Watch best' })).toBeDisabled();
+  await expect(viewer.getByText('Iteration 0 (seed 2)', { exact: false })).toBeVisible();
+  await expect(walk).toHaveAccessibleDescription(/0 training sessions$/);
 });
 
-test('direct biped URL works with no horizontal page overflow', async ({ page }) => {
+test('moves the skills below the viewer on mobile without page overflow', async ({ page }) => {
   await page.goto('/projects/biped/');
-  await expect(page.getByRole('heading', { name: 'Biped robot' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Start training' })).toBeEnabled();
+  const viewer = page.getByRole('region', { name: 'Walk' });
+  const skills = page.getByRole('complementary', { name: 'Skills' });
+  await expect(viewer.getByRole('button', { name: 'Start training' })).toBeEnabled();
+  const [view, list] = await Promise.all([viewer.boundingBox(), skills.boundingBox()]);
+  if ((await page.evaluate(() => window.innerWidth)) >= 832) {
+    expect(list.x).toBeGreaterThanOrEqual(view.x + view.width);
+    expect(view.width).toBeGreaterThan(list.width);
+  } else {
+    expect(list.y).toBeGreaterThanOrEqual(view.y + view.height);
+    const last = skills.getByRole('button', { name: 'Get up', exact: true });
+    await last.evaluate((button) => button.scrollIntoView({ block: 'start' }));
+    await last.click();
+    await expect(page.getByRole('img', { name: /Get up scene/ })).toBeInViewport({ ratio: 0.9 });
+  }
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
     await page.evaluate(() => window.innerWidth),
   );
 });
 
-test('keeps five skill checkpoints separate and reports a course result', async ({ page }) => {
+test('switches scenes immediately, counts isolated training, and plays parkour in the viewer', async ({
+  page,
+}) => {
   await page.goto('/projects/biped/');
-  const course = page.getByRole('button', { name: 'Run parkour' });
-  await expect(course).toBeDisabled();
+  const parkour = page.getByRole('button', { name: 'Run parkour' });
+  await expect(parkour).toBeDisabled();
   const train = page.getByRole('button', { name: 'Start training' });
-  const pause = page.getByRole('button', { name: 'Pause training' });
-  const best = page.getByRole('button', { name: 'Watch best' });
+  const pause = page.getByRole('button', { name: 'Pause training', exact: true });
+  await page.getByText('Training & replay options', { exact: true }).click();
   await page.getByRole('button', { name: 'Train all skills' }).click();
   await expect(page.getByText('Training Walk', { exact: true })).toBeVisible();
-  await expect(best).toBeEnabled({ timeout: 20000 });
+  const walk = page.getByRole('button', { name: 'Walk', exact: true });
+  await expect(walk).toHaveAccessibleDescription(/High score:\s*\d\/5 passed/, {
+    timeout: 20000,
+  });
   await pause.click();
   await expect(train).toBeEnabled();
-  for (const name of ['Run', 'Jump', 'Climb stairs', 'Get up']) {
+  for (const [name, tiles] of [
+    ['Run', 1],
+    ['Jump', 2],
+    ['Climb stairs', 4],
+    ['Get up', 1],
+  ]) {
     const skill = page.getByRole('button', { name, exact: true });
     await skill.click();
-    await expect(best).toBeDisabled();
+    await expect(skill).toHaveAttribute('aria-pressed', 'true');
+    const scene = page.getByRole('img', { name: new RegExp(name + ' scene') });
+    await expect(scene.locator('rect.floor')).toHaveCount(tiles);
+    await expect(skill).toHaveAccessibleDescription(/0 training sessions$/);
     await train.click();
-    await expect(best).toBeEnabled({ timeout: 20000 });
+    await expect(skill).toHaveAccessibleDescription(/High score:\s*\d\/5 passed/, {
+      timeout: 20000,
+    });
     await pause.click();
+    await expect(skill).toHaveAccessibleDescription(/1 training session$/);
     await expect(train).toBeEnabled();
   }
-  await expect(course).toBeEnabled();
-  await course.click();
-  await expect(page.getByTestId('biped-replay-summary')).toContainText('Parkour');
-  await expect(page.getByTestId('biped-result')).not.toBeEmpty({ timeout: 17000 });
-  await page.getByRole('button', { name: 'Restart selected skill' }).click();
-  await expect(course).toBeDisabled();
-  await page.getByRole('button', { name: 'Walk', exact: true }).click();
-  await expect(best).toBeEnabled();
+  await parkour.click();
+  const course = page.getByRole('region', { name: 'Parkour' });
+  await expect(course).toBeVisible();
+  await expect(course.getByTestId('biped-result')).not.toBeEmpty({ timeout: 17000 });
+  await expect(course.getByRole('button', { name: 'Replay', exact: true })).toBeEnabled();
+  await walk.click();
+  await expect(walk).toHaveAccessibleDescription(/1 training session$/);
+  await expect(page.getByTestId('biped-replay-summary')).toContainText(/Iteration\s*[1-9]\d*/);
 });

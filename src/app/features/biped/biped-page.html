@@ -1,210 +1,242 @@
 <section class="content-page ds-stack biped">
   <h1>Biped robot</h1>
-  <div class="ds-card ds-stack">
-    <div class="stage">
-      @let pose = frame(); @let pan = 0.95 - pose.torso.x;
-      <svg viewBox="0 0 3.6 1.95" role="img" aria-label="Side view of the biped robot and terrain">
-        <g [attr.transform]="'translate(' + pan + ' 1.62) scale(1 -1)'">
-          @for (tile of ground(); track tile.from) {
-          <rect
-            class="floor"
-            [attr.x]="tile.from"
-            y="-.6"
-            [attr.height]="tile.height + .6"
-            [attr.width]="tile.to - tile.from"
-          />
-          } @if (!course() && (selected() === 'walk' || selected() === 'run')) { @for (mark of [0,
-          1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]; track mark) {
-          <path class="marker" [attr.d]="'M ' + mark + ' 0 v .09'" />
-          @if (mark === trackGoal && selected() === 'walk') {
-          <path class="finish-line" [attr.d]="'M ' + mark + ' 0 v 1.5'" />
-          } } } @for (leg of pose.legs; track $index) {
-          <g [class.near-leg]="$index === 1">
-            <polyline
-              class="link"
-              [attr.points]="leg.hip.x + ',' + leg.hip.y + ' ' + leg.knee.x + ',' + leg.knee.y + ' ' + leg.ankle.x + ',' + leg.ankle.y"
-            />
-            <line
-              class="foot"
-              [attr.x1]="leg.heel.x"
-              [attr.y1]="leg.heel.y"
-              [attr.x2]="leg.toe.x"
-              [attr.y2]="leg.toe.y"
-            />
-            <circle class="hinge" [attr.cx]="leg.knee.x" [attr.cy]="leg.knee.y" r=".044" />
-            <circle class="hinge" [attr.cx]="leg.ankle.x" [attr.cy]="leg.ankle.y" r=".044" />
-          </g>
-          }
-          <g
-            [attr.transform]="'translate(' + pose.torso.x + ' ' + pose.torso.y + ') rotate(' + (pose.torso.angle * 57.295779513) + ')'"
-          >
-            <rect class="torso" x="-.19" y="-.19" width=".38" height=".38" rx=".04" />
-            <path class="face" d="M .03 .06 h .08 M .07 .1 l .04 -.04 -.04 -.04" />
-            <circle class="hinge" cy="-.16" r=".05" />
-          </g>
-          @if (showSensors()) { @for (leg of pose.legs; track $index) {
-          <circle
-            class="contact"
-            [class.active]="pose.contacts[$index * 2]"
-            [attr.cx]="leg.heel.x"
-            [attr.cy]="leg.heel.y"
-            r=".025"
-          />
-          <circle
-            class="contact"
-            [class.active]="pose.contacts[$index * 2 + 1]"
-            [attr.cx]="leg.toe.x"
-            [attr.cy]="leg.toe.y"
-            r=".025"
-          />
-          } }
-        </g>
-      </svg>
-    </div>
-    <p data-testid="biped-replay-summary">
-      @if (course()) { Parkour } @else { Iteration {{ replayIteration() }} } · {{ distance() |
-      number: '1.2-2' }} m · {{ steps() }} alternating steps
-    </p>
-    <p class="run-result" role="status" data-testid="biped-result">{{ finish() }}</p>
-    <div class="commands">
-      <button class="ds-button" type="button" (click)="replay('baseline')">Watch baseline</button>
-      <button class="ds-button" type="button" (click)="replay('best')" [disabled]="!best()">
-        Watch best
-      </button>
-      <button class="ds-button" type="button" (click)="togglePlayback()" [disabled]="!!finish()">
-        {{ playing() ? 'Pause replay' : 'Play replay' }}
-      </button>
-      @if (!course()) {
-      <label>
-        Test start
-        <select [value]="trialIndex()" (change)="setTrial($event)">
-          @for (trial of trials; track $index) {
-          <option [value]="$index">{{ $index + 1 }}</option>
-          }
-        </select>
-      </label>
-      }
-      <label
-        ><input
-          type="checkbox"
-          [checked]="showSensors()"
-          (change)="showSensors.set(!showSensors())"
-        />
-        Show sensors</label
-      >
-    </div>
-    @if (showSensors()) {
-    <div class="sensor-readings">
-      @for (side of [0, 1]; track side) {
-      <p>
-        {{ side === 0 ? 'Far leg' : 'Near leg' }}: @for (name of jointNames; track name) { {{ name
-        }} {{ ($index === 1 ? -1 : 1) * (pose.angles[side * 3 + $index]) | number: '1.0-0' }}° · }
-        Heel {{ pose.contacts[side * 2] ? 'down' : 'up' }}, toe {{ pose.contacts[side * 2 + 1] ?
-        'down' : 'up' }}
-      </p>
-      }
-    </div>
-    }
-  </div>
-
-  <section class="ds-card ds-stack" aria-labelledby="biped-training">
-    <h2 id="biped-training">Skill training</h2>
-    <ul class="skill-list">
-      @for (skill of skills; track skill) {
-      <li>
-        <button
-          class="ds-button"
-          type="button"
-          [attr.aria-pressed]="selected() === skill"
-          (click)="select(skill)"
+  <div class="workbench">
+    <section class="viewer" aria-labelledby="active-skill">
+      <h2 id="active-skill" #viewerHeading tabindex="-1">{{ viewing() }}</h2>
+      <div class="stage">
+        @let pose = frame(); @let pan = 0.95 - pose.torso.x;
+        <svg
+          viewBox="0 0 3.6 1.95"
+          role="img"
+          [attr.aria-label]="viewing() + ' scene: side view of the biped robot and terrain'"
         >
-          {{ names[skill] }}
+          <g [attr.transform]="'translate(' + pan + ' 1.62) scale(1 -1)'">
+            @for (tile of ground(); track tile.from) {
+            <rect
+              class="floor"
+              [attr.x]="tile.from"
+              y="-.6"
+              [attr.height]="tile.height + .6"
+              [attr.width]="tile.to - tile.from"
+            />
+            } @if (!course() && (selected() === 'walk' || selected() === 'run')) { @for (mark of [0,
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]; track mark) {
+            <path class="marker" [attr.d]="'M ' + mark + ' 0 v .09'" />
+            @if (mark === trackGoal && selected() === 'walk') {
+            <path class="finish-line" [attr.d]="'M ' + mark + ' 0 v 1.5'" />
+            } } } @for (leg of pose.legs; track $index) {
+            <g [class.near-leg]="$index === 1">
+              <polyline
+                class="link"
+                [attr.points]="leg.hip.x + ',' + leg.hip.y + ' ' + leg.knee.x + ',' + leg.knee.y + ' ' + leg.ankle.x + ',' + leg.ankle.y"
+              />
+              <line
+                class="foot"
+                [attr.x1]="leg.heel.x"
+                [attr.y1]="leg.heel.y"
+                [attr.x2]="leg.toe.x"
+                [attr.y2]="leg.toe.y"
+              />
+              <circle class="hinge" [attr.cx]="leg.knee.x" [attr.cy]="leg.knee.y" r=".044" />
+              <circle class="hinge" [attr.cx]="leg.ankle.x" [attr.cy]="leg.ankle.y" r=".044" />
+            </g>
+            }
+            <g
+              [attr.transform]="'translate(' + pose.torso.x + ' ' + pose.torso.y + ') rotate(' + (pose.torso.angle * 57.295779513) + ')'"
+            >
+              <rect class="torso" x="-.19" y="-.19" width=".38" height=".38" rx=".04" />
+              <path class="face" d="M .03 .06 h .08 M .07 .1 l .04 -.04 -.04 -.04" />
+              <circle class="hinge" cy="-.16" r=".05" />
+            </g>
+            @if (showSensors()) { @for (leg of pose.legs; track $index) {
+            <circle
+              class="contact"
+              [class.active]="pose.contacts[$index * 2]"
+              [attr.cx]="leg.heel.x"
+              [attr.cy]="leg.heel.y"
+              r=".025"
+            />
+            <circle
+              class="contact"
+              [class.active]="pose.contacts[$index * 2 + 1]"
+              [attr.cx]="leg.toe.x"
+              [attr.cy]="leg.toe.y"
+              r=".025"
+            />
+            } }
+          </g>
+        </svg>
+      </div>
+
+      <div class="commands playback">
+        <button class="ds-button" type="button" (click)="togglePlayback()">
+          {{ playing() ? 'Pause' : finish() ? 'Replay' : 'Play' }}
         </button>
-        @if (checkpoints()[skill]?.best; as checkpoint) {
-        <span
-          >{{ checkpoint.evaluation.passes }}/{{ trials.length }} passed · best at {{
-          checkpoint.iteration }}</span
+        @if (!course() || active()) {
+        <button
+          class="ds-button ds-button--secondary"
+          type="button"
+          (click)="toggleTraining()"
+          [disabled]="!ready() || awaitingWorker()"
         >
-        } @else {
-        <span>Untrained</span>
+          @if (active(); as training) { {{ !course() && training === selected() ? 'Pause training' :
+          'Pause ' + names[training] + ' training' }} } @else { Start training }
+        </button>
         }
-      </li>
+      </div>
+      <div class="viewer-status">
+        <p class="ds-hint" data-testid="biped-replay-summary">
+          @if (course(); as result) { {{ result.completed.length }}/{{ sections.length }} stages ·
+          {{ result.active }} } @else { {{ replayIteration() ? 'Iteration ' + replayIteration() :
+          'Baseline' }} } · {{ distance() | number: '1.2-2' }} m @if (!course() && (selected() ===
+          'walk' || selected() === 'run')) { · {{ steps() }} alternating steps }
+        </p>
+        <p class="run-result" role="status" data-testid="biped-result">{{ finish() }}</p>
+        @if (active(); as training) {
+        <p class="ds-hint" role="status">Training {{ names[training] }}</p>
+        } @if (trainingError()) {
+        <p role="status">{{ trainingError() }}</p>
+        }
+      </div>
+      @if (course(); as result) {
+      <ol class="course-stages" aria-label="Course stages">
+        @for (section of sections; track section) {
+        <li [attr.aria-current]="result.active === section && !result.finished ? 'step' : null">
+          {{ section }} @if (result.completed.includes(section)) { · Passed }
+        </li>
+        }
+      </ol>
+      } @else {
+      <details class="options">
+        <summary>Training &amp; replay options</summary>
+        <div class="option-body">
+          <p>{{ goals[selected()] }}</p>
+          @if (current(); as progress) {
+          <p class="ds-hint">
+            Iteration {{ progress.latest.iteration }} (seed {{ progress.seed }})
+          </p>
+          }
+          <div class="commands">
+            <button
+              class="ds-button ds-button--secondary"
+              type="button"
+              (click)="replay('baseline')"
+            >
+              Watch baseline
+            </button>
+            <button
+              class="ds-button ds-button--secondary"
+              type="button"
+              (click)="replay('best')"
+              [disabled]="!current()?.best"
+            >
+              Watch best
+            </button>
+            <label>
+              Test start
+              <select [value]="trialIndex()" (change)="setTrial($event)">
+                @for (trial of trials; track $index) {
+                <option [value]="$index">{{ $index + 1 }}</option>
+                }
+              </select>
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                [checked]="showSensors()"
+                (change)="showSensors.set(!showSensors())"
+              />
+              Show sensors
+            </label>
+          </div>
+          <div class="commands">
+            <button
+              class="ds-button ds-button--secondary"
+              type="button"
+              (click)="trainAll()"
+              [disabled]="!ready() || !!active() || awaitingWorker()"
+            >
+              Train all skills
+            </button>
+            <button
+              class="ds-button ds-button--secondary"
+              type="button"
+              (click)="resetTraining()"
+              [disabled]="!ready() || !!active() || awaitingWorker() || !seedValid()"
+            >
+              Restart selected skill
+            </button>
+            <label>
+              Restart seed
+              <input
+                type="number"
+                min="1"
+                [max]="maxSeed"
+                step="1"
+                [value]="seedInput()"
+                (input)="setSeed($event)"
+              />
+            </label>
+          </div>
+          <p class="ds-hint">Reloading clears training progress.</p>
+        </div>
+      </details>
+      } @if (!course() && showSensors()) {
+      <div class="sensor-readings">
+        @for (side of [0, 1]; track side) {
+        <p>
+          {{ side === 0 ? 'Far leg' : 'Near leg' }}: @for (name of jointNames; track name) { {{ name
+          }} {{ ($index === 1 ? -1 : 1) * (pose.angles[side * 3 + $index]) | number: '1.0-0' }}° · }
+          Heel {{ pose.contacts[side * 2] ? 'down' : 'up' }}, toe {{ pose.contacts[side * 2 + 1] ?
+          'down' : 'up' }}
+        </p>
+        }
+      </div>
       }
-    </ul>
-    <p>{{ goals[selected()] }}</p>
-    <div class="commands">
-      <button
-        class="ds-button"
-        type="button"
-        (click)="toggleTraining()"
-        [disabled]="!ready() || awaitingWorker()"
-      >
-        {{ active() ? 'Pause training' : 'Start training' }}
-      </button>
-      <button
-        class="ds-button"
-        type="button"
-        (click)="trainAll()"
-        [disabled]="!ready() || !!active() || awaitingWorker()"
-      >
-        Train all skills
-      </button>
-      <button
-        class="ds-button"
-        type="button"
-        (click)="resetTraining()"
-        [disabled]="!ready() || !!active() || awaitingWorker() || !seedValid()"
-      >
-        Restart selected skill
-      </button>
-      <label>
-        Restart seed
-        <input
-          type="number"
-          min="1"
-          [max]="maxSeed"
-          step="1"
-          [value]="seedInput()"
-          (input)="setSeed($event)"
-        />
-      </label>
-    </div>
-    @if (active(); as training) {
-    <p role="status">Training {{ names[training] }}</p>
-    } @if (trainingError()) {
-    <p role="status">{{ trainingError() }}</p>
-    } @if (current(); as progress) {
-    <p>
-      Iteration {{ progress.latest.iteration }} (seed {{ progress.seed }}) · {{
-      progress.latest.evaluation.passes }}/{{ trials.length }} passed on latest checkpoint
-    </p>
-    }
-    <p>
-      Train all runs up to 100 iterations per skill in sequence. Leaving or reloading clears the
-      session.
-    </p>
-  </section>
+    </section>
 
-  <section class="ds-card ds-stack" aria-labelledby="biped-parkour">
-    <h2 id="biped-parkour">Parkour test</h2>
-    <p>
-      One continuous run using each skill's best checkpoint. It tests transitions without resetting
-      the robot or training during the course.
-    </p>
-    <div class="commands">
-      <button class="ds-button" type="button" (click)="runCourse()" [disabled]="!allTrained()">
-        Run parkour
-      </button>
-      @if (!allTrained()) { <span>Train each skill once to unlock the test.</span> }
-    </div>
-    <ol>
-      @for (section of sections; track section) {
-      <li [attr.aria-current]="course()?.active === section && !course()?.finished ? 'step' : null">
-        {{ section }} @if (course()?.completed?.includes(section)) { · Passed } @else if
-        (course()?.active === section) { @if (course()?.failure; as failure) { · {{ failure }} }
-        @else { · In progress } }
-      </li>
-      }
-    </ol>
-  </section>
+    <aside class="skill-sidebar" aria-labelledby="biped-skills">
+      <h2 id="biped-skills">Skills</h2>
+      <ul class="skill-list">
+        @for (skill of skills; track skill) { @let progress = checkpoints()[skill];
+        <li>
+          <button
+            class="ds-button ds-button--secondary skill-card"
+            type="button"
+            [attr.aria-labelledby]="'skill-name-' + skill"
+            [attr.aria-describedby]="'skill-stats-' + skill"
+            [attr.aria-pressed]="!course() && selected() === skill"
+            (click)="select(skill)"
+          >
+            <span class="skill-name" [id]="'skill-name-' + skill">{{ names[skill] }}</span>
+            <span class="skill-stats" [id]="'skill-stats-' + skill">
+              <span>
+                High score: @if (progress?.best; as checkpoint) { {{ checkpoint.evaluation.passes
+                }}/{{ trials.length }} passed } @else { — }
+              </span>
+              <span
+                >{{ progress?.sessions ?? 0 }} training {{ progress?.sessions === 1 ? 'session' :
+                'sessions' }}</span
+              >
+            </span>
+          </button>
+        </li>
+        }
+      </ul>
+      <div class="parkour-entry">
+        <button
+          class="ds-button ds-button--secondary skill-card"
+          type="button"
+          (click)="runCourse()"
+          [disabled]="!allTrained()"
+          [attr.aria-describedby]="allTrained() ? null : 'parkour-lock'"
+        >
+          Run parkour
+        </button>
+        @if (!allTrained()) {
+        <p id="parkour-lock" class="ds-hint">Train each skill to unlock.</p>
+        }
+      </div>
+    </aside>
+  </div>
 </section>

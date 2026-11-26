@@ -1,10 +1,15 @@
 # Biped robot
 
-Route: `/projects/biped/`. Motion and training stay on-device. On the project page,
-choose **Start training** and then **Watch best** to compare with **Watch baseline**.
-Both use the selected test start; a new checkpoint does not change the current replay.
-**Restart learning** or a reload discards the current session. The browser starts at seed 3 and does not load
-pretrained weights. Edit **Restart seed** before choosing **Restart learning** to try a new run.
+Route: `/projects/biped/`. Selecting a skill opens its scene and plays its best checkpoint
+(or the baseline before training). **Play** / **Pause** controls the viewer; **Start training**
+updates the selected skill separately. An in-progress replay keeps its policy even when
+training finds a better one. Reselect the skill or choose **Watch best** to see the update.
+
+Each card shows the best result across five fixed test starts and the number of training
+sessions ended after doing work (by pausing or by finishing a batch). **Training & replay
+options** has baseline replay, test starts, sensors, batch training and **Restart selected
+skill**. Restarting clears that skill's progress; reloading clears all progress. The browser
+starts at seed 3 and does not load pretrained weights.
 
 ## Model
 

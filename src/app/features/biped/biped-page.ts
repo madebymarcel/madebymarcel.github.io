@@ -1,4 +1,14 @@
-import { Component, DestroyRef, afterNextRender, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  ElementRef,
+  Injector,
+  afterNextRender,
+  computed,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { CONTROL_DT, JOINT_NAMES, TRACK_GOAL } from './walker';
 import { Parkour, SECTIONS, type CourseResult, type PolicyBook } from './course';
@@ -20,9 +30,13 @@ import type { TrainingMessage, TrainingUpdate } from './biped.worker';
 })
 export class BipedPage {
   private readonly destroy = inject(DestroyRef);
+  private readonly injector = inject(Injector);
+  private readonly viewerHeading =
+    viewChild.required<ElementRef<HTMLHeadingElement>>('viewerHeading');
   private worker?: Worker;
   private simulation: Practice | Parkour = this.practice('walk', null, 0);
-  private replayKind: 'baseline' | 'best' = 'baseline';
+  private replayKind: 'baseline' | 'best' = 'best';
+  private hasPlayed = false;
   private animation?: number;
   private lastFrame?: number;
   private accumulator = 0;
@@ -39,7 +53,6 @@ export class BipedPage {
   readonly selected = signal<Skill>('walk');
   readonly checkpoints = signal<Partial<Record<Skill, TrainingUpdate>>>({});
   readonly current = computed(() => this.checkpoints()[this.selected()]);
-  readonly best = computed(() => this.current()?.best);
   readonly allTrained = computed(() => SKILLS.every((skill) => !!this.checkpoints()[skill]?.best));
   readonly replayIteration = signal(0);
   readonly trialIndex = signal(0);
@@ -50,6 +63,7 @@ export class BipedPage {
   readonly finish = signal('');
   readonly course = signal<CourseResult | null>(null);
   readonly showSensors = signal(false);
+  readonly viewing = computed(() => (this.course() ? 'Parkour' : NAMES[this.selected()]));
   readonly trainingError = signal('');
   readonly jointNames = JOINT_NAMES;
   readonly trackGoal = TRACK_GOAL;
@@ -115,7 +129,9 @@ export class BipedPage {
   select(skill: Skill) {
     this.selected.set(skill);
     this.seedInput.set(String(this.checkpoints()[skill]?.seed ?? DEFAULT_SEED));
-    this.initReplay('baseline');
+    this.trialIndex.set(0);
+    this.replay('best');
+    this.revealViewer();
   }
 
   resetTraining() {
@@ -123,7 +139,7 @@ export class BipedPage {
     const skill = this.selected();
     const seed = Number(this.seedInput());
     this.checkpoints.update((record) => ({ ...record, [skill]: undefined }));
-    this.initReplay('baseline');
+    this.initReplay('best');
     this.send({ type: 'reset', skill, seed });
   }
 
@@ -131,7 +147,9 @@ export class BipedPage {
     const index = Number((event.target as HTMLSelectElement).value);
     if (!EVALUATION_STARTS[index]) return;
     this.trialIndex.set(index);
+    const wasPlaying = this.playing();
     this.initReplay(this.replayKind);
+    if (wasPlaying) this.resume();
   }
 
   replay(which: 'baseline' | 'best') {
@@ -149,7 +167,8 @@ export class BipedPage {
 
   private initReplay(which: 'baseline' | 'best') {
     this.replayKind = which;
-    const checkpoint = which === 'best' ? this.best() : this.current()?.baseline;
+    const current = this.current();
+    const checkpoint = (which === 'best' ? current?.best : undefined) ?? current?.baseline;
     this.replayIteration.set(checkpoint?.iteration ?? 0);
     this.load(this.practice(this.selected(), checkpoint?.policy ?? null, this.trialIndex()));
   }
@@ -163,10 +182,25 @@ export class BipedPage {
     }
     this.load(new Parkour(book as PolicyBook));
     this.resume();
+    this.revealViewer();
+  }
+
+  private revealViewer() {
+    const heading = this.viewerHeading().nativeElement;
+    const top = heading.getBoundingClientRect().top;
+    if (top >= 0 && top < window.innerHeight) return;
+    afterNextRender(
+      () => {
+        heading.scrollIntoView({ block: 'start', behavior: 'instant' });
+        heading.focus({ preventScroll: true });
+      },
+      { injector: this.injector },
+    );
   }
 
   private load(simulation: Practice | Parkour) {
     this.pause();
+    this.hasPlayed = false;
     this.simulation = simulation;
     this.frame.set(simulation.sim.frame());
     this.ground.set(simulation.sim.ground);
@@ -177,8 +211,16 @@ export class BipedPage {
   }
 
   togglePlayback() {
-    if (this.playing()) this.pause();
-    else this.resume();
+    if (this.playing()) {
+      this.pause();
+    } else if (this.course() && this.simulation.done) {
+      this.runCourse();
+    } else {
+      if (!this.course() && (!this.hasPlayed || this.simulation.done)) {
+        this.initReplay(this.replayKind);
+      }
+      this.resume();
+    }
   }
 
   private pause() {
@@ -191,6 +233,7 @@ export class BipedPage {
 
   private resume() {
     if (this.simulation.done || this.playing()) return;
+    this.hasPlayed = true;
     this.playing.set(true);
     this.animation = requestAnimationFrame(this.tick);
   }
