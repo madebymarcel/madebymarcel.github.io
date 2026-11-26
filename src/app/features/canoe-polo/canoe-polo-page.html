@@ -143,6 +143,20 @@
             <strong>{{ match().score[1] }}</strong>
           </div>
         </div>
+        <label class="ds-cluster polo-vision-toggle">
+          <input
+            type="checkbox"
+            [checked]="showVision()"
+            (change)="showVision.set(!showVision())"
+          />
+          Show player vision
+        </label>
+        @if (showVision()) {
+        <p class="ds-hint polo-vision-summary">
+          Sight cones: {{ visionAngle }}° · {{ visionRange }} m. Ball in sight cone: Blue {{
+          visionBallPlayers()[0] }}; Red {{ visionBallPlayers()[1] }}.
+        </p>
+        }
         <svg
           class="pitch"
           viewBox="-1 -2.5 37 26.5"
@@ -150,6 +164,24 @@
           aria-label="Top-down canoe polo pitch showing five blue players, five red players, the ball and referee"
         >
           <rect class="water" x="0" y="0" width="35" height="23" rx="0.25" />
+          @if (showVision()) {
+          <defs>
+            <clipPath id="polo-vision-clip">
+              <rect x="0" y="0" [attr.width]="pitch.length" [attr.height]="pitch.width" />
+            </clipPath>
+          </defs>
+          <g class="polo-vision-overlay" clip-path="url(#polo-vision-clip)" aria-hidden="true">
+            @for (p of match().players; track p.id) {
+            <path
+              class="polo-vision-cone"
+              [class.polo-vision-red]="p.team === 1"
+              [attr.d]="visionCone"
+              [attr.transform]="playerTransform(p, p.headTurn)"
+              vector-effect="non-scaling-stroke"
+            />
+            }
+          </g>
+          }
           <g class="lines" fill="none" stroke-width="0.1">
             <rect x="0" y="0" width="35" height="23" />
             <path d="M17.5 0V23 M4 0V23 M31 0V23" stroke-dasharray=".4 .3" />
@@ -160,9 +192,19 @@
           @for (p of match().players; track p.id) {
           <g
             [attr.transform]="playerTransform(p)"
+            [attr.data-player-id]="p.id"
             [class.blue]="p.team === 0"
             [class.red]="p.team === 1"
           >
+            @if (p.id === manualPlayer()) {
+            <ellipse
+              class="polo-controlled-boat"
+              rx="1.8"
+              ry="0.75"
+              fill="none"
+              vector-effect="non-scaling-stroke"
+            />
+            }
             <path d="M-1.5 0Q-0.9 -0.5 0.5 -0.46Q1.2 -0.3 1.5 0Q1.2 .3 .5 .46Q-.9 .5 -1.5 0Z" />
             <path
               class="paddle"
@@ -208,6 +250,114 @@
           match().score[1] ? 'Blue wins' : 'Red wins' }}.
         </p>
         }
+        <details class="ds-stack polo-manual">
+          <summary>Player controls</summary>
+          <div class="ds-field">
+            <label for="polo-control-player">Control player</label>
+            <select
+              id="polo-control-player"
+              class="ds-input"
+              #controlPlayer
+              [value]="manualPlayer()"
+              (change)="chooseManualPlayer(controlPlayer.value)"
+            >
+              <option value="-1">All AI</option>
+              @for (p of match().players; track p.id) {
+              <option [value]="p.id">
+                {{ p.team === 0 ? 'Blue' : 'Red' }} {{ (p.id % 5) + 1 }}
+              </option>
+              }
+            </select>
+          </div>
+          @if (manualPlayer() >= 0) {
+          <div class="ds-field">
+            <label for="polo-control-look">Look</label>
+            <select
+              id="polo-control-look"
+              class="ds-input"
+              #controlLook
+              [value]="manualLook()"
+              (change)="manualLook.set(+controlLook.value)"
+            >
+              <option value="-1">Left</option>
+              <option value="0">Ahead</option>
+              <option value="1">Right</option>
+            </select>
+          </div>
+          <div role="group" aria-label="Paddle" class="ds-cluster">
+            @for (stroke of manualStrokes; track stroke.value) {
+            <button
+              class="ds-button ds-button--secondary"
+              type="button"
+              [disabled]="!manualActive() || manualHasBall()"
+              (click)="queueManualStroke(stroke.value)"
+            >
+              {{ stroke.label }}
+            </button>
+            }
+          </div>
+          <div class="ds-cluster">
+            <button
+              class="ds-button"
+              type="button"
+              [disabled]="!manualActive() || manualHasBall()"
+              (click)="queueManualPickup()"
+            >
+              Grab or catch
+            </button>
+            @if (manualHasBall()) {
+            <span>Ball in hand</span>
+            }
+          </div>
+          <div class="ds-grid">
+            <div class="ds-field">
+              <label for="polo-control-aim">Throw direction</label>
+              <select id="polo-control-aim" class="ds-input" #controlAim>
+                @for (aim of shotAimChoices; track aim) {
+                <option [value]="aim" [selected]="aim === 0">
+                  {{ aim === 0 ? 'Ahead' : (aim < 0 ? 'Left ' : 'Right ') + degrees(aim < 0 ? -aim :
+                  aim) + '°' }}
+                </option>
+                }
+              </select>
+            </div>
+            <div class="ds-field">
+              <label for="polo-control-power">Throw power</label>
+              <select id="polo-control-power" class="ds-input" #controlPower>
+                @for (power of shotPowerChoices; track power) {
+                <option [value]="power" [selected]="power === 0.82">{{ power * 100 }}%</option>
+                }
+              </select>
+            </div>
+            <div class="ds-field">
+              <label for="polo-control-loft">Throw loft</label>
+              <select id="polo-control-loft" class="ds-input" #controlLoft>
+                @for (loft of shotLoftChoices; track loft) {
+                <option [value]="loft" [selected]="loft === 0.55">{{ degrees(loft) }}°</option>
+                }
+              </select>
+            </div>
+            <div class="ds-field">
+              <label for="polo-control-hand">Throwing hand</label>
+              <select id="polo-control-hand" class="ds-input" #controlHand>
+                <option value="">Dominant</option>
+                <option value="-1">Left</option>
+                <option value="1">Right</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <button
+              class="ds-button"
+              type="button"
+              [disabled]="!manualActive() || !manualHasBall()"
+              (click)="queueManualThrow(controlAim.value, controlPower.value, controlLoft.value, controlHand.value)"
+            >
+              Throw
+            </button>
+          </div>
+          }
+        </details>
         <section class="ds-stack" aria-labelledby="referee-heading">
           <h3 id="referee-heading">Referee decisions</h3>
           <p class="ds-hint">Ruleset: {{ ruleset }}</p>

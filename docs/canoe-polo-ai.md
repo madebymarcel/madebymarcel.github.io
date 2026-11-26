@@ -26,6 +26,10 @@ Route: /projects/canoe-polo/
   leaving the experiment. Only completed generations persist across reloads.
 - Team generation selectors change the policy used from the next simulation tick without
   resetting the match. Leave both selections unchanged for a full-match comparison.
+- In a spectator match, enable Show player vision to see all ten current fields of view and
+  which cones contain the ball. This shows current geometry, not each player's memory.
+  Player controls can replace one policy with manual paddle, look, pickup and throw commands.
+  Manual controls use the same match physics and do not affect background training.
 
 ## Rule coverage
 

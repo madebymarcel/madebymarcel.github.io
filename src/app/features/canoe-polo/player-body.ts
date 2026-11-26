@@ -12,8 +12,18 @@ import { PADDLE_PICKUP_REACH } from './paddle';
 
 const MAX_HEAD_TURN = 1.25;
 const HALF_FOV = 1.18;
-const VISION_RANGE = 24;
+const VISION_EDGE_COS = Math.cos(HALF_FOV);
 const MEMORY_TICKS = 10;
+
+export const PLAYER_VISION_RANGE = 24;
+export const PLAYER_VISION_ANGLE_DEGREES = Math.round((2 * HALF_FOV * 180) / Math.PI);
+
+const visionEdgeX = PLAYER_VISION_RANGE * VISION_EDGE_COS;
+const visionEdgeY = PLAYER_VISION_RANGE * Math.sin(HALF_FOV);
+// Boat-local SVG sector, pointing along positive x before the head rotation.
+export const PLAYER_VISION_CONE =
+  `M 0 0 L ${visionEdgeX} ${-visionEdgeY} ` +
+  `A ${PLAYER_VISION_RANGE} ${PLAYER_VISION_RANGE} 0 0 1 ${visionEdgeX} ${visionEdgeY} Z`;
 
 export function turnHead(player: Player, look: number): void {
   const target = clamp(look, -1, 1) * MAX_HEAD_TURN;
@@ -24,12 +34,11 @@ function sightCone(player: Player): (target: Point) => boolean {
   const direction = player.heading + player.headTurn;
   const cos = Math.cos(direction);
   const sin = Math.sin(direction);
-  const limit = Math.cos(HALF_FOV);
   return (target: Point) => {
     const dx = target.x - player.x;
     const dy = target.y - player.y;
     const range = Math.hypot(dx, dy);
-    return range <= VISION_RANGE && dx * cos + dy * sin >= range * limit;
+    return range <= PLAYER_VISION_RANGE && dx * cos + dy * sin >= range * VISION_EDGE_COS;
   };
 }
 

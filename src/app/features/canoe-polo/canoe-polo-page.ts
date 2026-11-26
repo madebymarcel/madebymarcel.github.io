@@ -1,4 +1,5 @@
 import { Component, DestroyRef, afterNextRender, computed, inject, signal } from '@angular/core';
+import { COLLECT, FREE_THROW, HOLD } from './ball-play';
 import {
   GENESIS,
   MAX_GENERATION_IMPORT_BYTES,
@@ -15,11 +16,18 @@ import {
   RULESET,
   SHOT_TICKS,
   seededRandom,
+  type Action,
   type MatchState,
   type Player,
 } from './model';
-import { sample } from './policy';
+import { sample, SHOT_AIM, SHOT_LOFT, SHOT_POWER } from './policy';
 import { paddlePose } from './paddle';
+import {
+  canSee,
+  PLAYER_VISION_ANGLE_DEGREES,
+  PLAYER_VISION_CONE,
+  PLAYER_VISION_RANGE,
+} from './player-body';
 import { CanoeMatch } from './simulation';
 import { type TrainingProgress } from './training';
 import { type TrainingMessage } from './training.worker';
@@ -51,6 +59,39 @@ export class CanoePoloPage {
   readonly parent = signal(GENESIS.id);
   readonly match = signal<MatchState>(new CanoeMatch(1).state);
   readonly playing = signal(false);
+  readonly showVision = signal(false);
+  readonly visionCone = PLAYER_VISION_CONE;
+  readonly visionAngle = PLAYER_VISION_ANGLE_DEGREES;
+  readonly visionRange = PLAYER_VISION_RANGE;
+  readonly visionBallPlayers = computed(() => {
+    const { players, ball } = this.match();
+    return [0, 1].map(
+      (team) =>
+        players
+          .filter((p) => p.team === team && canSee(p, ball))
+          .map((p) => (p.id % 5) + 1)
+          .join(', ') || 'none',
+    );
+  });
+  readonly manualPlayer = signal(-1);
+  readonly manualLook = signal(0);
+  readonly manualActive = computed(
+    () => this.manualPlayer() >= 0 && this.playing() && this.match().phase === 'play',
+  );
+  readonly manualHasBall = computed(() => this.match().ball.owner === this.manualPlayer());
+  readonly manualStrokes = [
+    { value: 1, label: 'Paddle left' },
+    { value: 2, label: 'Paddle right' },
+    { value: 3, label: 'Sweep left' },
+    { value: 4, label: 'Sweep right' },
+    { value: 5, label: 'Reverse left' },
+    { value: 6, label: 'Reverse right' },
+  ];
+  readonly shotAimChoices = SHOT_AIM;
+  readonly shotPowerChoices = SHOT_POWER;
+  readonly shotLoftChoices = SHOT_LOFT;
+  private pendingStroke = 0;
+  private pendingBall: Pick<Action, 'ball' | 'aim' | 'power' | 'loft' | 'hand'> = { ball: HOLD };
   readonly speed = signal(1);
   readonly training = signal(false);
   readonly ready = signal(false);
@@ -156,6 +197,7 @@ export class CanoePoloPage {
 
   startMatch(): void {
     this.finishedMatchLabels.set(null);
+    this.clearManualCommands();
     const seed = Math.floor(Math.random() * 4294967296);
     this.engine = new CanoeMatch(seed);
     this.random = seededRandom(seed + 1);
@@ -164,11 +206,58 @@ export class CanoePoloPage {
   }
 
   toggleMatch(): void {
-    if (this.match().phase !== 'finished') this.playing.update((value) => !value);
+    if (this.match().phase !== 'finished') {
+      this.clearManualCommands();
+      this.playing.update((value) => !value);
+    }
   }
 
   changeSpeed(event: Event): void {
     this.speed.set(Number((event.target as HTMLSelectElement).value));
+  }
+
+  chooseManualPlayer(value: string): void {
+    this.clearManualCommands();
+    this.manualLook.set(0);
+    this.manualPlayer.set(Number(value));
+  }
+
+  degrees(radians: number): number {
+    return Math.round((radians * 180) / Math.PI);
+  }
+
+  queueManualStroke(stroke: number): void {
+    if (this.manualActive() && !this.manualHasBall()) this.pendingStroke = stroke;
+  }
+
+  queueManualPickup(): void {
+    if (this.manualActive() && !this.manualHasBall()) this.pendingBall = { ball: COLLECT };
+  }
+
+  queueManualThrow(aim: string, power: string, loft: string, hand: string): void {
+    if (!this.manualActive() || !this.manualHasBall()) return;
+    this.pendingBall = {
+      ball: FREE_THROW,
+      aim: Number(aim),
+      power: Number(power),
+      loft: Number(loft),
+      hand: hand === '-1' ? -1 : hand === '1' ? 1 : undefined,
+    };
+  }
+
+  private clearManualCommands(): void {
+    this.pendingStroke = 0;
+    this.pendingBall = { ball: HOLD };
+  }
+
+  private manualAction(p: Player, state: MatchState): Action {
+    const held = state.ball.owner === p.id;
+    const paddle = !held && p.strokeTicks === 0 ? this.pendingStroke : 0;
+    if (held || paddle) this.pendingStroke = 0;
+    const ball = this.pendingBall;
+    this.pendingBall = { ball: HOLD };
+    const applicable = held ? ball.ball === FREE_THROW : ball.ball === COLLECT;
+    return { ...(applicable ? ball : { ball: HOLD }), paddle, look: this.manualLook() };
   }
 
   private advance(): void {
@@ -176,13 +265,19 @@ export class CanoePoloPage {
     const generations = this.matchGenerations();
     for (let i = 0; i < this.speed() && this.engine.state.phase !== 'finished'; i++) {
       const state = this.engine.state;
-      this.engine.step(
-        state.players.map((p) =>
-          state.phase === 'play'
-            ? sample(generations[p.team].weights, state, p, this.random).action
-            : { paddle: 0, ball: 0 },
-        ),
-      );
+      if (state.phase !== 'play') {
+        this.clearManualCommands();
+        this.engine.step(state.players.map(() => ({ paddle: 0, ball: HOLD })));
+      } else {
+        const manualId = this.manualPlayer();
+        this.engine.step(
+          state.players.map((p) =>
+            p.id === manualId
+              ? this.manualAction(p, state)
+              : sample(generations[p.team].weights, state, p, this.random).action,
+          ),
+        );
+      }
     }
     this.publishMatch();
     if (this.engine.state.phase === 'finished') {
@@ -195,8 +290,8 @@ export class CanoePoloPage {
     this.match.set({ ...this.engine.state });
   }
 
-  playerTransform(player: Player): string {
-    const angle = (player.heading * 180) / Math.PI;
+  playerTransform(player: Player, headingOffset = 0): string {
+    const angle = ((player.heading + headingOffset) * 180) / Math.PI;
     return `translate(${player.x} ${player.y}) rotate(${angle})`;
   }
 
@@ -387,6 +482,7 @@ export class CanoePoloPage {
       this.parent.set(GENESIS.id);
       this.rewards.set({ ...DEFAULT_REWARDS });
       this.playing.set(false);
+      this.chooseManualPlayer('-1');
       this.engine = new CanoeMatch(1);
       this.random = seededRandom(1);
       this.finishedMatchLabels.set(null);
