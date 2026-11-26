@@ -1,6 +1,6 @@
 import { GENESIS, mergeGenerations, type Generation } from './generations';
 
-const DB_NAME = 'made-by-marcel-canoe-polo-v1';
+const DB_NAME = 'made-by-marcel-canoe-polo-v2';
 const STORE = 'generations';
 
 function database(): Promise<IDBDatabase> {

@@ -1,6 +1,6 @@
 export const PITCH = { length: 35, width: 23, goalWidth: 1.5, goalBottom: 2, goalTop: 3 };
 export const DT = 0.1;
-export const RULESET = 'icf-2025-prototype-v1';
+export const RULESET = 'icf-2025-prototype-v2';
 export const HALF_TICKS = 600 / DT;
 export const SHOT_TICKS = 60 / DT;
 export const POSSESSION_TICKS = 5 / DT;
@@ -19,6 +19,9 @@ export interface Player extends Point {
   id: number;
   team: Team;
   heading: number;
+  yawRate: number;
+  stroke: number;
+  strokeTicks: number;
   vx: number;
   vy: number;
 }
@@ -36,6 +39,8 @@ export interface Ball extends Point {
 export interface Action {
   paddle: number;
   ball: number;
+  aim?: number;
+  power?: number;
 }
 
 export interface Decision {

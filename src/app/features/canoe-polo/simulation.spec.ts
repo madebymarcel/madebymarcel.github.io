@@ -107,10 +107,28 @@ describe('Canoe polo learning and generations', () => {
     expect(trainer.progress.steps).toBeGreaterThan(0);
   });
 
+  it('preserves the reward profile in exports and rejects out-of-range bonuses', () => {
+    const generation = {
+      ...GENESIS,
+      id: 'round-trip-v2',
+      parentId: GENESIS.id,
+      number: 1,
+      rewards: { winBall: 0, usefulPass: 0.42, receivePass: 0.12 },
+    };
+    expect(importGenerations(exportGenerations([generation]))).toEqual([generation]);
+    expect(() =>
+      importGenerations(
+        exportGenerations([{ ...generation, rewards: { ...generation.rewards, winBall: 2 } }]),
+      ),
+    ).toThrow();
+  });
+
   it('round trips the actual policy and rejects incompatible imports', () => {
     const encoded = exportGenerations([GENESIS]);
     expect(importGenerations(encoded)).toEqual([GENESIS]);
-    expect(() => importGenerations(encoded.replace('linear-actor-critic-v1', 'other'))).toThrow();
+    expect(() =>
+      importGenerations(encoded.replace('linear-actor-critic-v2', 'linear-actor-critic-v1')),
+    ).toThrow();
     expect(() => importGenerations('{"format":"invalid"}')).toThrow();
     expect(mergeGenerations([GENESIS], [GENESIS])).toEqual([GENESIS]);
   });

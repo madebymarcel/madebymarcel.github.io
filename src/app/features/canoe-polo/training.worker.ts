@@ -1,11 +1,13 @@
 import { type Generation } from './generations';
 import { GenerationTrainer, type TrainingProgress } from './training';
+import { type TrainingRewards } from './training-rewards';
 
 interface StartTraining {
   kind: 'start';
   parent: Generation;
   seed: number;
   delay: number;
+  rewards: TrainingRewards;
 }
 
 type Command =
@@ -44,7 +46,7 @@ function run(): void {
 scope.onmessage = ({ data }) => {
   if (data.kind === 'start') {
     stop();
-    trainer = new GenerationTrainer(data.parent, data.seed);
+    trainer = new GenerationTrainer(data.parent, data.seed, data.rewards);
     delay = data.delay;
     running = true;
     run();

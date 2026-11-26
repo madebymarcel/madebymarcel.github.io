@@ -1,11 +1,25 @@
 import { PITCH, clamp, distance, seededRandom, type MatchState, type Team } from './model';
-import { CanoeMatch } from './simulation';
+import { CanoeMatch, type BallPlay } from './simulation';
+import { DEFAULT_REWARDS, type TrainingRewards } from './training-rewards';
 import { type Generation } from './generations';
 import { addGradient, estimateValue, sample, WEIGHT_COUNT, type PolicySample } from './policy';
 
 const BATCH_STEPS = 96;
 const DISCOUNT = 0.99;
 const LEARNING_RATE = 0.035;
+
+export function ballControlReward(
+  play: BallPlay | null,
+  id: number,
+  rewards: Readonly<TrainingRewards> = DEFAULT_REWARDS,
+): number {
+  if (!play) return 0;
+  if (play.receiver === id && (play.kind === 'claim' || play.kind === 'interception'))
+    return rewards.winBall;
+  if (play.kind !== 'pass' || (!play.progressive && !play.escapesPressure)) return 0;
+  if (play.from === id) return rewards.usefulPass;
+  return play.receiver === id ? rewards.receivePass : 0;
+}
 
 interface Transition {
   sample: PolicySample;
@@ -29,6 +43,7 @@ export class GenerationTrainer {
   constructor(
     private readonly parent: Generation,
     private readonly seed: number,
+    private readonly rewards: Readonly<TrainingRewards> = DEFAULT_REWARDS,
   ) {
     this.weights = [...parent.weights];
     this.random = seededRandom(seed);
@@ -49,8 +64,8 @@ export class GenerationTrainer {
     if (state.ball.owner === id) {
       return 0.12 * (1 - Math.abs(this.match.attackingGoal(p.team) - p.x) / PITCH.length);
     }
-    if (state.possessionTeam === p.team && state.ball.owner !== null) return 0;
-    return -0.06 * (distance(p, state.ball) / PITCH.length);
+    if (state.ball.owner !== null) return 0;
+    return -0.2 * (distance(p, state.ball) / PITCH.length);
   }
 
   runBatch(limit = BATCH_STEPS): Generation | null {
@@ -68,8 +83,13 @@ export class GenerationTrainer {
         sample(p.team === this.learner ? this.weights : this.parent.weights, s, p, this.random),
       );
       const before = indices.map((id) => this.rewardPotential(s, id));
-      const oldOwner = s.ball.owner;
-      const oldTeam = s.possessionTeam;
+      const nearest =
+        s.ball.owner === null
+          ? indices.reduce((a, b) =>
+              distance(s.players[a], s.ball) <= distance(s.players[b], s.ball) ? a : b,
+            )
+          : s.ball.owner;
+      const chase = s.ball.owner === null;
       const event = this.match.step(decisions.map((d) => d.action));
 
       if (this.evaluation) continue;
@@ -88,10 +108,11 @@ export class GenerationTrainer {
       indices.forEach((id, i) => {
         let reward = teamReward;
         if (after.phase === 'play' && !event) {
-          reward += this.rewardPotential(s, id) - before[i];
-          if (oldOwner === null && s.ball.owner === id) {
-            reward += oldTeam === this.learner ? 0.015 : 0.15;
+          // Avoid giving five boats the same incentive to crowd the loose ball.
+          if (id === nearest && (chase ? s.ball.owner === null : s.ball.owner === id)) {
+            reward += this.rewardPotential(s, id) - before[i];
           }
+          reward += ballControlReward(this.match.lastBallPlay, id, this.rewards);
         }
         trajectories[i].push({ sample: decisions[id], reward });
       });
@@ -132,6 +153,7 @@ export class GenerationTrainer {
       weights: [...this.weights],
       matches: this.parent.matches + 1,
       steps: this.parent.steps + this.trainingSteps,
+      rewards: { ...this.rewards },
       evaluation: [s.score[this.learner], s.score[this.learner === 0 ? 1 : 0]],
     };
   }
