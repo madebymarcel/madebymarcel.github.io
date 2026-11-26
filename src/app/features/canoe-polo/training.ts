@@ -1,5 +1,6 @@
 import { PITCH, clamp, distance, seededRandom, type MatchState, type Team } from './model';
 import { CanoeMatch, type BallPlay } from './simulation';
+import { reachableBall } from './player-body';
 import { DEFAULT_REWARDS, type TrainingRewards } from './training-rewards';
 import { type Generation } from './generations';
 import { addGradient, estimateValue, sample, WEIGHT_COUNT, type PolicySample } from './policy';
@@ -15,7 +16,7 @@ export function ballControlReward(
 ): number {
   if (!play) return 0;
   if (play.receiver === id && (play.kind === 'claim' || play.kind === 'interception'))
-    return rewards.winBall;
+    return rewards.winBall + (play.save ? rewards.saveGoal : 0);
   if (play.kind !== 'pass' || (!play.progressive && !play.escapesPressure)) return 0;
   if (play.from === id) return rewards.usefulPass;
   return play.receiver === id ? rewards.receivePass : 0;
@@ -90,6 +91,14 @@ export class GenerationTrainer {
             )
           : s.ball.owner;
       const chase = s.ball.owner === null;
+      const lastTouch = s.ball.lastTouch;
+      const ignore =
+        chase &&
+        s.looseTicks >= 10 &&
+        s.players.reduce((a, b) => (distance(a, s.ball) <= distance(b, s.ball) ? a : b)).id ===
+          nearest &&
+        reachableBall(s.players[nearest], s.ball) &&
+        decisions[nearest].action.ball !== 1;
       const event = this.match.step(decisions.map((d) => d.action));
 
       if (this.evaluation) continue;
@@ -107,12 +116,18 @@ export class GenerationTrainer {
 
       indices.forEach((id, i) => {
         let reward = teamReward;
+        if (event?.kind === 'out' && lastTouch === id && event.rule !== 'Scoring a goal') {
+          reward -= 0.22;
+        }
         if (after.phase === 'play' && !event) {
           // Avoid giving five boats the same incentive to crowd the loose ball.
           if (id === nearest && (chase ? s.ball.owner === null : s.ball.owner === id)) {
             reward += this.rewardPotential(s, id) - before[i];
           }
           reward += ballControlReward(this.match.lastBallPlay, id, this.rewards);
+          if (ignore && id === nearest && s.ball.owner === null && s.looseTicks % 5 === 0) {
+            reward -= this.rewards.ignoreLooseBall;
+          }
         }
         trajectories[i].push({ sample: decisions[id], reward });
       });

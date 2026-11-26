@@ -1,4 +1,10 @@
-export const REWARD_KEYS = ['winBall', 'usefulPass', 'receivePass'] as const;
+export const REWARD_KEYS = [
+  'winBall',
+  'usefulPass',
+  'receivePass',
+  'saveGoal',
+  'ignoreLooseBall',
+] as const;
 export type RewardKey = (typeof REWARD_KEYS)[number];
 export type TrainingRewards = Record<RewardKey, number>;
 
@@ -6,6 +12,8 @@ export const DEFAULT_REWARDS: Readonly<TrainingRewards> = {
   winBall: 0.2,
   usefulPass: 0.18,
   receivePass: 0.08,
+  saveGoal: 0.35,
+  ignoreLooseBall: 0.02,
 };
 
 export function validRewards(value: unknown): value is TrainingRewards {

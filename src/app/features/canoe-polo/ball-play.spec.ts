@@ -1,16 +1,17 @@
-import { FIRST_PASS, FIRST_SHOT, FREE_THROW, launchBall } from './ball-play';
+import { FIRST_PASS, FREE_THROW, launchBall } from './ball-play';
 import { PITCH } from './model';
 import { CanoeMatch } from './simulation';
 import { ballControlReward } from './training';
 
 function setup() {
-  const match = new CanoeMatch(7);
+  const match = new CanoeMatch(42);
   const s = match.state;
   Object.assign(s.players[0], { x: 10, y: 9.3 });
-  Object.assign(s.players[1], { x: 15, y: 10 });
+  Object.assign(s.players[1], { x: 15, y: 10, heading: Math.PI });
   s.ball.owner = 0;
   s.ball.lastTouch = 0;
   s.possessionTeam = 0;
+  match.refreshVision();
   return { match, s };
 }
 
@@ -20,17 +21,24 @@ function play(match: CanoeMatch, actions: Record<number, number>) {
 
 describe('Aimed ball play', () => {
   it('aims at a moving teammate without rounding to a fixed direction', () => {
-    const { s } = setup();
-    const pass = launchBall(s, s.players[0], { paddle: 0, ball: FIRST_PASS });
+    const { match, s } = setup();
+    const pass = launchBall(s, s.players[0], { paddle: 0, ball: FIRST_PASS })!;
     expect(pass.target).toBe(1);
     expect(pass.vy / pass.vx).toBeCloseTo(0.7 / 5);
     s.players[1].vy = 1;
-    const led = launchBall(s, s.players[0], { paddle: 0, ball: FIRST_PASS });
+    match.refreshVision();
+    const led = launchBall(s, s.players[0], { paddle: 0, ball: FIRST_PASS })!;
     expect(led.vy / led.vx).toBeGreaterThan(pass.vy / pass.vx);
     const aim = 0.12345;
-    const free = launchBall(s, s.players[0], { paddle: 0, ball: FREE_THROW, aim, power: 0.5 });
+    const free = launchBall(s, s.players[0], {
+      paddle: 0,
+      ball: FREE_THROW,
+      aim,
+      power: 0.5,
+      loft: 0.5,
+    })!;
     expect(Math.atan2(free.vy, free.vx)).toBeCloseTo(aim, 10);
-    expect(Math.hypot(free.vx, free.vy)).toBeCloseTo(5.5);
+    expect(Math.hypot(free.vx, free.vy)).toBeCloseTo(5.5 * Math.cos(0.5));
   });
 
   it('completes an open pass and rewards the passer and receiver, not other players', () => {
@@ -64,7 +72,15 @@ describe('Aimed ball play', () => {
   it('can score a legal shot without bypassing elevated goal detection', () => {
     const { match, s } = setup();
     Object.assign(s.players[0], { x: PITCH.length - 8, y: PITCH.width / 2 - 2 });
-    play(match, { 0: FIRST_SHOT + 2 });
+    match.step(
+      s.players.map((p) => ({
+        paddle: 0,
+        ball: p.id === 0 ? FREE_THROW : 0,
+        aim: Math.atan2(2, 8.11),
+        power: 1,
+        loft: 0.55,
+      })),
+    );
     for (let i = 0; i < 12 && s.score[0] === 0; i++) play(match, {});
     expect(s.score).toEqual([1, 0]);
   });

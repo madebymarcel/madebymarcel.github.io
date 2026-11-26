@@ -18,6 +18,7 @@ import { assessPlay, halfExpired } from './referee';
 
 import { launchBall } from './ball-play';
 import { stepPaddle } from './paddle';
+import { reachableBall, remember, turnHead } from './player-body';
 
 export interface BallPlay {
   receiver: number;
@@ -25,6 +26,7 @@ export interface BallPlay {
   kind: 'recovery' | 'claim' | 'interception' | 'pass';
   progressive: boolean;
   escapesPressure: boolean;
+  save?: boolean;
 }
 
 export class CanoeMatch {
@@ -45,6 +47,10 @@ export class CanoeMatch {
         x: 0,
         y: 0,
         heading: 0,
+        headTurn: 0,
+        dominantHand: id % 5 === 1 ? -1 : 1,
+        seenBall: null,
+        seenPlayers: Array(10).fill(null),
         yawRate: 0,
         stroke: 0,
         strokeTicks: 0,
@@ -70,12 +76,18 @@ export class CanoeMatch {
       restart: null,
       pauseTicks: 0,
       possessionTicks: 0,
+      looseTicks: 0,
       possessionTeam: null,
       shotTicks: 0,
       events: [],
     };
     this.lineUp();
+    this.refreshVision();
     this.record({ tick: 0, kind: 'start', message: 'First half: sprint!', rule: 'Start of play' });
+  }
+
+  refreshVision(): void {
+    for (const player of this.state.players) remember(this.state, player);
   }
 
   private lineUp(): void {
@@ -89,6 +101,9 @@ export class CanoeMatch {
       p.vx = 0;
       p.vy = 0;
       p.yawRate = 0;
+      p.headTurn = 0;
+      p.seenBall = null;
+      p.seenPlayers.fill(null);
       p.stroke = 0;
       p.strokeTicks = 0;
     }
@@ -104,6 +119,7 @@ export class CanoeMatch {
       restrictedThrower: null,
     });
     s.possessionTicks = 0;
+    s.looseTicks = 0;
     s.possessionTeam = null;
     s.shotTicks = 0;
   }
@@ -148,6 +164,7 @@ export class CanoeMatch {
     if (s.ball.restrictedThrower !== player.id) s.ball.restrictedThrower = null;
     s.possessionTeam = player.team;
     s.possessionTicks = 0;
+    s.looseTicks = 0;
     Object.assign(s.ball, {
       owner: player.id,
       lastTouch: player.id,
@@ -173,6 +190,22 @@ export class CanoeMatch {
     this.escapeCredited = false;
   }
 
+  private wouldScore(ball: MatchState['ball'], shooter: Player): boolean {
+    if (ball.restrictedThrower !== null) return false;
+    const dir = attackDirection(shooter.team, this.state.half);
+    if (ball.vx * dir < 0.2) return false;
+    const plane = dir === 1 ? PITCH.length + 0.11 : -0.11;
+    const time = (plane - ball.x) / ball.vx;
+    if (time <= 0 || time > 2) return false;
+    const y = ball.y + ball.vy * time;
+    const z = ball.z + (ball.vz + 9.81 * DT * 0.5) * time - 9.81 * time * time * 0.5;
+    return (
+      Math.abs(y - PITCH.width / 2) <= PITCH.goalWidth / 2 - 0.11 &&
+      z >= PITCH.goalBottom + 0.11 &&
+      z <= PITCH.goalTop - 0.11
+    );
+  }
+
   private catchBall(player: Player): void {
     const s = this.state;
     const from = s.ball.lastTouch;
@@ -186,6 +219,7 @@ export class CanoeMatch {
           : this.passTarget === player.id
             ? 'pass'
             : 'recovery';
+    const save = kind === 'interception' && !!passer && this.wouldScore(s.ball, passer);
     if (s.possessionTeam !== player.team) this.resetPassSequence();
     const progress = player.x * attackDirection(player.team, s.half);
     const progressive = kind === 'pass' && progress >= this.bestPassProgress + 1.5;
@@ -196,14 +230,16 @@ export class CanoeMatch {
       this.pressure(player) > this.pressureAtRelease + 1;
     if (progressive) this.bestPassProgress = progress;
     if (escapesPressure) this.escapeCredited = true;
-    this.lastBallPlay = { receiver: player.id, from, kind, progressive, escapesPressure };
+    this.lastBallPlay = { receiver: player.id, from, kind, progressive, escapesPressure, save };
     this.passTarget = null;
     this.takeBall(player);
   }
 
   private releaseBall(player: Player, action: Action): void {
     const s = this.state;
-    const { vx, vy, vz, target } = launchBall(s, player, action);
+    const launch = launchBall(s, player, action);
+    if (!launch) return;
+    const { vx, vy, vz, target } = launch;
     this.passTarget = target;
     this.pressureAtRelease = this.pressure(player);
     this.bestPassProgress = Math.max(
@@ -236,6 +272,7 @@ export class CanoeMatch {
     s.ball.vy = 0;
     s.ball.vz = 0;
     s.possessionTicks = 0;
+    s.looseTicks = 0;
     s.possessionTeam = restart.team;
     s.shotTicks = 0;
   }
@@ -253,12 +290,23 @@ export class CanoeMatch {
     player.vx = 0;
     player.vy = 0;
     player.yawRate = 0;
+    if (restart.kind !== 'centre') {
+      // Face along the inward normal on a boundary restart; never align to a goal.
+      const edge = Math.min(player.x, PITCH.length - player.x, player.y, PITCH.width - player.y);
+      if (edge <= 1) {
+        if (edge === player.y) player.heading = Math.PI / 2;
+        else if (edge === PITCH.width - player.y) player.heading = -Math.PI / 2;
+        else player.heading = player.x < PITCH.length / 2 ? 0 : Math.PI;
+      }
+    }
+    player.headTurn = 0;
     player.stroke = 0;
     player.strokeTicks = 0;
     this.takeBall(player);
     if (restart.kind !== 'free-shot') s.ball.restrictedThrower = player.id;
     s.restart = null;
     s.phase = 'play';
+    this.refreshVision();
     this.record({
       tick: s.ticks,
       kind: 'restart',
@@ -277,6 +325,7 @@ export class CanoeMatch {
         s.half = 2;
         this.lineUp();
         s.phase = 'play';
+        this.refreshVision();
         this.record({
           tick: s.ticks,
           kind: 'start',
@@ -292,7 +341,16 @@ export class CanoeMatch {
     }
 
     s.ticks++;
-    for (const player of s.players) stepPaddle(player, actions[player.id].paddle);
+    for (const player of s.players) {
+      const action = actions[player.id];
+      turnHead(player, action.look ?? 0);
+      const holding = s.ball.owner === player.id;
+      if (holding) {
+        player.stroke = 0;
+        player.strokeTicks = 0;
+      }
+      stepPaddle(player, holding ? 0 : action.paddle);
+    }
     this.resolveContacts();
     const previous = { ...s.ball };
     if (s.ball.owner !== null) {
@@ -310,6 +368,7 @@ export class CanoeMatch {
       ball.y += ball.vy * DT;
       ball.z = Math.max(0.11, ball.z + ball.vz * DT);
       ball.vz = ball.z > 0.11 ? ball.vz - 9.81 * DT : 0;
+      s.looseTicks = ball.z === 0.11 && Math.hypot(ball.vx, ball.vy) < 1.4 ? s.looseTicks + 1 : 0;
       if (ball.z === 0.11) {
         ball.vx *= 0.86;
         ball.vy *= 0.86;
@@ -319,10 +378,10 @@ export class CanoeMatch {
         ball.x <= PITCH.length &&
         ball.y >= 0 &&
         ball.y <= PITCH.width &&
-        ball.z <= 2
+        ball.z <= 2.85
       ) {
         const candidates = s.players
-          .filter((p) => actions[p.id].ball === 1 && distance(p, ball) <= 1.25)
+          .filter((p) => actions[p.id].ball === 1 && reachableBall(p, ball))
           .sort((a, b) => distance(a, ball) - distance(b, ball));
         // The thrower cannot immediately catch their own airborne release.
         const catcher = candidates.find((p) => p.id !== ball.lastTouch || ball.z === 0.11);
@@ -351,6 +410,7 @@ export class CanoeMatch {
         rule: 'Match duration',
       });
     }
+    this.refreshVision();
     return ruling?.decision ?? null;
   }
 

@@ -89,6 +89,8 @@ export function importGenerations(source: string): Generation[] {
         winBall: g.rewards.winBall,
         usefulPass: g.rewards.usefulPass,
         receivePass: g.rewards.receivePass,
+        saveGoal: g.rewards.saveGoal,
+        ignoreLooseBall: g.rewards.ignoreLooseBall,
       },
     }),
     evaluation: g.evaluation,
