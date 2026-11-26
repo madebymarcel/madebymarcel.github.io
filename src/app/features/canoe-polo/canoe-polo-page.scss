@@ -81,7 +81,9 @@
 }
 
 .events {
-  max-block-size: var(--layout-narrow);
+  // New decisions should grow the log, not move everything below the match.
+  block-size: min(10rem, 30svh);
+  grid-auto-rows: max-content;
   overflow-y: auto;
 }
 
@@ -93,7 +95,15 @@
   padding-block-start: var(--space-3);
 }
 
+// Keep this row mounted when the training worker rolls over to a new generation.
+.training-progress {
+  display: grid;
+  gap: var(--space-1);
+  font-size: var(--type-small);
+}
+
 progress {
+  display: block;
   inline-size: 100%;
   accent-color: var(--accent);
 }
@@ -130,7 +140,8 @@ summary {
   scrollbar-gutter: stable;
 }
 
-.generation-scroll:focus-visible {
+.generation-scroll:focus-visible,
+.events:focus-visible {
   outline: var(--border-width) solid var(--accent);
   outline-offset: var(--space-1);
 }
@@ -142,6 +153,10 @@ summary {
 
 .polo-vision-toggle input {
   accent-color: var(--accent);
+}
+
+.polo-vision-summary span {
+  display: block;
 }
 
 .polo-vision-overlay {

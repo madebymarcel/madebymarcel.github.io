@@ -29,14 +29,19 @@
         </select>
       </div>
     </div>
-    @if (progress(); as p) {
-    <p>{{ p.phase }} · {{ eventTime(p.ticks) }} / 20:00 · {{ p.steps }} learning steps</p>
-    <progress
-      aria-label="Current training or evaluation match"
-      [value]="p.ticks"
-      [max]="halfTicks * 2"
-    ></progress>
-    }
+    @let p = progress();
+    <div class="training-progress">
+      <p>
+        {{ p ? p.phase + ' · ' + eventTime(p.ticks) + ' / 20:00' : (training() ? 'Starting' : 'Not
+        started') }}
+      </p>
+      <p>{{ p?.steps ?? 0 }} learning steps</p>
+      <progress
+        aria-label="Current training or evaluation match"
+        [value]="p?.ticks ?? 0"
+        [max]="halfTicks * 2"
+      ></progress>
+    </div>
     <button
       class="ds-button"
       type="button"
@@ -153,8 +158,10 @@
         </label>
         @if (showVision()) {
         <p class="ds-hint polo-vision-summary">
-          Sight cones: {{ visionAngle }}° · {{ visionRange }} m. Ball in sight cone: Blue {{
-          visionBallPlayers()[0] }}; Red {{ visionBallPlayers()[1] }}.
+          <span>Sight cones: {{ visionAngle }}° · {{ visionRange }} m.</span>
+          <span>Ball in sight cone:</span>
+          <span>Blue {{ visionBallPlayers()[0] }}.</span>
+          <span>Red {{ visionBallPlayers()[1] }}.</span>
         </p>
         }
         <svg
@@ -361,8 +368,8 @@
         <section class="ds-stack" aria-labelledby="referee-heading">
           <h3 id="referee-heading">Referee decisions</h3>
           <p class="ds-hint">Ruleset: {{ ruleset }}</p>
-          <ol class="events">
-            @for (event of match().events; track $index) {
+          <ol class="events" role="list" tabindex="0" aria-label="Recent referee decisions">
+            @for (event of match().events; track event) {
             <li>
               <strong>{{ eventTime(event.tick) }} · {{ event.message }}</strong>
               <span class="ds-hint">
@@ -371,6 +378,8 @@
                 }
               </span>
             </li>
+            } @empty {
+            <li>No decisions yet.</li>
             }
           </ol>
         </section>
