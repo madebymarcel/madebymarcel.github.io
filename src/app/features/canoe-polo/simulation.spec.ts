@@ -122,6 +122,16 @@ describe('Canoe polo learning and generations', () => {
       },
     };
     expect(importGenerations(exportGenerations([generation]))).toEqual([generation]);
+    const expanded = {
+      ...generation,
+      rewards: { ...generation.rewards, scoreGoal: 7.5, throwOut: 0 },
+    };
+    expect(importGenerations(exportGenerations([expanded]))).toEqual([expanded]);
+    expect(() =>
+      importGenerations(
+        exportGenerations([{ ...expanded, rewards: { ...expanded.rewards, scoreGoal: 11 } }]),
+      ),
+    ).toThrow();
     expect(() =>
       importGenerations(
         exportGenerations([{ ...generation, rewards: { ...generation.rewards, winBall: 2 } }]),

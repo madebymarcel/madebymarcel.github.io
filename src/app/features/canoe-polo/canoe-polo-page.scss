@@ -97,3 +97,35 @@ progress {
   inline-size: 100%;
   accent-color: var(--accent);
 }
+
+.dashboard-match,
+.dashboard-side,
+.generation-layout,
+.generation-panel,
+.training-controls {
+  align-items: start;
+  min-inline-size: 0;
+}
+
+.reward-panel {
+  border-block-start: var(--border-width) solid var(--border);
+  padding-block-start: var(--space-fluid-component);
+}
+
+summary {
+  cursor: pointer;
+  font-weight: var(--weight-semibold);
+}
+
+.generation-scroll {
+  max-block-size: min(var(--layout-narrow), 55vh);
+  min-inline-size: 0;
+  overflow-y: auto;
+  padding-inline-end: var(--space-2);
+  scrollbar-gutter: stable;
+}
+
+.generation-scroll:focus-visible {
+  outline: var(--border-width) solid var(--accent);
+  outline-offset: var(--space-1);
+}
