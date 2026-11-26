@@ -100,19 +100,26 @@ svg {
   max-inline-size: 100%;
 }
 
-.metrics {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(11rem, 100%), 1fr));
-  gap: var(--space-3);
-  margin: 0;
-}
-
-.metrics dd {
-  margin: 0;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
 .run-result:empty {
   display: none;
+}
+
+.skill-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(9rem, 100%), 1fr));
+  gap: var(--space-3);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.skill-list li {
+  display: grid;
+  gap: var(--space-1);
+  align-content: start;
+}
+
+.skill-list button[aria-pressed='true'] {
+  background: var(--accent);
+  color: var(--on-accent);
 }
