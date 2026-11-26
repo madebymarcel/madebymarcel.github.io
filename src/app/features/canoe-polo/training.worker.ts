@@ -9,13 +9,9 @@ interface StartTraining {
 }
 
 type Command =
-  | StartTraining
-  | { kind: 'pause' }
-  | { kind: 'resume' }
-  | { kind: 'pace'; delay: number };
+  StartTraining | { kind: 'pause' } | { kind: 'resume' } | { kind: 'pace'; delay: number };
 export type TrainingMessage =
-  | { kind: 'progress'; progress: TrainingProgress }
-  | { kind: 'generation'; generation: Generation };
+  { kind: 'progress'; progress: TrainingProgress } | { kind: 'generation'; generation: Generation };
 
 const scope = globalThis as unknown as {
   onmessage: (event: MessageEvent<Command>) => void;
