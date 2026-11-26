@@ -3,15 +3,16 @@
   <div class="workbench">
     <section class="viewer" aria-labelledby="active-skill">
       <h2 id="active-skill" #viewerHeading tabindex="-1">{{ viewing() }}</h2>
+      @let debug = jointDebug();
       <div class="stage">
-        @let pose = frame(); @let pan = 0.95 - pose.torso.x;
+        @let pose = debug?.frame ?? frame(); @let pan = (debug ? 1.8 : 0.95) - pose.torso.x;
         <svg
           viewBox="0 0 3.6 1.95"
           role="img"
-          [attr.aria-label]="viewing() + ' scene: side view of the biped robot and terrain'"
+          [attr.aria-label]="debug ? 'Side view of the robot on the joint test stand' : viewing() + ' scene: side view of the biped robot and terrain'"
         >
           <g [attr.transform]="'translate(' + pan + ' 1.62) scale(1 -1)'">
-            @for (tile of ground(); track tile.from) {
+            @for (tile of (debug ? [] : ground()); track tile.from) {
             <rect
               class="floor"
               [attr.x]="tile.from"
@@ -19,8 +20,8 @@
               [attr.height]="tile.height + .6"
               [attr.width]="tile.to - tile.from"
             />
-            } @if (!course() && (selected() === 'walk' || selected() === 'run')) { @for (mark of [0,
-            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]; track mark) {
+            } @if (!debug && !course() && (selected() === 'walk' || selected() === 'run')) { @for
+            (mark of [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]; track mark) {
             <path class="marker" [attr.d]="'M ' + mark + ' 0 v .09'" />
             @if (mark === trackGoal && selected() === 'walk') {
             <path class="finish-line" [attr.d]="'M ' + mark + ' 0 v 1.5'" />
@@ -37,8 +38,20 @@
                 [attr.x2]="leg.toe.x"
                 [attr.y2]="leg.toe.y"
               />
-              <circle class="hinge" [attr.cx]="leg.knee.x" [attr.cy]="leg.knee.y" r=".044" />
-              <circle class="hinge" [attr.cx]="leg.ankle.x" [attr.cy]="leg.ankle.y" r=".044" />
+              <circle
+                class="hinge"
+                [class.probed]="debug?.motor === $index * 3 + 1"
+                [attr.cx]="leg.knee.x"
+                [attr.cy]="leg.knee.y"
+                r=".044"
+              />
+              <circle
+                class="hinge"
+                [class.probed]="debug?.motor === $index * 3 + 2"
+                [attr.cx]="leg.ankle.x"
+                [attr.cy]="leg.ankle.y"
+                r=".044"
+              />
             </g>
             }
             <g
@@ -46,9 +59,14 @@
             >
               <rect class="torso" x="-.19" y="-.19" width=".38" height=".38" rx=".04" />
               <path class="face" d="M .03 .06 h .08 M .07 .1 l .04 -.04 -.04 -.04" />
-              <circle class="hinge" cy="-.16" r=".05" />
+              <circle
+                class="hinge"
+                [class.probed]="debug?.motor === 0 || debug?.motor === 3"
+                cy="-.16"
+                r=".05"
+              />
             </g>
-            @if (showSensors()) { @for (leg of pose.legs; track $index) {
+            @if (!debug && showSensors()) { @for (leg of pose.legs; track $index) {
             <circle
               class="contact"
               [class.active]="pose.contacts[$index * 2]"
@@ -70,9 +88,9 @@
 
       <div class="commands playback">
         <button class="ds-button" type="button" (click)="togglePlayback()">
-          {{ playing() ? 'Pause' : finish() ? 'Replay' : 'Play' }}
+          {{ playing() ? 'Pause' : (debug ? debug.done : finish()) ? 'Replay' : 'Play' }}
         </button>
-        @if (!course() || active()) {
+        @if ((!debug && !course()) || active()) {
         <button
           class="ds-button ds-button--secondary"
           type="button"
@@ -83,7 +101,72 @@
           'Pause ' + names[training] + ' training' }} } @else { Start training }
         </button>
         }
+        <button
+          class="ds-button ds-button--secondary"
+          type="button"
+          [attr.aria-pressed]="!!debug"
+          (click)="toggleJointDebug()"
+        >
+          Joint debug
+        </button>
+        @if (debug) {
+        <button
+          class="ds-button ds-button--secondary"
+          type="button"
+          (click)="nextJointPose()"
+          [disabled]="debug.done"
+        >
+          Next pose
+        </button>
+        }
       </div>
+      @if (debug) {
+      <section class="joint-debug" aria-label="Joint measurements">
+        <p role="status" data-testid="joint-debug-phase">
+          {{ debug.done ? 'Sweep complete' : debug.label }}
+        </p>
+        <div class="joint-grid">
+          @for (spec of jointSpecs; track spec.name; let i = $index) {
+          <section
+            class="joint-reading ds-card"
+            [attr.aria-label]="spec.name + ' limits and speeds'"
+          >
+            <h3>{{ spec.name }}</h3>
+            <dl>
+              <div>
+                <dt>Joint limits</dt>
+                <dd>{{ spec.min | number: '1.0-0' }}° to {{ spec.max | number: '1.0-0' }}°</dd>
+              </div>
+              <div>
+                <dt>Policy targets</dt>
+                <dd>
+                  {{ spec.policyMin | number: '1.0-1' }}° to {{ spec.policyMax | number: '1.0-1' }}°
+                </dd>
+              </div>
+              <div>
+                <dt>Motor command max</dt>
+                <dd>{{ spec.motorSpeed | number: '1.0-0' }}°/s</dd>
+              </div>
+              @for (side of [0, 1]; track side) { @let motor = side * 3 + i;
+              <div class="joint-leg" [class.probed-reading]="debug.motor === motor">
+                <dt>{{ side === 0 ? 'Far leg' : 'Near leg' }}</dt>
+                <dd>
+                  {{ debug.frame.angles[motor] | number: '1.0-0' }}° → {{ debug.targets[motor] |
+                  number: '1.0-0' }}° target
+                </dd>
+                <dd>Peak {{ debug.peaks[motor] | number: '1.0-0' }}°/s</dd>
+              </div>
+              }
+            </dl>
+          </section>
+          }
+        </div>
+        <p class="ds-hint">
+          Fixed torso, no gravity or ground contact. Peaks are measured in this sweep, not while
+          running.
+        </p>
+      </section>
+      } @else {
       <div class="viewer-status">
         <p class="ds-hint" data-testid="biped-replay-summary">
           @if (course(); as result) { {{ result.completed.length }}/{{ sections.length }} stages ·
@@ -194,7 +277,7 @@
         </p>
         }
       </div>
-      }
+      } }
     </section>
 
     <aside class="skill-sidebar" aria-labelledby="biped-skills">
@@ -207,7 +290,7 @@
             type="button"
             [attr.aria-labelledby]="'skill-name-' + skill"
             [attr.aria-describedby]="'skill-stats-' + skill"
-            [attr.aria-pressed]="!course() && selected() === skill"
+            [attr.aria-pressed]="!debug && !course() && selected() === skill"
             (click)="select(skill)"
           >
             <span class="skill-name" [id]="'skill-name-' + skill">{{ names[skill] }}</span>

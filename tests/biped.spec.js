@@ -113,3 +113,38 @@ test('switches scenes immediately, counts isolated training, and plays parkour i
   await expect(walk).toHaveAccessibleDescription(/1 training session$/);
   await expect(page.getByTestId('biped-replay-summary')).toContainText(/Iteration\s*[1-9]\d*/);
 });
+
+test('joint debug moves the real rig, shows limits and speed, and returns to the selected skill', async ({
+  page,
+}) => {
+  await page.goto('/projects/biped/');
+  const button = page.getByRole('button', { name: 'Joint debug', exact: true });
+  await button.click();
+  await expect(button).toHaveAttribute('aria-pressed', 'true');
+  const viewer = page.getByRole('region', { name: 'Joint debug', exact: true });
+  await expect(
+    viewer.getByRole('img', { name: 'Side view of the robot on the joint test stand' }),
+  ).toBeVisible();
+  await viewer.getByRole('button', { name: 'Pause', exact: true }).click();
+  await expect(viewer.getByRole('region', { name: 'Hip limits and speeds' })).toContainText(
+    '-20° to 120°',
+  );
+  await expect(viewer.getByRole('region', { name: 'Knee limits and speeds' })).toContainText(
+    '-140° to 0°',
+  );
+  await expect(viewer.getByRole('region', { name: 'Ankle limits and speeds' })).toContainText(
+    '688°/s',
+  );
+  const phase = page.getByTestId('joint-debug-phase');
+  const next = viewer.getByRole('button', { name: 'Next pose' });
+  for (let i = 0; i < 12 && !(await phase.textContent()).includes('Combined pose'); i++) {
+    await next.click();
+  }
+  await expect(phase).toHaveText('Combined pose 1 / 64');
+  await expect(viewer.getByRole('region', { name: 'Ankle limits and speeds' })).toContainText(
+    /Peak [1-9]\d*°\/s/,
+  );
+  await button.click();
+  await expect(page.getByRole('region', { name: 'Walk', exact: true })).toBeVisible();
+  await expect(button).toHaveAttribute('aria-pressed', 'false');
+});
