@@ -1,0 +1,112 @@
+.stage {
+  overflow: hidden;
+  border-radius: var(--radius-medium);
+  border: 1px solid var(--border-strong);
+  background: var(--color-night);
+}
+
+svg {
+  display: block;
+  width: 100%;
+  max-height: 25rem;
+}
+
+.floor {
+  fill: var(--color-night-surface);
+}
+
+.marker {
+  stroke: var(--color-night-muted);
+  stroke-width: 0.012;
+}
+
+.finish-line {
+  stroke: var(--color-amber-soft);
+  stroke-width: 0.018;
+  stroke-dasharray: 0.045 0.032;
+}
+
+.link,
+.foot {
+  fill: none;
+  stroke: var(--color-violet-soft);
+  stroke-linecap: round;
+  stroke-width: 0.075;
+}
+
+.near-leg .link,
+.near-leg .foot {
+  stroke: var(--color-teal-soft);
+  stroke-width: 0.06;
+}
+
+.foot {
+  stroke-linecap: butt;
+  stroke-width: 0.045;
+}
+
+.near-leg .foot {
+  stroke-width: 0.04;
+}
+
+.hinge {
+  fill: var(--color-ink);
+  stroke: var(--color-night-text);
+  stroke-width: 0.013;
+}
+
+.torso {
+  fill: var(--color-amber-soft);
+  stroke: var(--color-paper);
+  stroke-width: 0.012;
+}
+
+.face {
+  fill: none;
+  stroke: var(--color-ink);
+  stroke-width: 0.015;
+}
+
+.contact {
+  fill: var(--color-night);
+  stroke: var(--color-white);
+  stroke-width: 0.012;
+}
+
+.contact.active {
+  fill: var(--color-amber-soft);
+}
+
+.commands {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.commands label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.commands select {
+  font: inherit;
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(11rem, 100%), 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.metrics dd {
+  margin: 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.run-result:empty {
+  display: none;
+}
