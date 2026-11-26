@@ -17,10 +17,18 @@ import { PADDLE_ACTIONS, STROKE_TICKS } from './paddle';
 
 export const INPUTS = 72;
 const look = [-1, 0, 1];
-const aim = [-1.3, -0.85, -0.48, -0.24, -0.1, 0, 0.1, 0.24, 0.48, 0.85, 1.3];
-const power = [0.45, 0.65, 0.82, 1];
-const loft = [0.24, 0.4, 0.55, 0.72, 0.9];
-const sizes = [PADDLE_ACTIONS, BALL_ACTIONS, look.length, 2, aim.length, power.length, loft.length];
+export const SHOT_AIM = [-1.3, -0.85, -0.48, -0.24, -0.1, 0, 0.1, 0.24, 0.48, 0.85, 1.3];
+export const SHOT_POWER = [0.45, 0.65, 0.82, 1];
+export const SHOT_LOFT = [0.24, 0.4, 0.55, 0.72, 0.9];
+const sizes = [
+  PADDLE_ACTIONS,
+  BALL_ACTIONS,
+  look.length,
+  2,
+  SHOT_AIM.length,
+  SHOT_POWER.length,
+  SHOT_LOFT.length,
+];
 const offsets = sizes.map((_, i) => sizes.slice(0, i).reduce((a, b) => a + b, 0));
 const VALUE_ROW = sizes.reduce((a, b) => a + b, 0);
 export const WEIGHT_COUNT = (VALUE_ROW + 1) * INPUTS;
@@ -161,9 +169,9 @@ export function sample(
   if (holding && ball >= FIRST_PASS) {
     action.hand = draw(3) === 0 ? player.dominantHand : player.dominantHand === 1 ? -1 : 1;
     if (ball === FREE_THROW) {
-      action.aim = aim[draw(4)];
-      action.power = power[draw(5)];
-      action.loft = loft[draw(6)];
+      action.aim = SHOT_AIM[draw(4)];
+      action.power = SHOT_POWER[draw(5)];
+      action.loft = SHOT_LOFT[draw(6)];
     } else {
       action.passTo = player.seenPlayers[squad[ball - FIRST_PASS].id] ?? undefined;
     }

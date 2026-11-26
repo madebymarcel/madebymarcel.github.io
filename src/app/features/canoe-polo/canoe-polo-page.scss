@@ -106,7 +106,8 @@ progress {
   min-inline-size: 0;
 }
 
-.reward-panel {
+.reward-panel,
+.polo-manual {
   border-block-start: var(--border-width) solid var(--border);
   padding-block-start: var(--space-fluid-component);
 }
@@ -132,4 +133,36 @@ summary {
 .generation-scroll:focus-visible {
   outline: var(--border-width) solid var(--accent);
   outline-offset: var(--space-1);
+}
+
+.polo-vision-toggle {
+  inline-size: fit-content;
+  cursor: pointer;
+}
+
+.polo-vision-toggle input {
+  accent-color: var(--accent);
+}
+
+.polo-vision-overlay {
+  pointer-events: none;
+}
+
+.polo-vision-cone {
+  fill: var(--polo-blue);
+  fill-opacity: 0.06;
+  stroke: var(--polo-blue);
+  stroke-opacity: 0.45;
+  stroke-width: 1px;
+}
+
+.polo-vision-red {
+  fill: var(--polo-red);
+  stroke: var(--polo-red);
+  stroke-dasharray: 3 2;
+}
+
+.polo-controlled-boat {
+  stroke: var(--water-text);
+  stroke-width: 2px;
 }
