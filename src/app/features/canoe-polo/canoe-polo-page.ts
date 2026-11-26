@@ -381,21 +381,24 @@ export class CanoePoloPage {
     this.worker?.terminate();
     this.worker = null;
     try {
-      await this.addGenerations([generation]);
+      await this.addGenerations([generation], this.status, '');
       if (this.destroyed) return;
       this.parent.set(generation.id);
-      this.status.update((message) => this.generationLabel(generation) + ' unlocked. ' + message);
     } finally {
       this.saving.set(false);
       if (!this.destroyed && this.training()) this.startTraining();
     }
   }
 
-  private async addGenerations(incoming: Generation[], status = this.status): Promise<void> {
+  private async addGenerations(
+    incoming: Generation[],
+    status: typeof this.status,
+    savedMessage = 'Saved on this device.',
+  ): Promise<void> {
     this.generations.set(mergeGenerations(this.generations(), incoming));
     try {
       await saveGenerations(incoming);
-      status.set('Saved on this device.');
+      status.set(savedMessage);
     } catch {
       status.set(
         'Could not save locally. Download any generations you want to keep before leaving.',
