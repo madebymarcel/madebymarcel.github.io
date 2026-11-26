@@ -37,7 +37,6 @@ describe('T. rex walking', () => {
     }
   });
 
-
   it('learns from a zero-weight policy in its own physical model', () => {
     const trainer = rexTrainer();
     const baseline = trainer.checkpoint();
