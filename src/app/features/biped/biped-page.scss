@@ -1,3 +1,97 @@
+.biped {
+  max-width: none;
+  padding-block-start: var(--space-7);
+}
+
+.biped h1 {
+  font-size: var(--type-step-2);
+}
+
+#active-skill {
+  scroll-margin-block-start: var(--space-3);
+}
+
+.workbench {
+  display: grid;
+  gap: var(--space-5);
+  align-items: start;
+}
+
+@media (min-width: 52rem) {
+  .workbench {
+    grid-template-columns: minmax(0, 1fr) minmax(13rem, 22%);
+  }
+}
+
+.viewer,
+.skill-sidebar {
+  min-inline-size: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.viewer h2,
+.skill-sidebar h2 {
+  font-size: var(--type-step-1);
+}
+
+.viewer-status {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.skill-list {
+  display: grid;
+  gap: var(--space-2);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.skill-card {
+  display: grid;
+  gap: var(--space-1);
+  justify-content: start;
+  inline-size: 100%;
+  text-align: start;
+  padding-block: var(--space-2);
+  border-radius: var(--radius-medium);
+}
+
+.skill-name {
+  font-weight: var(--weight-semibold);
+}
+
+.skill-stats {
+  display: grid;
+}
+
+.parkour-entry,
+.option-body {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.options {
+  border-block-start: var(--border-width) solid var(--border);
+}
+
+.options summary {
+  display: list-item;
+  align-content: center;
+  min-block-size: var(--target-size);
+  cursor: pointer;
+}
+
+.course-stages {
+  margin-block: 0;
+  padding-inline-start: var(--space-5);
+}
+
+.course-stages [aria-current='step'] {
+  font-weight: var(--weight-semibold);
+}
+
 .stage {
   overflow: hidden;
   border-radius: var(--radius-medium);
@@ -8,7 +102,6 @@
 svg {
   display: block;
   width: 100%;
-  max-height: 25rem;
 }
 
 .floor {
@@ -102,24 +195,4 @@ svg {
 
 .run-result:empty {
   display: none;
-}
-
-.skill-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(9rem, 100%), 1fr));
-  gap: var(--space-3);
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.skill-list li {
-  display: grid;
-  gap: var(--space-1);
-  align-content: start;
-}
-
-.skill-list button[aria-pressed='true'] {
-  background: var(--accent);
-  color: var(--on-accent);
 }
