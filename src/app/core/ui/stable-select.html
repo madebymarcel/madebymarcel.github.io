@@ -1,0 +1,45 @@
+<div class="ds-field">
+  <span class="picker-label">{{ label() }}</span>
+  <button
+    #trigger
+    class="ds-input picker-trigger"
+    type="button"
+    [id]="controlId()"
+    [attr.aria-label]="label() + ': ' + selectedLabel()"
+    aria-haspopup="dialog"
+    [attr.aria-expanded]="isOpen()"
+    [disabled]="disabled()"
+    (click)="openPicker(picker, list)"
+  >
+    <span>{{ selectedLabel() }}</span>
+    <span aria-hidden="true">▾</span>
+  </button>
+</div>
+
+<dialog
+  #picker
+  class="ds-card picker-dialog"
+  [attr.aria-label]="'Choose ' + label()"
+  (close)="closePicker(trigger)"
+>
+  <div class="picker-header">
+    <h2>Choose {{ label() }}</h2>
+    <button class="ds-button ds-button--secondary" type="button" (click)="picker.close()">
+      Cancel
+    </button>
+  </div>
+  <ul #list class="picker-options" [attr.aria-label]="label() + ' options'">
+    @for (option of snapshot(); track option.id) {
+    <li>
+      <button
+        class="ds-button ds-button--secondary picker-option"
+        type="button"
+        [attr.aria-pressed]="option.id === value()"
+        (click)="choose(option.id, picker)"
+      >
+        {{ option.label }}
+      </button>
+    </li>
+    }
+  </ul>
+</dialog>

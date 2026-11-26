@@ -1,5 +1,6 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { Component, DestroyRef, afterNextRender, computed, inject, signal } from '@angular/core';
+import { StableSelect } from '../../core/ui/stable-select';
 import { COLLECT, FREE_THROW, HOLD } from './ball-play';
 import {
   GENESIS,
@@ -41,12 +42,15 @@ import {
 } from './training-rewards';
 
 @Component({
-  imports: [NgTemplateOutlet],
+  imports: [NgTemplateOutlet, StableSelect],
   templateUrl: './canoe-polo-page.html',
   styleUrl: './canoe-polo-page.scss',
 })
 export class CanoePoloPage {
   readonly generations = signal<Generation[]>([GENESIS]);
+  readonly generationOptions = computed(() =>
+    this.generations().map((g) => ({ id: g.id, label: this.generationLabel(g) })),
+  );
   readonly generationQuery = signal('');
   readonly shownGenerations = computed(() => {
     const query = this.generationQuery().trim().toLowerCase();
@@ -186,11 +190,6 @@ export class CanoePoloPage {
     } finally {
       this.ready.set(true);
     }
-  }
-
-  selectGeneration(event: Event, field: 'blue' | 'red' | 'parent'): void {
-    const id = (event.target as HTMLSelectElement).value;
-    this[field].set(id);
   }
 
   generationLabel(g: Generation): string {

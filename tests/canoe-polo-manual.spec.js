@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
+import { chooseGeneration } from './generation-picker.js';
 
 test('takes over one player during a match and hands it back without a restart', async ({
   page,
@@ -21,8 +22,8 @@ test('takes over one player during a match and hands it back without a restart',
   });
   await expect(page.getByText(/Imported 1 generation\. Saved on this device/)).toBeVisible();
 
-  await page.getByLabel('Blue team').selectOption(coast.id);
-  await page.getByLabel('Red team').selectOption(coast.id);
+  await chooseGeneration(page, 'Blue team', coast);
+  await chooseGeneration(page, 'Red team', coast);
   await page.getByRole('button', { name: 'Start new match' }).click();
   const pitch = page.getByRole('img', { name: /Top-down canoe polo pitch/ });
   const player = pitch.locator('[data-player-id="2"]');
