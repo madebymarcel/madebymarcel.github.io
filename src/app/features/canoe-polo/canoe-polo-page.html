@@ -129,7 +129,7 @@
         [class.red]="p.team === 1"
       >
         <path d="M-1.5 0Q-0.9 -0.5 0.5 -0.46Q1.2 -0.3 1.5 0Q1.2 .3 .5 .46Q-.9 .5 -1.5 0Z" />
-        <path class="paddle" d="M0 -0.85V0.85" stroke-width="0.13" stroke-linecap="round" />
+        <path class="paddle" [attr.d]="paddlePose(p)" stroke-width="0.13" stroke-linecap="round" />
         <circle class="helmet" r=".28" />
         <text class="number" x="0" y=".12" text-anchor="middle" font-size=".36">
           {{ (p.id % 5) + 1 }}
@@ -189,6 +189,12 @@
           {{ g.matches }} training matches · {{ g.steps }} learning steps @if (g.evaluation) { ·
           Evaluation vs parent: {{ g.evaluation[0] }}–{{ g.evaluation[1] }} }
         </p>
+        @if (g.rewards; as settings) {
+        <p class="ds-hint">
+          Rewards: win ball {{ settings.winBall }} · pass {{ settings.usefulPass }} · receive {{
+          settings.receivePass }}
+        </p>
+        }
         <div class="ds-cluster">
           <button class="ds-button ds-button--secondary" type="button" (click)="exportOne(g)">
             Export {{ generationLabel(g) }}
@@ -224,15 +230,16 @@
     <h2>How it works</h2>
     <p>
       Each team shares a policy with learned numerical weights. Every player observes their own
-      boat, the ball, other players and the match clock, then samples paddle and ball actions. No
-      pre-written formation or targeting commands are used.
+      boat, the ball, other players and the match clock. It chooses a paddle stroke and lets the
+      stroke finish instead of steering directly every tick. Players select whom to pass to; the
+      ball travels through the air and can be intercepted.
     </p>
     <h3>Learning</h3>
     <p>
       A Web Worker runs the same fixed-step simulator without rendering. A linear actor-critic
-      updates its policy from experience: scoring, conceding, possession, movement and fouls. After
-      one training match, a frozen candidate plays a separate evaluation against its parent. The
-      result is saved regardless of who wins.
+      updates its policy from experience: goals, fouls, winning a loose ball and completing passes
+      that advance play or beat pressure. After one training match, a frozen candidate plays a
+      separate evaluation against its parent. The result is saved regardless of who wins.
     </p>
     <h3>Rules and limitations</h3>
     <p>
@@ -251,7 +258,8 @@
     <p>
       Training is opt-in and local. No data leaves this browser. Pausing retains the in-progress
       worker; closing the page preserves completed generations only. Export them to keep a backup or
-      challenge another person's players.
+      challenge another person's players. This simulator uses a new policy format. Earlier v1
+      generations remain in their original browser storage but are not used by v2.
     </p>
   </section>
   }
@@ -283,6 +291,33 @@
         <option value="0">High</option>
       </select>
     </div>
+    <details class="ds-card">
+      <summary>Training rewards</summary>
+      <p class="ds-hint">
+        Set a bonus from 0 (off) to 1. Goals still count for more. Changes apply to the next new
+        generation, not a paused match that you resume.
+      </p>
+      <div class="ds-grid">
+        @for (control of rewardControls; track control.key) {
+        <div class="ds-field">
+          <label [attr.for]="'polo-reward-' + control.key">{{ control.label }}</label>
+          <input
+            type="number"
+            class="ds-input"
+            [id]="'polo-reward-' + control.key"
+            min="0"
+            max="1"
+            step="0.01"
+            [value]="rewards()[control.key]"
+            (change)="updateReward($event, control.key)"
+          />
+        </div>
+        }
+      </div>
+      <button class="ds-button ds-button--secondary" type="button" (click)="resetRewards()">
+        Reset reward defaults
+      </button>
+    </details>
     @if (progress(); as p) {
     <p>{{ p.phase }} · {{ eventTime(p.ticks) }} / 20:00 · {{ p.steps }} learning steps</p>
     <progress

@@ -1,5 +1,6 @@
 import { RULESET } from './model';
 import { POLICY_VERSION, WEIGHT_COUNT, initialWeights } from './policy';
+import { validRewards, type TrainingRewards } from './training-rewards';
 
 export interface Generation {
   id: string;
@@ -8,6 +9,7 @@ export interface Generation {
   weights: number[];
   matches: number;
   steps: number;
+  rewards?: TrainingRewards;
   evaluation: [number, number] | null;
 }
 
@@ -40,6 +42,7 @@ function validGeneration(value: unknown): value is Generation {
     count(g.number) &&
     count(g.matches) &&
     count(g.steps) &&
+    (g.rewards === undefined || validRewards(g.rewards)) &&
     Array.isArray(g.weights) &&
     g.weights.length === WEIGHT_COUNT &&
     g.weights.every((w) => typeof w === 'number' && Number.isFinite(w) && Math.abs(w) <= 20) &&
@@ -81,6 +84,13 @@ export function importGenerations(source: string): Generation[] {
     weights: [...g.weights],
     matches: g.matches,
     steps: g.steps,
+    ...(g.rewards && {
+      rewards: {
+        winBall: g.rewards.winBall,
+        usefulPass: g.rewards.usefulPass,
+        receivePass: g.rewards.receivePass,
+      },
+    }),
     evaluation: g.evaluation,
   }));
 }

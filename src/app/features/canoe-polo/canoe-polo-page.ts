@@ -18,9 +18,11 @@ import {
   type Player,
 } from './model';
 import { sample } from './policy';
+import { paddlePose } from './paddle';
 import { CanoeMatch } from './simulation';
 import { type TrainingProgress } from './training';
 import { type TrainingMessage } from './training.worker';
+import { DEFAULT_REWARDS, type RewardKey, type TrainingRewards } from './training-rewards';
 
 type View = 'home' | 'play' | 'generations' | 'about';
 
@@ -40,11 +42,18 @@ export class CanoePoloPage {
   readonly training = signal(false);
   readonly ready = signal(false);
   readonly pace = signal(30);
+  readonly rewards = signal<TrainingRewards>({ ...DEFAULT_REWARDS });
+  readonly rewardControls: readonly { key: RewardKey; label: string }[] = [
+    { key: 'winBall', label: 'Win a loose ball or intercept' },
+    { key: 'usefulPass', label: 'Make a useful pass' },
+    { key: 'receivePass', label: 'Receive a useful pass' },
+  ];
   readonly progress = signal<TrainingProgress | null>(null);
   readonly transfer = signal('');
   readonly status = signal('');
   readonly ruleset = RULESET;
   readonly pitch = PITCH;
+  readonly paddlePose = paddlePose;
   readonly halfTicks = HALF_TICKS;
   readonly matchLabels = signal(['Generation 0', 'Generation 0']);
   readonly clock = computed(() => {
@@ -85,6 +94,7 @@ export class CanoePoloPage {
       this.generations.set(generations);
       this.blue.set(generations[0].id);
       this.parent.set(generations[0].id);
+      if (generations[0].rewards) this.rewards.set({ ...generations[0].rewards });
     } catch {
       this.status.set('Local storage is unavailable. Export generations before leaving.');
     } finally {
@@ -170,6 +180,20 @@ export class CanoePoloPage {
     this.worker?.postMessage({ kind: 'pace', delay });
   }
 
+  updateReward(event: Event, key: RewardKey): void {
+    const input = event.target as HTMLInputElement;
+    const value = input.valueAsNumber;
+    if (!Number.isFinite(value) || value < 0 || value > 1) {
+      input.value = String(this.rewards()[key]);
+      return;
+    }
+    this.rewards.update((rewards) => ({ ...rewards, [key]: value }));
+  }
+
+  resetRewards(): void {
+    this.rewards.set({ ...DEFAULT_REWARDS });
+  }
+
   toggleTraining(): void {
     if (this.saving() || !this.ready()) return;
     if (this.training()) {
@@ -214,6 +238,7 @@ export class CanoePoloPage {
         parent: this.find(this.parent()),
         seed: Math.floor(Math.random() * 4294967296),
         delay: this.pace(),
+        rewards: this.rewards(),
       });
     } catch {
       this.training.set(false);
@@ -274,7 +299,7 @@ export class CanoePoloPage {
       await this.addGenerations(importGenerations(this.transfer()));
       this.status.update((message) => 'Import complete. ' + message);
     } catch {
-      this.status.set('Invalid, incompatible or conflicting generation export.');
+      this.status.set('Could not import. This simulator requires a v2 policy export.');
     }
   }
 }

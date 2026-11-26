@@ -5,18 +5,19 @@ import {
   SHOT_TICKS,
   attackDirection,
   clamp,
+  distance,
   seededRandom,
   type Action,
   type MatchState,
   type Player,
 } from './model';
+import { BALL_ACTIONS, FIRST_PASS, FIRST_SHOT, FREE_THROW, teammates } from './ball-play';
+import { PADDLE_ACTIONS, STROKE_TICKS } from './paddle';
 
-export const INPUTS = 56;
-export const PADDLE_ACTIONS = 7;
-export const BALL_ACTIONS = 34;
+export const INPUTS = 65;
 const VALUE_ROW = PADDLE_ACTIONS + BALL_ACTIONS;
 export const WEIGHT_COUNT = (VALUE_ROW + 1) * INPUTS;
-export const POLICY_VERSION = 'linear-actor-critic-v1';
+export const POLICY_VERSION = 'linear-actor-critic-v2';
 
 export interface PolicySample {
   observation: number[];
@@ -59,11 +60,22 @@ export function observe(state: MatchState, player: Player): number[] {
     1 - state.ticks / (2 * HALF_TICKS),
     Number(ball.restrictedThrower === player.id),
   ];
+  const relative = (x: number, y: number): number => {
+    const angle = Math.atan2(y - player.y, x - player.x) - player.heading;
+    return Math.sin(angle);
+  };
+  const squad = teammates(state, player);
+  const opponents = state.players.filter((p) => p.team !== player.team);
+  input.push(
+    player.yawRate / 3.5,
+    player.strokeTicks / STROKE_TICKS,
+    relative(ball.x, ball.y),
+    relative(direction === 1 ? PITCH.length : 0, PITCH.width / 2),
+    Number(ball.lastTouch === player.id),
+    ...squad.map((p) => Math.min(1, Math.min(...opponents.map((o) => distance(p, o))) / 6)),
+  );
   // Teammates first, then opponents, in stable roster order.
-  const others = [
-    ...state.players.filter((p) => p.id !== player.id && p.team === player.team),
-    ...state.players.filter((p) => p.team !== player.team),
-  ];
+  const others = [...squad, ...opponents];
   for (const p of others) {
     input.push(
       ((p.x - player.x) * direction) / PITCH.length,
@@ -117,20 +129,28 @@ export function sample(
   random: () => number,
 ): PolicySample {
   const observation = observe(state, player);
-  const paddles = probabilities(weights, observation, 0, PADDLE_ACTIONS, () => true);
+  const paddles =
+    player.strokeTicks > 0
+      ? []
+      : probabilities(weights, observation, 0, PADDLE_ACTIONS, () => true);
   const hasBall = state.ball.owner === player.id;
-  const balls = probabilities(
-    weights,
-    observation,
-    PADDLE_ACTIONS,
-    BALL_ACTIONS,
-    (i) => i === 0 || (hasBall ? i >= 2 : i === 1),
+  const squad = hasBall ? teammates(state, player) : [];
+  const shotRange = Math.hypot(
+    (attackDirection(player.team, state.half) === 1 ? PITCH.length : 0) - player.x,
+    PITCH.width / 2 - player.y,
   );
+  const balls = probabilities(weights, observation, PADDLE_ACTIONS, BALL_ACTIONS, (i) => {
+    if (i === 0) return true;
+    if (!hasBall) return i === 1;
+    if (i < FIRST_PASS) return false;
+    if (i < FIRST_SHOT) return distance(player, squad[i - FIRST_PASS]) <= 10;
+    return i === FREE_THROW || (shotRange <= 12 && state.ball.restrictedThrower === null);
+  });
   return {
     observation,
     paddles,
     balls,
-    action: { paddle: choose(paddles, random), ball: choose(balls, random) },
+    action: { paddle: paddles.length ? choose(paddles, random) : 0, ball: choose(balls, random) },
     value: dot(weights, observation, VALUE_ROW),
   };
 }

@@ -24,6 +24,15 @@ test('canoe polo match and portable generation library', async ({ page }) => {
   await expect(page.getByText(/Import complete/)).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Unlocked generations (1)' })).toBeVisible();
 
+  await page.getByText('Training rewards', { exact: true }).click();
+  const passBonus = page.getByLabel('Make a useful pass');
+  await expect(passBonus).toHaveValue('0.18');
+  await passBonus.fill('0');
+  await passBonus.blur();
+  await expect(passBonus).toHaveValue('0');
+  await page.getByRole('button', { name: 'Reset reward defaults' }).click();
+  await expect(passBonus).toHaveValue('0.18');
+
   await page.getByRole('button', { name: 'About', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Rules and limitations' })).toBeVisible();
 });
