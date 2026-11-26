@@ -40,7 +40,7 @@
     <button
       class="ds-button"
       type="button"
-      [disabled]="saving() || !ready()"
+      [disabled]="saving() || resetting() || !ready()"
       (click)="toggleTraining()"
     >
       {{ training() ? 'Pause training' : 'Start or resume training' }}
@@ -253,11 +253,19 @@
               class="ds-input"
               type="file"
               accept=".json,application/json"
-              [disabled]="!ready() || importing()"
+              [disabled]="!ready() || importing() || resetting()"
               (change)="importFile($event)"
             />
           </div>
-          <p role="status">{{ importStatus() }}</p>
+          <button
+            class="ds-button ds-button--secondary"
+            type="button"
+            [disabled]="resetUnavailable()"
+            (click)="resetGenerations()"
+          >
+            Start from scratch
+          </button>
+          <p role="status">{{ libraryStatus() }}</p>
         </div>
         <div class="ds-stack generation-panel">
           <div class="ds-field">

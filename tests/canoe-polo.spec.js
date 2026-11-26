@@ -133,3 +133,54 @@ test('explains malformed and incompatible imports without changing generations',
   await expect(page.getByText('This simulator imports v3 generation exports only.')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Generations (1)' })).toBeVisible();
 });
+
+test('starts from scratch only after confirmation and leaves unrelated browser data alone', async ({
+  page,
+}) => {
+  await page.goto('/projects/canoe-polo/');
+  const { data } = await downloadGeneration(page, 'Download Generation 0');
+  const snapshot = {
+    ...data.generations[0],
+    id: 'saved-generation',
+    number: 1,
+    parentId: 'genesis-v1',
+  };
+  const input = page.getByLabel('Generation file (JSON)');
+  await expect(input).toBeEnabled();
+  await input.setInputFiles({
+    name: 'generation.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify({ ...data, generations: [snapshot] })),
+  });
+  await expect(page.getByText(/Imported 1 generation\. Saved on this device/)).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Generations (2)', exact: true })).toBeVisible();
+  await page.evaluate(() => globalThis.localStorage.setItem('unrelated-setting', 'keep'));
+
+  await page.getByLabel('Red team').selectOption(snapshot.id);
+  await page.getByLabel('Find a generation').fill(snapshot.id);
+  const reset = page.getByRole('button', { name: 'Start from scratch' });
+  page.once('dialog', (dialog) => dialog.dismiss());
+  await reset.click();
+  await expect(page.getByRole('heading', { name: 'Generations (2)', exact: true })).toBeVisible();
+  await expect(page.getByLabel('Red team')).toHaveValue(snapshot.id);
+
+  await page.getByRole('button', { name: 'Start or resume training' }).click();
+  await expect(page.getByRole('button', { name: 'Pause training' })).toBeVisible();
+  page.once('dialog', (dialog) => dialog.accept());
+  await reset.click();
+  await expect(page.getByText('Saved generations deleted. Back to Generation 0.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Start or resume training' })).toBeEnabled();
+  await expect(page.getByLabel('Find a generation')).toHaveValue('');
+  await expect(page.getByLabel('Train from')).toHaveValue('genesis-v1');
+  await expect(page.getByLabel('Blue team')).toHaveValue('genesis-v1');
+  await expect(page.getByLabel('Red team')).toHaveValue('genesis-v1');
+
+  await page.reload();
+  await expect(page.getByLabel('Train from')).toBeEnabled();
+  await expect(page.getByRole('heading', { name: 'Generations (1)', exact: true })).toBeVisible();
+  await expect(page.getByLabel('Red team').locator('option')).toHaveCount(1);
+  expect(await page.evaluate(() => globalThis.localStorage.getItem('unrelated-setting'))).toBe(
+    'keep',
+  );
+});

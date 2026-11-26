@@ -51,3 +51,18 @@ export async function saveGenerations(generations: readonly Generation[]): Promi
     db.close();
   }
 }
+
+/** Clear only the current simulator's generation history. */
+export async function clearGenerations(): Promise<void> {
+  const db = await database();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE, 'readwrite');
+      tx.oncomplete = () => resolve();
+      tx.onabort = () => reject(tx.error ?? new Error('Could not clear generations.'));
+      tx.objectStore(STORE).clear();
+    });
+  } finally {
+    db.close();
+  }
+}

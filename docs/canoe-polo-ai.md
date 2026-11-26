@@ -18,7 +18,8 @@ Route: /projects/canoe-polo/
 - Generations: immutable versioned JSON envelopes with weights and lineage; IndexedDB persistence.
   Branches have unique IDs. No server or shared training population. Download individual
   generations as JSON. File import accepts v3 snapshots and existing v3 collection backups
-  up to 64 MB.
+  up to 64 MB. Start from scratch clears the current simulator's saved generations from this
+  browser after confirmation. Downloaded JSON files are unaffected.
 - UI: match, generations, rules, and opt-in background training. The worker terminates when
   leaving the experiment. Only completed generations persist across reloads.
 
