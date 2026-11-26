@@ -5,12 +5,7 @@
 }
 
 .preview-stage {
-  --bleed-inset: var(--space-fluid-component);
   min-inline-size: 0;
-  padding: var(--bleed-inset);
-  border: var(--border-width) solid var(--border);
-  border-radius: var(--radius-large);
-  background: var(--background);
 }
 
 .preview-context {
@@ -74,14 +69,14 @@
   --frame-ratio: var(--ratio-hero);
 }
 
-.preview-list {
+.preview-list-items {
   --stack-gap: var(--space-fluid-small);
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
-.preview-list li {
+.preview-list-items li {
   padding-block-start: var(--space-3);
   border-block-start: var(--border-width) solid var(--border);
   font-size: var(--type-small);
