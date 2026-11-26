@@ -22,6 +22,8 @@ Route: /projects/canoe-polo/
   browser after confirmation. Downloaded JSON files are unaffected.
 - UI: match, generations, rules, and opt-in background training. The worker terminates when
   leaving the experiment. Only completed generations persist across reloads.
+- Team generation selectors change the policy used from the next simulation tick without
+  resetting the match. Leave both selections unchanged for a full-match comparison.
 
 ## Rule coverage
 
