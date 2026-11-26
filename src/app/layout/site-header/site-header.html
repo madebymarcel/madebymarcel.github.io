@@ -1,4 +1,4 @@
-<header class="site-header">
+<header #header class="site-header">
   <div class="header-inner">
     <a class="wordmark" routerLink="/" (click)="onNavigate()"
       >made<span>by</span>marcel<span class="wordmark-dot">.</span></a
@@ -10,10 +10,16 @@
       aria-haspopup="dialog"
       aria-controls="header-actions"
       [attr.aria-expanded]="menuOpen()"
-      (click)="openMenu()"
+      [attr.aria-label]="menuOpen() ? 'Close' : 'Menu'"
+      (click)="toggleMenu()"
     >
-      <span class="menu-icon" aria-hidden="true"><span></span><span></span></span>
-      <span class="menu-label">Menu</span>
+      <span class="menu-icon" [class.menu-icon--close]="menuOpen()" aria-hidden="true"
+        ><span></span><span></span
+      ></span>
+      <span class="menu-label" aria-hidden="true">
+        <span class="menu-label-menu">Menu</span>
+        <span class="menu-label-close">Close</span>
+      </span>
     </button>
     <div class="header-actions">
       <ng-container [ngTemplateOutlet]="navigationActions" />
@@ -21,25 +27,8 @@
   </div>
 </header>
 
-<dialog
-  #drawer
-  id="header-actions"
-  class="navigation-drawer"
-  aria-label="Menu"
-  (cancel)="onCancel($event)"
-  (pointerdown)="onBackdropPointerDown($event)"
-  (pointerup)="onBackdropPointerUp($event)"
-  (pointercancel)="onBackdropPointerCancel()"
->
+<dialog #drawer id="header-actions" class="navigation-drawer" aria-label="Menu">
   <div class="drawer-content">
-    <button
-      class="ds-button ds-button--secondary drawer-close menu-toggle"
-      type="button"
-      (click)="closeMenu()"
-    >
-      <span class="menu-icon menu-icon--close" aria-hidden="true"><span></span><span></span></span>
-      <span class="menu-label">Close</span>
-    </button>
     <ng-container [ngTemplateOutlet]="navigationActions" />
   </div>
 </dialog>

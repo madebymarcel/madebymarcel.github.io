@@ -40,6 +40,7 @@
 
 body {
   margin: 0;
+  overflow-x: clip;
 }
 
 /* Avoid media forcing a layout wider than its containing element. */
@@ -96,6 +97,17 @@ textarea:focus-visible,
 
 a {
   color: var(--accent);
+}
+
+.site-content {
+  transform: translateX(0);
+  transition: transform var(--drawer-motion);
+}
+
+@media (max-width: 900px) {
+  :root:has(.navigation-drawer[open]) .site-content {
+    transform: translateX(calc(-1 * var(--drawer-offset)));
+  }
 }
 
 .site-main {

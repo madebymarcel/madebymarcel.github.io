@@ -67,6 +67,10 @@
   --ratio-portrait: 3 / 4;
   --ratio-hero: 2 / 1;
   --drawer-width: 22rem;
+  --drawer-offset: min(var(--drawer-width), 85vw);
+  --drawer-duration: 0.6s;
+  --drawer-easing: cubic-bezier(0.76, 0, 0.24, 1);
+  --drawer-motion: var(--drawer-duration) var(--drawer-easing);
   --ratio-golden: 1.618fr;
   --target-size: 2.75rem;
   --radius-small: var(--space-2);
