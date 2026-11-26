@@ -7,6 +7,8 @@ Route: /projects/canoe-polo/
 - Model: fixed-step state, 35 × 23 m pitch, 10 boats and an airborne ball.
 - Simulation: shared by spectator matches and worker-based learning. Seeded randomness enables
   reproducibility with the same policies and action stream.
+  A deliberate pickup can interrupt a stroke to recover a loose ball within 1.7 m of the seat
+  in any direction. Paddle reach applies on the water only; airborne catches still use hand reach.
 - Referee: independent deterministic evaluation of match events. The simulation executes rulings.
 - Policy: 56 numerical inputs per player, two categorical action heads (paddle strokes and
   hold/catch/throw) and a scalar value head. The linear actor-critic has 2352 weights.

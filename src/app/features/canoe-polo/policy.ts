@@ -1,4 +1,5 @@
 import {
+  BALL_RADIUS,
   HALF_TICKS,
   PITCH,
   POSSESSION_TICKS,
@@ -142,12 +143,13 @@ export function sample(
   const ball = draw(1, (i) => {
     if (i === 0) return true;
     if (!holding) {
+      const seen = player.seenBall;
       return (
         i === 1 &&
-        !paddle &&
-        !player.strokeTicks &&
-        !!player.seenBall &&
-        distance(player, player.seenBall) < 2.8
+        !!seen &&
+        seen.owner === null &&
+        distance(player, seen) < 2.8 &&
+        (seen.z === BALL_RADIUS || (!paddle && !player.strokeTicks))
       );
     }
     if (i === 1) return false;

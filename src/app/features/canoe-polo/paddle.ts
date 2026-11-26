@@ -1,6 +1,9 @@
 import { DT, PITCH, clamp, type Player } from './model';
 
 export const STROKE_TICKS = 5;
+const PADDLE_HALF_SPAN = 0.85;
+// The paddler can extend the grip away from the seat when reaching for a loose ball.
+export const PADDLE_PICKUP_REACH = PADDLE_HALF_SPAN + 0.85;
 
 // Local blade contact and force relative to the hull: +x forward, +y starboard.
 // Integrating force at the blade gives both translation and yaw, not a heading command.
@@ -22,7 +25,7 @@ function strokePhase(ticks: number): number {
 
 export function paddlePose(player: Player): string {
   const stroke = strokes[player.stroke];
-  if (!stroke || player.strokeTicks === 0) return 'M0 -0.85V0.85';
+  if (!stroke || player.strokeTicks === 0) return `M0 -${PADDLE_HALF_SPAN}V${PADDLE_HALF_SPAN}`;
   const phase = strokePhase(player.strokeTicks);
   const reach = stroke.fore - phase * Math.sign(stroke.forward) * 0.65;
   const side = 0.75 * Math.sign(stroke.side) + stroke.side * 0.25;
