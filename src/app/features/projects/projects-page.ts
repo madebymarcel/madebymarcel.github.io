@@ -16,6 +16,11 @@ import { RouterLink } from '@angular/router';
         <p>Train a two-legged robot to walk using joint motors and foot sensors.</p>
         <a class="ds-button" routerLink="/projects/biped">Explore biped robot</a>
       </article>
+      <article class="ds-card ds-stack">
+        <h2>T. rex</h2>
+        <p>A top-down study of dinosaur anatomy using scalable vector shapes.</p>
+        <a class="ds-button" routerLink="/projects/t-rex">Explore T. rex</a>
+      </article>
     </section>
   `,
 })

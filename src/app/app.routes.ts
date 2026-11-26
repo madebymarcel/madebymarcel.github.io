@@ -34,6 +34,11 @@ export const routes: Routes = [
     loadComponent: () => import('./features/biped/biped-page').then((m) => m.BipedPage),
   },
   {
+    path: 'projects/t-rex',
+    title: 'T. rex | Made by Marcel',
+    loadComponent: () => import('./features/t-rex/t-rex-page').then((m) => m.TRexPage),
+  },
+  {
     path: 'lab',
     title: 'Lab | Made by Marcel',
     loadComponent: () => import('./features/lab/lab-page').then((m) => m.LabPage),
