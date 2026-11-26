@@ -7,7 +7,7 @@ import {
   mergeGenerations,
   type Generation,
 } from './generations';
-import { loadGenerations, saveGenerations } from './generation-store';
+import { clearGenerations, loadGenerations, saveGenerations } from './generation-store';
 import {
   DT,
   HALF_TICKS,
@@ -73,8 +73,12 @@ export class CanoePoloPage {
   ];
   readonly progress = signal<TrainingProgress | null>(null);
   readonly status = signal('');
-  readonly importStatus = signal('');
+  readonly libraryStatus = signal('');
   readonly importing = signal(false);
+  readonly resetting = signal(false);
+  readonly resetUnavailable = computed(
+    () => !this.ready() || this.importing() || this.saving() || this.resetting(),
+  );
   readonly rewardMax = rewardMax;
   readonly ruleset = RULESET;
   readonly pitch = PITCH;
@@ -220,7 +224,7 @@ export class CanoePoloPage {
   }
 
   toggleTraining(): void {
-    if (this.saving() || !this.ready()) return;
+    if (this.saving() || this.resetting() || !this.ready()) return;
     if (this.training()) {
       this.worker?.postMessage({ kind: 'pause' });
       this.training.set(false);
@@ -318,35 +322,76 @@ export class CanoePoloPage {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     input.value = '';
-    if (!file || !this.ready() || this.importing()) return;
+    if (!file || !this.ready() || this.importing() || this.resetting()) return;
     if (file.size > MAX_GENERATION_IMPORT_BYTES) {
-      this.importStatus.set('Generation file exceeds the 64 MB import limit.');
+      this.libraryStatus.set('Generation file exceeds the 64 MB import limit.');
       return;
     }
 
     this.importing.set(true);
-    this.importStatus.set('Importing…');
+    this.libraryStatus.set('Importing…');
     try {
       let text: string;
       try {
         text = await file.text();
       } catch {
-        this.importStatus.set('Could not read the generation file.');
+        this.libraryStatus.set('Could not read the generation file.');
         return;
       }
       if (this.destroyed) return;
       const incoming = importGenerations(text);
-      await this.addGenerations(incoming, this.importStatus);
-      this.importStatus.update(
+      await this.addGenerations(incoming, this.libraryStatus);
+      this.libraryStatus.update(
         (message) =>
           `Imported ${incoming.length} ${incoming.length === 1 ? 'generation' : 'generations'}. ${message}`,
       );
     } catch (error) {
-      this.importStatus.set(
+      this.libraryStatus.set(
         error instanceof Error ? error.message : 'Could not import generations.',
       );
     } finally {
       this.importing.set(false);
+    }
+  }
+
+  async resetGenerations(): Promise<void> {
+    if (
+      this.resetUnavailable() ||
+      !window.confirm(
+        'Delete all saved Canoe Polo generations from this browser? Training will stop. This cannot be undone.',
+      )
+    )
+      return;
+
+    this.resetting.set(true);
+    this.training.set(false);
+    this.worker?.terminate();
+    this.worker = null;
+    this.workerParent = null;
+    this.progress.set(null);
+    this.libraryStatus.set('');
+
+    try {
+      await clearGenerations();
+      if (this.destroyed) return;
+      this.generations.set([GENESIS]);
+      this.generationQuery.set('');
+      this.blue.set(GENESIS.id);
+      this.red.set(GENESIS.id);
+      this.parent.set(GENESIS.id);
+      this.rewards.set({ ...DEFAULT_REWARDS });
+      this.playing.set(false);
+      this.engine = new CanoeMatch(1);
+      this.random = seededRandom(1);
+      this.policies = [GENESIS.weights, GENESIS.weights];
+      this.matchLabels.set([this.generationLabel(GENESIS), this.generationLabel(GENESIS)]);
+      this.publishMatch();
+      this.status.set('');
+      this.libraryStatus.set('Saved generations deleted. Back to Generation 0.');
+    } catch {
+      this.libraryStatus.set('Could not delete saved generations. Try again.');
+    } finally {
+      this.resetting.set(false);
     }
   }
 }
