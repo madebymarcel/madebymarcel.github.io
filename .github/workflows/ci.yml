@@ -18,6 +18,10 @@ jobs:
   validate:
     name: Validate website
     runs-on: ubuntu-latest
+    container:
+      # Update this tag together with @playwright/test in package.json and package-lock.json.
+      image: mcr.microsoft.com/playwright:v1.65.1-noble
+      options: --user 1001 --ipc=host
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -31,7 +35,15 @@ jobs:
       - run: npm run format:check
       - run: npm run test:unit
       - run: npm run build
-      - run: npx playwright install --with-deps chromium firefox webkit
+      - name: Use Playwright Chromium for Lighthouse
+        shell: bash
+        run: |
+          chrome="$(node -p "require('@playwright/test').chromium.executablePath()")"
+          if [[ ! -x "$chrome" ]]; then
+            echo "::error::Chromium not found. Match the Playwright container tag to @playwright/test."
+            exit 1
+          fi
+          echo "CHROME_PATH=$chrome" >> "$GITHUB_ENV"
       - run: npm run test:e2e
       - run: npm run lighthouse
       - run: npx lhci autorun --config=./lighthouserc.mobile.cjs
