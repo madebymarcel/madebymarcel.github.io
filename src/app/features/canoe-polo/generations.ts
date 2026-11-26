@@ -1,6 +1,6 @@
 import { RULESET } from './model';
 import { POLICY_VERSION, WEIGHT_COUNT, initialWeights } from './policy';
-import { validRewards, type TrainingRewards } from './training-rewards';
+import { copySavedRewards, validRewards, type SavedRewards } from './training-rewards';
 
 export interface Generation {
   id: string;
@@ -9,7 +9,7 @@ export interface Generation {
   weights: number[];
   matches: number;
   steps: number;
-  rewards?: TrainingRewards;
+  rewards?: SavedRewards;
   evaluation: [number, number] | null;
 }
 
@@ -84,15 +84,7 @@ export function importGenerations(source: string): Generation[] {
     weights: [...g.weights],
     matches: g.matches,
     steps: g.steps,
-    ...(g.rewards && {
-      rewards: {
-        winBall: g.rewards.winBall,
-        usefulPass: g.rewards.usefulPass,
-        receivePass: g.rewards.receivePass,
-        saveGoal: g.rewards.saveGoal,
-        ignoreLooseBall: g.rewards.ignoreLooseBall,
-      },
-    }),
+    ...(g.rewards && { rewards: copySavedRewards(g.rewards) }),
     evaluation: g.evaluation,
   }));
 }

@@ -63,10 +63,13 @@ export class GenerationTrainer {
   private rewardPotential(state: MatchState, id: number): number {
     const p = state.players[id];
     if (state.ball.owner === id) {
-      return 0.12 * (1 - Math.abs(this.match.attackingGoal(p.team) - p.x) / PITCH.length);
+      return (
+        this.rewards.advanceWithBall *
+        (1 - Math.abs(this.match.attackingGoal(p.team) - p.x) / PITCH.length)
+      );
     }
     if (state.ball.owner !== null) return 0;
-    return -0.2 * (distance(p, state.ball) / PITCH.length);
+    return -this.rewards.approachLooseBall * (distance(p, state.ball) / PITCH.length);
   }
 
   runBatch(limit = BATCH_STEPS): Generation | null {
@@ -107,17 +110,21 @@ export class GenerationTrainer {
       const goal = event?.kind === 'goal';
       const foul = event?.kind === 'foul';
       let teamReward = 0;
-      if (goal) teamReward += event.team === this.learner ? 5 : -5;
-      if (foul) teamReward += event.team === this.learner ? -0.4 : 0.1;
+      if (goal)
+        teamReward +=
+          event.team === this.learner ? this.rewards.scoreGoal : -this.rewards.concedeGoal;
+      if (foul)
+        teamReward +=
+          event.team === this.learner ? -this.rewards.teamFoul : this.rewards.opponentFoul;
       if (after.phase === 'finished') {
         const difference = s.score[this.learner] - s.score[this.learner === 0 ? 1 : 0];
-        teamReward += Math.sign(difference) * 3;
+        teamReward += Math.sign(difference) * this.rewards.matchResult;
       }
 
       indices.forEach((id, i) => {
         let reward = teamReward;
         if (event?.kind === 'out' && lastTouch === id && event.rule !== 'Scoring a goal') {
-          reward -= 0.22;
+          reward -= this.rewards.throwOut;
         }
         if (after.phase === 'play' && !event) {
           // Avoid giving five boats the same incentive to crowd the loose ball.

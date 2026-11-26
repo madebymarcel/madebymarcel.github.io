@@ -23,17 +23,29 @@ import { paddlePose } from './paddle';
 import { CanoeMatch } from './simulation';
 import { type TrainingProgress } from './training';
 import { type TrainingMessage } from './training.worker';
-import { DEFAULT_REWARDS, type RewardKey, type TrainingRewards } from './training-rewards';
-
-type View = 'home' | 'play' | 'generations' | 'drills' | 'about';
+import {
+  DEFAULT_REWARDS,
+  rewardMax,
+  validRewardValue,
+  type RewardKey,
+  type TrainingRewards,
+} from './training-rewards';
 
 @Component({
   templateUrl: './canoe-polo-page.html',
   styleUrl: './canoe-polo-page.scss',
 })
 export class CanoePoloPage {
-  readonly view = signal<View>('home');
   readonly generations = signal<Generation[]>([GENESIS]);
+  readonly generationQuery = signal('');
+  readonly shownGenerations = computed(() => {
+    const query = this.generationQuery().trim().toLowerCase();
+    return query
+      ? this.generations().filter(
+          (g) => this.generationLabel(g).toLowerCase().includes(query) || g.id.includes(query),
+        )
+      : this.generations();
+  });
   readonly blue = signal(GENESIS.id);
   readonly red = signal(GENESIS.id);
   readonly parent = signal(GENESIS.id);
@@ -50,10 +62,20 @@ export class CanoePoloPage {
     { key: 'receivePass', label: 'Receive a useful pass' },
     { key: 'saveGoal', label: 'Save a goal-bound shot' },
     { key: 'ignoreLooseBall', label: 'Ignore a reachable loose ball (penalty)' },
+    { key: 'scoreGoal', label: 'Score a goal' },
+    { key: 'concedeGoal', label: 'Concede a goal (penalty)' },
+    { key: 'matchResult', label: 'Win or lose a match (±)' },
+    { key: 'teamFoul', label: 'Commit a team foul (penalty)' },
+    { key: 'opponentFoul', label: 'Opponent commits a foul' },
+    { key: 'throwOut', label: 'Throw out of bounds (penalty)' },
+    { key: 'approachLooseBall', label: 'Approach a loose ball' },
+    { key: 'advanceWithBall', label: 'Advance with the ball' },
   ];
   readonly progress = signal<TrainingProgress | null>(null);
   readonly transfer = signal('');
   readonly status = signal('');
+  readonly transferStatus = signal('');
+  readonly rewardMax = rewardMax;
   readonly ruleset = RULESET;
   readonly pitch = PITCH;
   readonly paddlePose = paddlePose;
@@ -106,17 +128,13 @@ export class CanoePoloPage {
       this.generations.set(generations);
       this.blue.set(generations[0].id);
       this.parent.set(generations[0].id);
-      if (generations[0].rewards) this.rewards.set({ ...generations[0].rewards });
+      if (generations[0].rewards)
+        this.rewards.set({ ...DEFAULT_REWARDS, ...generations[0].rewards });
     } catch {
       this.status.set('Local storage is unavailable. Export generations before leaving.');
     } finally {
       this.ready.set(true);
     }
-  }
-
-  navigate(view: View): void {
-    this.view.set(view);
-    if (view !== 'play') this.playing.set(false);
   }
 
   selectGeneration(event: Event, field: 'blue' | 'red' | 'parent' | 'drillCandidate'): void {
@@ -226,7 +244,7 @@ export class CanoePoloPage {
   updateReward(event: Event, key: RewardKey): void {
     const input = event.target as HTMLInputElement;
     const value = input.valueAsNumber;
-    if (!Number.isFinite(value) || value < 0 || value > 1) {
+    if (!validRewardValue(key, value)) {
       input.value = String(this.rewards()[key]);
       return;
     }
@@ -304,32 +322,36 @@ export class CanoePoloPage {
     }
   }
 
-  private async addGenerations(incoming: Generation[]): Promise<void> {
+  private async addGenerations(incoming: Generation[], status = this.status): Promise<void> {
     this.generations.set(mergeGenerations(this.generations(), incoming));
     try {
       await saveGenerations(incoming);
-      this.status.set('Saved on this device.');
+      status.set('Saved on this device.');
     } catch {
-      this.status.set('Could not save locally. Export before leaving.');
+      status.set('Could not save locally. Export before leaving.');
     }
+  }
+
+  searchGenerations(event: Event): void {
+    this.generationQuery.set((event.target as HTMLInputElement).value);
   }
 
   exportOne(g: Generation): void {
     this.transfer.set(exportGenerations([g]));
-    this.status.set('Export ready. Select and copy the text.');
+    this.transferStatus.set('Export ready. Select and copy the text.');
   }
 
   exportAll(): void {
     this.transfer.set(exportGenerations(this.generations()));
-    this.status.set('Collection export ready. Select and copy the text.');
+    this.transferStatus.set('Collection export ready. Select and copy the text.');
   }
 
   async copyExport(): Promise<void> {
     try {
       await navigator.clipboard.writeText(this.transfer());
-      this.status.set('Copied.');
+      this.transferStatus.set('Copied.');
     } catch {
-      this.status.set('Clipboard unavailable. Select and copy the text manually.');
+      this.transferStatus.set('Clipboard unavailable. Select and copy the text manually.');
     }
   }
 
@@ -339,10 +361,10 @@ export class CanoePoloPage {
 
   async importData(): Promise<void> {
     try {
-      await this.addGenerations(importGenerations(this.transfer()));
-      this.status.update((message) => 'Import complete. ' + message);
+      await this.addGenerations(importGenerations(this.transfer()), this.transferStatus);
+      this.transferStatus.update((message) => 'Import complete. ' + message);
     } catch {
-      this.status.set('Could not import. This simulator requires a v3 policy export.');
+      this.transferStatus.set('Could not import. This simulator requires a v3 policy export.');
     }
   }
 }
