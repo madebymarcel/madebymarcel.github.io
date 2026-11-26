@@ -14,23 +14,25 @@
         Q 133,204 146,203 L 162,213 Z"/>
     </g>
     <g id="hindlimb" stroke="#344e35" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-      <path fill="#62835a" d="M 175,284 C 154,261 128,267 113,291
-        C 98,310 98,335 111,348 Q 127,362 149,348
-        C 168,337 184,318 187,301 Z"/>
       <path fill="#739161" d="M 122,332 Q 103,326 100,308 L 94,280
         Q 90,266 79,259 L 64,246 Q 60,241 64,238 Q 68,235 74,241 L 86,251
         L 78,229 Q 76,222 81,221 Q 86,220 88,226 L 99,248
         L 103,229 Q 105,223 109,225 Q 113,227 112,234 L 112,258
         Q 118,266 116,278 L 125,298 Q 136,310 134,323 Q 131,331 122,332 Z"/>
-      <path fill="none" stroke="#486540" opacity=".8" d="M 110,285 Q 113,306 124,315 M 126,292 Q 146,282 158,295"/>
+
       <path fill="#d0c6a0" stroke="none" d="M 60,241 Q 58,237 62,236 L 66,238 Z M 78,225 Q 77,219 81,219 L 84,222 Z M 104,227 Q 105,222 109,223 L 111,226 Z"/>
+      <path fill="#62835a" d="M 175,284 C 154,261 128,267 113,291
+        C 98,310 98,335 111,348 Q 127,362 149,348
+        C 168,337 184,318 187,301 Z"/>
+      <path fill="none" stroke="#486540" opacity=".8" d="M 126,292 Q 146,282 158,295"/>
     </g>
   </defs>
   <!-- Paired limbs, behind the neck and trunk. -->
-  <use href="#forelimb"/>
-  <use href="#forelimb" transform="translate(420 0) scale(-1 1)"/>
   <use href="#hindlimb"/>
   <use href="#hindlimb" transform="translate(420 0) scale(-1 1)"/>
+  <g id="trex-top">
+  <use href="#forelimb"/>
+  <use href="#forelimb" transform="translate(420 0) scale(-1 1)"/>
   <!-- Neck, trunk, hips and tail form one continuous dorsal silhouette. -->
   <path fill="url(#body)" stroke="#344e35" stroke-width="3" stroke-linejoin="round"
     d="M 184,131 C 179,160 166,181 163,204
@@ -79,5 +81,6 @@
     <path d="M 161,87 Q 173,78 187,89 M 259,87 Q 247,78 233,89"/>
     <path d="M 158,121 Q 168,138 187,144 M 262,121 Q 252,138 233,144"/>
     <path d="M 210,39 Q 207,66 210,84"/>
+  </g>
   </g>
 </svg>

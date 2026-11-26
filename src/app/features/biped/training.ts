@@ -40,6 +40,7 @@ export type Trial = {
   passed: boolean;
 };
 export type Checkpoint = { iteration: number; policy: number[]; evaluation: Evaluation };
+export type WalkerFactory = (start: Start) => Walker;
 
 export function act(
   observation: Float64Array,
@@ -106,8 +107,9 @@ export class Practice {
     readonly skill: Skill,
     start: Start,
     private readonly weights: ArrayLike<number>,
+    createWalker?: WalkerFactory,
   ) {
-    this.sim = labWalker(skill, start);
+    this.sim = createWalker ? createWalker(start) : labWalker(skill, start);
     this.progress = new TaskProgress(skill);
     this.observation = inputBuffer(skill);
   }
@@ -154,8 +156,13 @@ export function startFor(skill: Skill, index: number, training = false, iteratio
   return start;
 }
 
-export function trial(weights: ArrayLike<number>, start: Start, skill: Skill = 'walk'): Trial {
-  const practice = new Practice(skill, start, weights);
+export function trial(
+  weights: ArrayLike<number>,
+  start: Start,
+  skill: Skill = 'walk',
+  createWalker?: WalkerFactory,
+): Trial {
+  const practice = new Practice(skill, start, weights, createWalker);
   const { sim } = practice;
   while (!practice.done) practice.step();
   const seconds = sim.ticks * CONTROL_DT;
@@ -178,9 +185,13 @@ function median(values: number[]) {
   return sorted[Math.floor(sorted.length / 2)];
 }
 
-export function evaluate(weights: ArrayLike<number>, skill: Skill = 'walk'): Evaluation {
+export function evaluate(
+  weights: ArrayLike<number>,
+  skill: Skill = 'walk',
+  createWalker?: WalkerFactory,
+): Evaluation {
   const results = EVALUATION_STARTS.map((_, index) =>
-    trial(weights, startFor(skill, index), skill),
+    trial(weights, startFor(skill, index), skill, createWalker),
   );
   return {
     medianDistance: median(results.map((item) => item.distance)),
@@ -228,6 +239,7 @@ export class Trainer {
     seed: number,
     readonly skill: Skill = 'walk',
     walkPolicy?: number[],
+    private readonly createWalker?: WalkerFactory,
   ) {
     this.seed = seed >>> 0 || 1;
     const stride = inputBuffer(skill).length;
@@ -261,11 +273,13 @@ export class Trainer {
         this.weights.map((weight, i) => weight + NOISE * direction[i]),
         start,
         this.skill,
+        this.createWalker,
       ).reward;
       const negative = trial(
         this.weights.map((weight, i) => weight - NOISE * direction[i]),
         start,
         this.skill,
+        this.createWalker,
       ).reward;
       return { direction, positive, negative };
     });
@@ -290,6 +304,10 @@ export class Trainer {
 
   checkpoint(): Checkpoint {
     const policy = Array.from(this.weights);
-    return { iteration: this.iteration, policy, evaluation: evaluate(policy, this.skill) };
+    return {
+      iteration: this.iteration,
+      policy,
+      evaluation: evaluate(policy, this.skill, this.createWalker),
+    };
   }
 }
