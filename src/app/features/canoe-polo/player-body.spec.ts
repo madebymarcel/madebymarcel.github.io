@@ -1,6 +1,6 @@
 import { FIRST_PASS, FREE_THROW, launchBall } from './ball-play';
 import { GENESIS } from './generations';
-import { PITCH, seededRandom, type Action } from './model';
+import { BALL_RADIUS, PITCH, seededRandom, type Action } from './model';
 import { canSee, turnHead } from './player-body';
 import { observe, sample } from './policy';
 import { CanoeMatch } from './simulation';
@@ -10,6 +10,26 @@ import { ballControlReward } from './training';
 const idle: Action = { paddle: 0, ball: 0 };
 
 describe('Player perception and body', () => {
+  it('lets the policy choose a paddle pickup mid-stroke for a known loose ball only', () => {
+    const match = new CanoeMatch(42);
+    const { state } = match;
+    const p = state.players[0];
+    Object.assign(p, { stroke: 1, strokeTicks: 3 });
+    Object.assign(state.ball, { x: p.x + 1.6, y: p.y, z: BALL_RADIUS });
+    match.refreshVision();
+    const choosePickup = () => sample(GENESIS.weights, state, p, () => 0.99).action.ball;
+    expect(choosePickup()).toBe(1);
+
+    state.ball.z = 1.1;
+    match.refreshVision();
+    expect(choosePickup()).toBe(0);
+
+    p.seenBall = null;
+    Object.assign(state.ball, { x: p.x - 1.6, z: BALL_RADIUS });
+    match.refreshVision();
+    expect(choosePickup()).toBe(0);
+  });
+
   it('does not leak hidden movement through observations, pass choices, or the throw vector', () => {
     const m = new CanoeMatch(42);
     const s = m.state;

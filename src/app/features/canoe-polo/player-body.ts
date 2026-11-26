@@ -1,4 +1,14 @@
-import { DT, distance, clamp, type Ball, type MatchState, type Player, type Point } from './model';
+import {
+  BALL_RADIUS,
+  DT,
+  distance,
+  clamp,
+  type Ball,
+  type MatchState,
+  type Player,
+  type Point,
+} from './model';
+import { PADDLE_PICKUP_REACH } from './paddle';
 
 const MAX_HEAD_TURN = 1.25;
 const HALF_FOV = 1.18;
@@ -64,6 +74,7 @@ export function remember(state: MatchState, viewer: Player): void {
 }
 
 export function reachableBall(player: Player, ball: Ball): boolean {
+  if (ball.z === BALL_RADIUS) return distance(player, ball) <= PADDLE_PICKUP_REACH;
   if (player.strokeTicks > 0 || ball.z > 2.85) return false;
   const bearing = Math.atan2(ball.y - player.y, ball.x - player.x) - player.heading;
   const side = Math.sin(bearing) >= 0 ? 1 : -1;

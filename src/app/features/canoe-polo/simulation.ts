@@ -161,6 +161,8 @@ export class CanoeMatch {
 
   private takeBall(player: Player): void {
     const s = this.state;
+    player.stroke = 0;
+    player.strokeTicks = 0;
     if (s.possessionTeam !== player.team) s.shotTicks = 0;
     if (s.ball.restrictedThrower !== player.id) s.ball.restrictedThrower = null;
     s.possessionTeam = player.team;
@@ -346,8 +348,7 @@ export class CanoeMatch {
     let groundReach: Map<number, number> | undefined;
     if (s.ball.owner === null && s.ball.z === BALL_RADIUS) {
       for (const p of s.players) {
-        const action = actions[p.id];
-        if (action.ball === 1 && action.paddle === 0 && reachableBall(p, s.ball)) {
+        if (actions[p.id].ball === 1 && reachableBall(p, s.ball)) {
           groundReach ??= new Map();
           groundReach.set(p.id, distance(p, s.ball));
         }
@@ -409,7 +410,9 @@ export class CanoeMatch {
             catcher = p;
           }
         }
-        if (catcher && this.random() < 0.85) this.catchBall(catcher);
+        if (catcher && (ball.z === BALL_RADIUS || this.random() < 0.85)) {
+          this.catchBall(catcher);
+        }
       }
     }
 

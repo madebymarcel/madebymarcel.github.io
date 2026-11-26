@@ -1,5 +1,6 @@
 import { FIRST_PASS, FREE_THROW, launchBall } from './ball-play';
-import { BALL_RADIUS, PITCH } from './model';
+import { BALL_RADIUS, PITCH, seededRandom } from './model';
+import { PADDLE_PICKUP_REACH } from './paddle';
 import { CanoeMatch } from './simulation';
 import { ballControlReward } from './training';
 
@@ -44,11 +45,46 @@ describe('Loose-ball pickups', () => {
     expect(ball.owner).toBeNull();
   });
 
-  it('does not grant the early reach to a paddler committed to a stroke', () => {
+  it('lets a paddler interrupt a stroke to collect a water ball', () => {
     const { match, ball, p } = crossing();
     Object.assign(p, { stroke: 1, strokeTicks: 3 });
     play(match, { 0: 1 });
-    expect(p.x).toBeGreaterThan(ball.x);
+    expect(ball.owner).toBe(p.id);
+    expect(p.strokeTicks).toBe(0);
+  });
+
+  it('can pick up a water ball behind the boat if it is within paddle reach', () => {
+    const { match, ball, p } = crossing();
+    p.vx = 0;
+    ball.x = p.x - PADDLE_PICKUP_REACH + 0.01;
+    play(match, { 0: 1 });
+    expect(ball.owner).toBe(p.id);
+  });
+
+  it('does not pick up a water ball outside paddle reach', () => {
+    const { match, ball, p } = crossing();
+    p.vx = 0;
+    ball.y = p.y + PADDLE_PICKUP_REACH + 0.01;
+    play(match, { 0: 1 });
+    expect(ball.owner).toBeNull();
+  });
+
+  it('does not apply the aerial catch miss chance to a reachable water pickup', () => {
+    const seed = 1600;
+    expect(seededRandom(seed)()).toBeGreaterThan(0.85);
+    const match = new CanoeMatch(seed);
+    const { ball, players } = match.state;
+    const p = players[0];
+    Object.assign(ball, { x: p.x + 0.6, y: p.y });
+    play(match, { 0: 1 });
+    expect(ball.owner).toBe(p.id);
+  });
+
+  it('still requires a free hand for airborne catches', () => {
+    const { match, ball, p } = crossing();
+    Object.assign(p, { vx: 0, stroke: 1, strokeTicks: 3 });
+    Object.assign(ball, { x: p.x + 0.75, z: 1.2 });
+    play(match, { 0: 1 });
     expect(ball.owner).toBeNull();
   });
 
