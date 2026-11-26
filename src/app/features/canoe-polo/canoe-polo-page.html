@@ -226,56 +226,18 @@
         </section>
       </section>
 
-      <div class="ds-stack dashboard-side">
-        <section class="ds-card ds-stack" aria-labelledby="skill-drills-heading">
-          <h2 id="skill-drills-heading">Skills drills</h2>
-          <div class="ds-field">
-            <label for="polo-drill-candidate">Generation to test</label>
-            <select
-              id="polo-drill-candidate"
-              class="ds-input"
-              [disabled]="!ready() || drillBusy()"
-              [value]="drillCandidate()"
-              (change)="selectGeneration($event, 'drillCandidate')"
-            >
-              @for (g of generations(); track g.id) {
-              <option [value]="g.id">{{ generationLabel(g) }}</option>
-              }
-            </select>
-          </div>
-          <button
-            class="ds-button"
-            type="button"
-            [disabled]="!ready() || drillBusy()"
-            (click)="runDrills()"
-          >
-            {{ drillBusy() ? 'Running drills…' : 'Run skills drills' }}
-          </button>
-          @if (drillResults(); as results) {
-          <div role="status">
-            <p>{{ drillLabel() }} results</p>
-            <ul>
-              <li>Turn and collect under control: {{ results.collect }} / {{ drillTrials }}</li>
-              <li>Aim and score: {{ results.shoot }} / {{ drillTrials }}</li>
-              <li>Save a goal-bound shot: {{ results.save }} / {{ drillTrials }}</li>
-            </ul>
-          </div>
-          }
-        </section>
-
-        <details class="ds-card ds-stack">
-          <summary>About and rules</summary>
-          <p>
-            Two teams of five, two 10-minute halves. The referee checks goals, possession, the shot
-            clock, and restarts. Tackles, paddle fouls, and cards aren't modeled.
-          </p>
-          <p>
-            Training runs locally. Only completed generations are saved when you close the page.
-            This version imports v3 snapshots.
-          </p>
-          <a href="https://www.canoeicf.com/rules">Official ICF rules</a>
-        </details>
-      </div>
+      <details class="ds-card ds-stack">
+        <summary>About and rules</summary>
+        <p>
+          Two teams of five, two 10-minute halves. The referee checks goals, possession, the shot
+          clock, and restarts. Tackles, paddle fouls, and cards aren't modeled.
+        </p>
+        <p>
+          Training runs locally. Only completed generations are saved when you close the page. This
+          version imports v3 snapshots.
+        </p>
+        <a href="https://www.canoeicf.com/rules">Official ICF rules</a>
+      </details>
     </div>
   </div>
   <section class="ds-card ds-stack" aria-labelledby="generations-heading">
@@ -283,39 +245,19 @@
     <div class="ds-layout-context">
       <div class="ds-equal-split generation-layout">
         <div class="ds-stack generation-panel">
-          <h3>Import and export</h3>
+          <h3>Import</h3>
           <div class="ds-field">
-            <label for="polo-transfer">Generation data (JSON)</label>
-            <textarea
-              id="polo-transfer"
+            <label for="polo-import">Generation file (JSON)</label>
+            <input
+              id="polo-import"
               class="ds-input"
-              rows="5"
-              [value]="transfer()"
-              (input)="updateTransfer($event)"
-            ></textarea>
+              type="file"
+              accept=".json,application/json"
+              [disabled]="!ready() || importing()"
+              (change)="importFile($event)"
+            />
           </div>
-          <div class="ds-cluster">
-            <button class="ds-button ds-button--secondary" type="button" (click)="exportAll()">
-              Export all
-            </button>
-            <button
-              class="ds-button"
-              type="button"
-              [disabled]="!ready() || !transfer().trim()"
-              (click)="importData()"
-            >
-              Import
-            </button>
-            <button
-              class="ds-button ds-button--secondary"
-              type="button"
-              [disabled]="!transfer()"
-              (click)="copyExport()"
-            >
-              Copy text
-            </button>
-          </div>
-          <p role="status">{{ transferStatus() }}</p>
+          <p role="status">{{ importStatus() }}</p>
         </div>
         <div class="ds-stack generation-panel">
           <div class="ds-field">
@@ -347,9 +289,9 @@
                   <button
                     class="ds-button ds-button--secondary"
                     type="button"
-                    (click)="exportOne(g)"
+                    (click)="downloadGeneration(g)"
                   >
-                    Export {{ generationLabel(g) }}
+                    Download {{ generationLabel(g) }}
                   </button>
                 </div>
               </li>

@@ -1,6 +1,7 @@
 import { Component, DestroyRef, afterNextRender, computed, inject, signal } from '@angular/core';
 import {
   GENESIS,
+  MAX_GENERATION_IMPORT_BYTES,
   exportGenerations,
   importGenerations,
   mergeGenerations,
@@ -18,7 +19,6 @@ import {
   type Player,
 } from './model';
 import { sample } from './policy';
-import { TRIALS, type Drill } from './skills-drills';
 import { paddlePose } from './paddle';
 import { CanoeMatch } from './simulation';
 import { type TrainingProgress } from './training';
@@ -72,19 +72,14 @@ export class CanoePoloPage {
     { key: 'advanceWithBall', label: 'Advance with the ball' },
   ];
   readonly progress = signal<TrainingProgress | null>(null);
-  readonly transfer = signal('');
   readonly status = signal('');
-  readonly transferStatus = signal('');
+  readonly importStatus = signal('');
+  readonly importing = signal(false);
   readonly rewardMax = rewardMax;
   readonly ruleset = RULESET;
   readonly pitch = PITCH;
   readonly paddlePose = paddlePose;
   readonly halfTicks = HALF_TICKS;
-  readonly drillTrials = TRIALS;
-  readonly drillResults = signal<Record<Drill, number> | null>(null);
-  readonly drillBusy = signal(false);
-  readonly drillLabel = signal('');
-  readonly drillCandidate = signal(GENESIS.id);
   readonly cos = Math.cos;
   readonly sin = Math.sin;
   readonly matchLabels = signal(['Generation 0', 'Generation 0']);
@@ -99,7 +94,6 @@ export class CanoePoloPage {
   });
   private readonly destroyRef = inject(DestroyRef);
   private worker: Worker | null = null;
-  private drillWorker: Worker | null = null;
   private timer: ReturnType<typeof setInterval> | undefined;
   private engine = new CanoeMatch(1);
   private random = seededRandom(1);
@@ -117,7 +111,6 @@ export class CanoePoloPage {
       this.destroyed = true;
       clearInterval(this.timer);
       this.worker?.terminate();
-      this.drillWorker?.terminate();
     });
   }
 
@@ -131,13 +124,15 @@ export class CanoePoloPage {
       if (generations[0].rewards)
         this.rewards.set({ ...DEFAULT_REWARDS, ...generations[0].rewards });
     } catch {
-      this.status.set('Local storage is unavailable. Export generations before leaving.');
+      this.status.set(
+        'Local storage is unavailable. Download any generations you want to keep before leaving.',
+      );
     } finally {
       this.ready.set(true);
     }
   }
 
-  selectGeneration(event: Event, field: 'blue' | 'red' | 'parent' | 'drillCandidate'): void {
+  selectGeneration(event: Event, field: 'blue' | 'red' | 'parent'): void {
     const id = (event.target as HTMLSelectElement).value;
     this[field].set(id);
   }
@@ -148,37 +143,6 @@ export class CanoePoloPage {
 
   private find(id: string): Generation {
     return this.generations().find((g) => g.id === id) ?? GENESIS;
-  }
-
-  runDrills(): void {
-    if (this.drillBusy()) return;
-    const candidate = this.find(this.drillCandidate());
-    this.drillResults.set(null);
-    this.drillLabel.set(this.generationLabel(candidate));
-    this.drillBusy.set(true);
-    const finish = () => {
-      this.drillWorker?.terminate();
-      this.drillWorker = null;
-      this.drillBusy.set(false);
-    };
-    try {
-      const worker = new Worker(new URL('./skills-drills.worker', import.meta.url), {
-        type: 'module',
-      });
-      this.drillWorker = worker;
-      worker.onmessage = ({ data }: MessageEvent<Record<Drill, number>>) => {
-        this.drillResults.set(data);
-        finish();
-      };
-      worker.onerror = () => {
-        this.status.set('The drills could not finish in this browser.');
-        finish();
-      };
-      worker.postMessage(candidate.weights);
-    } catch {
-      this.status.set('The drills could not start in this browser.');
-      finish();
-    }
   }
 
   startMatch(): void {
@@ -328,7 +292,9 @@ export class CanoePoloPage {
       await saveGenerations(incoming);
       status.set('Saved on this device.');
     } catch {
-      status.set('Could not save locally. Export before leaving.');
+      status.set(
+        'Could not save locally. Download any generations you want to keep before leaving.',
+      );
     }
   }
 
@@ -336,35 +302,51 @@ export class CanoePoloPage {
     this.generationQuery.set((event.target as HTMLInputElement).value);
   }
 
-  exportOne(g: Generation): void {
-    this.transfer.set(exportGenerations([g]));
-    this.transferStatus.set('Export ready. Select and copy the text.');
+  downloadGeneration(generation: Generation): void {
+    const blob = new Blob([exportGenerations([generation])], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `canoe-polo-generation-${generation.number}-${generation.id}.json`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  exportAll(): void {
-    this.transfer.set(exportGenerations(this.generations()));
-    this.transferStatus.set('Collection export ready. Select and copy the text.');
-  }
-
-  async copyExport(): Promise<void> {
-    try {
-      await navigator.clipboard.writeText(this.transfer());
-      this.transferStatus.set('Copied.');
-    } catch {
-      this.transferStatus.set('Clipboard unavailable. Select and copy the text manually.');
+  async importFile(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file || !this.ready() || this.importing()) return;
+    if (file.size > MAX_GENERATION_IMPORT_BYTES) {
+      this.importStatus.set('Generation file exceeds the 64 MB import limit.');
+      return;
     }
-  }
 
-  updateTransfer(event: Event): void {
-    this.transfer.set((event.target as HTMLTextAreaElement).value);
-  }
-
-  async importData(): Promise<void> {
+    this.importing.set(true);
+    this.importStatus.set('Importing…');
     try {
-      await this.addGenerations(importGenerations(this.transfer()), this.transferStatus);
-      this.transferStatus.update((message) => 'Import complete. ' + message);
-    } catch {
-      this.transferStatus.set('Could not import. This simulator requires a v3 policy export.');
+      let text: string;
+      try {
+        text = await file.text();
+      } catch {
+        this.importStatus.set('Could not read the generation file.');
+        return;
+      }
+      if (this.destroyed) return;
+      const incoming = importGenerations(text);
+      await this.addGenerations(incoming, this.importStatus);
+      this.importStatus.update(
+        (message) =>
+          `Imported ${incoming.length} ${incoming.length === 1 ? 'generation' : 'generations'}. ${message}`,
+      );
+    } catch (error) {
+      this.importStatus.set(
+        error instanceof Error ? error.message : 'Could not import generations.',
+      );
+    } finally {
+      this.importing.set(false);
     }
   }
 }

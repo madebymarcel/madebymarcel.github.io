@@ -1,4 +1,5 @@
 import {
+  BALL_RADIUS,
   DT,
   HALF_TICKS,
   PITCH,
@@ -340,6 +341,19 @@ export class CanoeMatch {
       return null;
     }
 
+    // A reached ball can pass behind the paddler as the hull coasts this tick.
+    // Remember start-of-tick reach for deliberate ground pickups, not aerial catches.
+    let groundReach: Map<number, number> | undefined;
+    if (s.ball.owner === null && s.ball.z === BALL_RADIUS) {
+      for (const p of s.players) {
+        const action = actions[p.id];
+        if (action.ball === 1 && action.paddle === 0 && reachableBall(p, s.ball)) {
+          groundReach ??= new Map();
+          groundReach.set(p.id, distance(p, s.ball));
+        }
+      }
+    }
+
     s.ticks++;
     for (const player of s.players) {
       const action = actions[player.id];
@@ -380,11 +394,21 @@ export class CanoeMatch {
         ball.y <= PITCH.width &&
         ball.z <= 2.85
       ) {
-        const candidates = s.players
-          .filter((p) => actions[p.id].ball === 1 && reachableBall(p, ball))
-          .sort((a, b) => distance(a, ball) - distance(b, ball));
-        // The thrower cannot immediately catch their own airborne release.
-        const catcher = candidates.find((p) => p.id !== ball.lastTouch || ball.z === 0.11);
+        let catcher: Player | undefined;
+        let closest = Infinity;
+        for (const p of s.players) {
+          if (actions[p.id].ball !== 1) continue;
+          // The thrower cannot immediately catch their own airborne release.
+          if (p.id === ball.lastTouch && ball.z > BALL_RADIUS) continue;
+          const reachDistance = Math.min(
+            groundReach?.get(p.id) ?? Infinity,
+            reachableBall(p, ball) ? distance(p, ball) : Infinity,
+          );
+          if (reachDistance < closest) {
+            closest = reachDistance;
+            catcher = p;
+          }
+        }
         if (catcher && this.random() < 0.85) this.catchBall(catcher);
       }
     }

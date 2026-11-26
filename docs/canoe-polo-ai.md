@@ -16,9 +16,11 @@ Route: /projects/canoe-polo/
 - A generation is one training match followed by one independent evaluation against its parent.
   Evaluation scores are descriptive, not a qualification gate or reliable skill rating.
 - Generations: immutable versioned JSON envelopes with weights and lineage; IndexedDB persistence.
-  Branches have unique IDs. No server or shared training population.
-- UI: Play, Generations, About, plus opt-in background training controls. The worker terminates
-  when leaving the experiment. Only completed generations persist across reloads.
+  Branches have unique IDs. No server or shared training population. Download individual
+  generations as JSON. File import accepts v3 snapshots and existing v3 collection backups
+  up to 64 MB.
+- UI: match, generations, rules, and opt-in background training. The worker terminates when
+  leaving the experiment. Only completed generations persist across reloads.
 
 ## Rule coverage
 
@@ -41,3 +43,6 @@ The first PR establishes the pipeline, not competitive playing quality. Verify w
 reproducibility, import validation, persistence and mobile responsiveness. Compare generations
 across many independent matches and both sides of the pitch before concluding that learning
 improves performance. Generation 0 is intentionally weak; early matches may be scoreless.
+
+The developer-only drills in `skills-drills.ts` run seeded collection, shooting, and save
+scenarios without modifying policies. The unit suite exercises their reproducibility.
