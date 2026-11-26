@@ -27,7 +27,7 @@
   }
 }
 
-:root:has(.navigation-drawer[open]) {
+:root:has(.navigation-drawer.is-open) {
   overflow-y: hidden;
 }
 
@@ -40,6 +40,7 @@
 
 body {
   margin: 0;
+  overflow-x: clip;
 }
 
 /* Avoid media forcing a layout wider than its containing element. */
@@ -96,6 +97,17 @@ textarea:focus-visible,
 
 a {
   color: var(--accent);
+}
+
+.site-content {
+  transform: translateX(0);
+  transition: transform var(--drawer-motion);
+}
+
+@media (max-width: 900px) {
+  :root:has(.navigation-drawer.is-open) .site-content {
+    transform: translateX(calc(-1 * var(--drawer-offset)));
+  }
 }
 
 .site-main {
@@ -158,6 +170,10 @@ a {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .site-content {
+    transition: none;
+  }
+
   *,
   *::before,
   *::after {
