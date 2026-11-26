@@ -238,3 +238,30 @@ test('starts from scratch only after confirmation and leaves unrelated browser d
     'keep',
   );
 });
+
+test('watching a match keeps playback and training alive across drawer changes', async ({
+  page,
+}) => {
+  await page.goto('/projects/canoe-polo/');
+  await page.getByRole('button', { name: 'Start new match' }).click();
+  await page.getByRole('button', { name: 'Watch match' }).click();
+  const viewer = page.getByRole('dialog', { name: 'Immersive match view' });
+  await viewer.getByRole('button', { name: 'Options' }).click();
+  const options = page.getByRole('dialog', { name: 'Match options and training' });
+  await options.getByLabel('Resource usage').selectOption({ label: 'Auto' });
+  await options.getByRole('button', { name: 'Start or resume training' }).click();
+  const progress = options.getByRole('progressbar');
+  await expect(progress).toBeVisible();
+  const before = await progress.getAttribute('value');
+  await options.getByRole('button', { name: 'Close options' }).click();
+  const clock = viewer.locator('.viewer-bar span');
+  await expect(clock).not.toHaveText(await clock.innerText());
+  await viewer.getByRole('button', { name: 'Options' }).click();
+  await expect(progress).not.toHaveAttribute('value', before);
+  await expect(options.getByRole('button', { name: 'Pause training' })).toBeVisible();
+  await options.getByRole('button', { name: 'Close options' }).click();
+  await viewer.getByRole('button', { name: 'Pause', exact: true }).click();
+  await viewer.getByRole('button', { name: 'Exit match view' }).click();
+  await expect(page.getByRole('button', { name: 'Resume match' })).toBeVisible();
+  await expect(page.getByLabel('Resource usage')).toHaveValue('-1');
+});

@@ -1,138 +1,13 @@
 <section class="content-page polo-page ds-stack">
   <h1>Canoe polo AI</h1>
-  <section class="ds-card ds-stack" aria-labelledby="training-heading">
-    <h2 id="training-heading">Background training</h2>
-    <p class="ds-hint">
-      {{ training() ? 'Running' : 'Paused' }} · {{ generations().length }} unlocked snapshots
-    </p>
-    <div class="ds-grid training-controls">
-      <div class="ds-field">
-        <label for="polo-parent">Train from</label>
-        <select
-          id="polo-parent"
-          class="ds-input"
-          [disabled]="training() || saving() || !ready()"
-          [value]="parent()"
-          (change)="selectGeneration($event, 'parent')"
-        >
-          @for (g of generations(); track g.id) {
-          <option [value]="g.id">{{ generationLabel(g) }}</option>
-          }
-        </select>
-      </div>
-      <div class="ds-field">
-        <label for="polo-pace">Resource usage</label>
-        <select id="polo-pace" class="ds-input" [value]="pace()" (change)="setPace($event)">
-          <option value="100">Low</option>
-          <option value="30">Balanced</option>
-          <option value="0">High</option>
-        </select>
-      </div>
-    </div>
-    @let p = progress();
-    <div class="training-progress">
-      <p>
-        {{ p ? p.phase + ' · ' + eventTime(p.ticks) + ' / 20:00' : (training() ? 'Starting' : 'Not
-        started') }}
-      </p>
-      <p>{{ p?.steps ?? 0 }} learning steps</p>
-      <progress
-        aria-label="Current training or evaluation match"
-        [value]="p?.ticks ?? 0"
-        [max]="halfTicks * 2"
-      ></progress>
-    </div>
-    <button
-      class="ds-button"
-      type="button"
-      [disabled]="saving() || resetting() || !ready()"
-      (click)="toggleTraining()"
-    >
-      {{ training() ? 'Pause training' : 'Start or resume training' }}
-    </button>
-    <details class="ds-stack reward-panel">
-      <summary>Training rewards</summary>
-      <p class="ds-hint">Changes apply to the next generation. Set 0 to turn a reward off.</p>
-      <div class="ds-grid">
-        @for (control of rewardControls; track control.key) {
-        <div class="ds-field">
-          <label [attr.for]="'polo-reward-' + control.key">{{ control.label }}</label>
-          <input
-            type="number"
-            class="ds-input"
-            [id]="'polo-reward-' + control.key"
-            min="0"
-            [max]="rewardMax(control.key)"
-            step="0.01"
-            [value]="rewards()[control.key]"
-            (change)="updateReward($event, control.key)"
-          />
-        </div>
-        }
-      </div>
-      <button class="ds-button ds-button--secondary" type="button" (click)="resetRewards()">
-        Reset reward defaults
-      </button>
-    </details>
-    <p role="status">{{ status() }}</p>
-  </section>
-
+  <button class="ds-button" (click)="immersive.set(true); viewer.showModal()">Watch match</button>
+  @if (!immersive()) {
+  <ng-container *ngTemplateOutlet="trainingPanel" />
   <div class="ds-layout-context">
     <div class="ds-sidebar-end dashboard-match">
       <section class="ds-card ds-stack" aria-labelledby="match-heading">
         <h2 id="match-heading">Match setup</h2>
-        <div class="ds-grid">
-          <div class="ds-field">
-            <label for="polo-blue">Blue team</label>
-            <select
-              id="polo-blue"
-              class="ds-input"
-              [value]="blue()"
-              (change)="selectGeneration($event, 'blue')"
-            >
-              @for (g of generations(); track g.id) {
-              <option [value]="g.id">{{ generationLabel(g) }}</option>
-              }
-            </select>
-          </div>
-          <div class="ds-field">
-            <label for="polo-red">Red team</label>
-            <select
-              id="polo-red"
-              class="ds-input"
-              [value]="red()"
-              (change)="selectGeneration($event, 'red')"
-            >
-              @for (g of generations(); track g.id) {
-              <option [value]="g.id">{{ generationLabel(g) }}</option>
-              }
-            </select>
-          </div>
-        </div>
-        <div class="ds-cluster">
-          <button class="ds-button" type="button" [disabled]="!ready()" (click)="startMatch()">
-            Start new match
-          </button>
-          <button
-            class="ds-button ds-button--secondary"
-            type="button"
-            [disabled]="!ready() || match().phase === 'finished'"
-            (click)="toggleMatch()"
-          >
-            {{ playing() ? 'Pause match' : 'Resume match' }}
-          </button>
-          <label for="polo-speed">Speed</label>
-          <select
-            class="ds-input speed"
-            id="polo-speed"
-            [value]="speed()"
-            (change)="changeSpeed($event)"
-          >
-            <option value="1">1×</option>
-            <option value="4">4×</option>
-            <option value="16">16×</option>
-          </select>
-        </div>
+        <ng-container *ngTemplateOutlet="teams" />
         <div class="scoreboard">
           <div class="team-score">
             <span>Blue · {{ matchLabels()[0] }}</span>
@@ -148,105 +23,8 @@
             <strong>{{ match().score[1] }}</strong>
           </div>
         </div>
-        <label class="ds-cluster polo-vision-toggle">
-          <input
-            type="checkbox"
-            [checked]="showVision()"
-            (change)="showVision.set(!showVision())"
-          />
-          Show player vision
-        </label>
-        @if (showVision()) {
-        <p class="ds-hint polo-vision-summary">
-          <span>Sight cones: {{ visionAngle }}° · {{ visionRange }} m.</span>
-          <span>Ball in sight cone:</span>
-          <span>Blue {{ visionBallPlayers()[0] }}.</span>
-          <span>Red {{ visionBallPlayers()[1] }}.</span>
-        </p>
-        }
-        <svg
-          class="pitch"
-          viewBox="-1 -2.5 37 26.5"
-          role="img"
-          aria-label="Top-down canoe polo pitch showing five blue players, five red players, the ball and referee"
-        >
-          <rect class="water" x="0" y="0" width="35" height="23" rx="0.25" />
-          @if (showVision()) {
-          <defs>
-            <clipPath id="polo-vision-clip">
-              <rect x="0" y="0" [attr.width]="pitch.length" [attr.height]="pitch.width" />
-            </clipPath>
-          </defs>
-          <g class="polo-vision-overlay" clip-path="url(#polo-vision-clip)" aria-hidden="true">
-            @for (p of match().players; track p.id) {
-            <path
-              class="polo-vision-cone"
-              [class.polo-vision-red]="p.team === 1"
-              [attr.d]="visionCone"
-              [attr.transform]="playerTransform(p, p.headTurn)"
-              vector-effect="non-scaling-stroke"
-            />
-            }
-          </g>
-          }
-          <g class="lines" fill="none" stroke-width="0.1">
-            <rect x="0" y="0" width="35" height="23" />
-            <path d="M17.5 0V23 M4 0V23 M31 0V23" stroke-dasharray=".4 .3" />
-            <circle cx="17.5" cy="11.5" r="2" />
-            <rect x="-0.5" y="10.75" width="0.5" height="1.5" />
-            <rect x="35" y="10.75" width="0.5" height="1.5" />
-          </g>
-          @for (p of match().players; track p.id) {
-          <g
-            [attr.transform]="playerTransform(p)"
-            [attr.data-player-id]="p.id"
-            [class.blue]="p.team === 0"
-            [class.red]="p.team === 1"
-          >
-            @if (p.id === manualPlayer()) {
-            <ellipse
-              class="polo-controlled-boat"
-              rx="1.8"
-              ry="0.75"
-              fill="none"
-              vector-effect="non-scaling-stroke"
-            />
-            }
-            <path d="M-1.5 0Q-0.9 -0.5 0.5 -0.46Q1.2 -0.3 1.5 0Q1.2 .3 .5 .46Q-.9 .5 -1.5 0Z" />
-            <path
-              class="paddle"
-              [attr.d]="paddlePose(p)"
-              stroke-width="0.13"
-              stroke-linecap="round"
-            />
-            <circle
-              class="helmet"
-              r=".28"
-              [attr.cx]="0.14 * cos(p.headTurn)"
-              [attr.cy]="0.14 * sin(p.headTurn)"
-            />
-            <text class="number" x="0" y=".12" text-anchor="middle" font-size=".36">
-              {{ (p.id % 5) + 1 }}
-            </text>
-          </g>
-          }
-          <circle
-            class="ball"
-            [attr.cx]="match().ball.x"
-            [attr.cy]="match().ball.y"
-            [attr.r]="0.16 + match().ball.z * 0.05"
-          />
-          <g [attr.transform]="'translate(' + match().ball.x + ' -1.2)'">
-            <circle class="official" r=".32" />
-            <path
-              class="official-arm"
-              [attr.d]="match().phase === 'play' ? 'M0 .32V.8' : 'M0 .32V.8M0 .45L.65 .05'"
-            />
-            <text class="official-label" x="0" y="-.55" text-anchor="middle" font-size=".45">
-              REF
-            </text>
-          </g>
-        </svg>
+        <ng-container *ngTemplateOutlet="vision" />
+        <ng-container *ngTemplateOutlet="pitchView" />
         <p class="ds-hint">
           Ball size indicates height. Phase: {{ match().phase }}. Fouls: blue {{ match().fouls[0]
           }}, red {{ match().fouls[1] }}.
@@ -399,6 +177,256 @@
       </details>
     </div>
   </div>
+  <ng-container *ngTemplateOutlet="generationPanel" />
+
+  }
+</section>
+<dialog #viewer class="match-view" aria-label="Immersive match view" (close)="immersive.set(false)">
+  @if (immersive()) {
+  <header class="viewer-bar">
+    <strong>Blue {{ match().score[0] }} – {{ match().score[1] }} Red</strong>
+    <span>Half {{ match().half }} · {{ clock() }}</span>
+    <button
+      class="ds-button"
+      [disabled]="!ready() || match().phase === 'finished'"
+      (click)="toggleMatch()"
+    >
+      {{ playing() ? 'Pause' : 'Play' }}
+    </button>
+    <button class="ds-button" (click)="drawer.showModal()">Options</button>
+    <button class="ds-button" (click)="viewer.close()">Exit match view</button>
+  </header>
+  <ng-container *ngTemplateOutlet="pitchView" />
+  <dialog #drawer class="match-options ds-stack" aria-label="Match options and training">
+    <button class="ds-button" (click)="drawer.close()">Close options</button>
+    <ng-container *ngTemplateOutlet="teams" />
+    <ng-container *ngTemplateOutlet="vision" />
+    <ng-container *ngTemplateOutlet="trainingPanel" />
+    <ng-container *ngTemplateOutlet="generationPanel" />
+  </dialog>
+  }
+</dialog>
+<ng-template #trainingPanel>
+  <section class="ds-card ds-stack" aria-labelledby="training-heading">
+    <h2 id="training-heading">Background training</h2>
+    <p class="ds-hint">
+      {{ training() ? 'Running' : 'Paused' }} · {{ generations().length }} unlocked snapshots
+    </p>
+    <div class="ds-grid training-controls">
+      <div class="ds-field">
+        <label for="polo-parent">Train from</label>
+        <select
+          id="polo-parent"
+          class="ds-input"
+          [disabled]="training() || saving() || !ready()"
+          [value]="parent()"
+          (change)="selectGeneration($event, 'parent')"
+        >
+          @for (g of generations(); track g.id) {
+          <option [value]="g.id">{{ generationLabel(g) }}</option>
+          }
+        </select>
+      </div>
+      <div class="ds-field">
+        <label for="polo-pace">Resource usage</label>
+        <select id="polo-pace" class="ds-input" [value]="pace()" (change)="setPace($event)">
+          <option value="100">Low</option>
+          <option value="30">Balanced</option>
+          <option value="0">High</option>
+          <option value="-1">Auto</option>
+        </select>
+      </div>
+    </div>
+    @let p = progress();
+    <div class="training-progress">
+      <p>
+        {{ p ? p.phase + ' · ' + eventTime(p.ticks) + ' / 20:00' : (training() ? 'Starting' : 'Not
+        started') }}
+      </p>
+      <p>{{ p?.steps ?? 0 }} learning steps</p>
+      <progress
+        aria-label="Current training or evaluation match"
+        [value]="p?.ticks ?? 0"
+        [max]="halfTicks * 2"
+      ></progress>
+    </div>
+    <button
+      class="ds-button"
+      type="button"
+      [disabled]="saving() || resetting() || !ready()"
+      (click)="toggleTraining()"
+    >
+      {{ training() ? 'Pause training' : 'Start or resume training' }}
+    </button>
+    <details class="ds-stack reward-panel">
+      <summary>Training rewards</summary>
+      <p class="ds-hint">Changes apply to the next generation. Set 0 to turn a reward off.</p>
+      <div class="ds-grid">
+        @for (control of rewardControls; track control.key) {
+        <div class="ds-field">
+          <label [attr.for]="'polo-reward-' + control.key">{{ control.label }}</label>
+          <input
+            type="number"
+            class="ds-input"
+            [id]="'polo-reward-' + control.key"
+            min="0"
+            [max]="rewardMax(control.key)"
+            step="0.01"
+            [value]="rewards()[control.key]"
+            (change)="updateReward($event, control.key)"
+          />
+        </div>
+        }
+      </div>
+      <button class="ds-button ds-button--secondary" type="button" (click)="resetRewards()">
+        Reset reward defaults
+      </button>
+    </details>
+    <p role="status">{{ status() }}</p>
+  </section>
+</ng-template>
+<ng-template #teams>
+  <div class="ds-grid">
+    <div class="ds-field">
+      <label for="polo-blue">Blue team</label>
+      <select
+        id="polo-blue"
+        class="ds-input"
+        [value]="blue()"
+        (change)="selectGeneration($event, 'blue')"
+      >
+        @for (g of generations(); track g.id) {
+        <option [value]="g.id">{{ generationLabel(g) }}</option>
+        }
+      </select>
+    </div>
+    <div class="ds-field">
+      <label for="polo-red">Red team</label>
+      <select
+        id="polo-red"
+        class="ds-input"
+        [value]="red()"
+        (change)="selectGeneration($event, 'red')"
+      >
+        @for (g of generations(); track g.id) {
+        <option [value]="g.id">{{ generationLabel(g) }}</option>
+        }
+      </select>
+    </div>
+  </div>
+  <div class="ds-cluster">
+    <button class="ds-button" type="button" [disabled]="!ready()" (click)="startMatch()">
+      Start new match
+    </button>
+    <button
+      class="ds-button ds-button--secondary"
+      type="button"
+      [disabled]="!ready() || match().phase === 'finished'"
+      (click)="toggleMatch()"
+    >
+      {{ playing() ? 'Pause match' : 'Resume match' }}
+    </button>
+    <label for="polo-speed">Speed</label>
+    <select class="ds-input speed" id="polo-speed" [value]="speed()" (change)="changeSpeed($event)">
+      <option value="1">1×</option>
+      <option value="4">4×</option>
+      <option value="16">16×</option>
+    </select>
+  </div>
+</ng-template>
+<ng-template #vision>
+  <label class="ds-cluster polo-vision-toggle">
+    <input type="checkbox" [checked]="showVision()" (change)="showVision.set(!showVision())" />
+    Show player vision
+  </label>
+  @if (showVision()) {
+  <p class="ds-hint polo-vision-summary">
+    <span>Sight cones: {{ visionAngle }}° · {{ visionRange }} m.</span>
+    <span>Ball in sight cone:</span>
+    <span>Blue {{ visionBallPlayers()[0] }}.</span>
+    <span>Red {{ visionBallPlayers()[1] }}.</span>
+  </p>
+  }
+</ng-template>
+<ng-template #pitchView>
+  <svg
+    class="pitch"
+    viewBox="-1 -2.5 37 26.5"
+    role="img"
+    aria-label="Top-down canoe polo pitch showing five blue players, five red players, the ball and referee"
+  >
+    <rect class="water" x="0" y="0" width="35" height="23" rx="0.25" />
+    @if (showVision()) {
+    <defs>
+      <clipPath id="polo-vision-clip">
+        <rect x="0" y="0" [attr.width]="pitch.length" [attr.height]="pitch.width" />
+      </clipPath>
+    </defs>
+    <g class="polo-vision-overlay" clip-path="url(#polo-vision-clip)" aria-hidden="true">
+      @for (p of match().players; track p.id) {
+      <path
+        class="polo-vision-cone"
+        [class.polo-vision-red]="p.team === 1"
+        [attr.d]="visionCone"
+        [attr.transform]="playerTransform(p, p.headTurn)"
+        vector-effect="non-scaling-stroke"
+      />
+      }
+    </g>
+    }
+    <g class="lines" fill="none" stroke-width="0.1">
+      <rect x="0" y="0" width="35" height="23" />
+      <path d="M17.5 0V23 M4 0V23 M31 0V23" stroke-dasharray=".4 .3" />
+      <circle cx="17.5" cy="11.5" r="2" />
+      <rect x="-0.5" y="10.75" width="0.5" height="1.5" />
+      <rect x="35" y="10.75" width="0.5" height="1.5" />
+    </g>
+    @for (p of match().players; track p.id) {
+    <g
+      [attr.transform]="playerTransform(p)"
+      [attr.data-player-id]="p.id"
+      [class.blue]="p.team === 0"
+      [class.red]="p.team === 1"
+    >
+      @if (p.id === manualPlayer()) {
+      <ellipse
+        class="polo-controlled-boat"
+        rx="1.8"
+        ry="0.75"
+        fill="none"
+        vector-effect="non-scaling-stroke"
+      />
+      }
+      <path d="M-1.5 0Q-0.9 -0.5 0.5 -0.46Q1.2 -0.3 1.5 0Q1.2 .3 .5 .46Q-.9 .5 -1.5 0Z" />
+      <path class="paddle" [attr.d]="paddlePose(p)" stroke-width="0.13" stroke-linecap="round" />
+      <circle
+        class="helmet"
+        r=".28"
+        [attr.cx]="0.14 * cos(p.headTurn)"
+        [attr.cy]="0.14 * sin(p.headTurn)"
+      />
+      <text class="number" x="0" y=".12" text-anchor="middle" font-size=".36">
+        {{ (p.id % 5) + 1 }}
+      </text>
+    </g>
+    }
+    <circle
+      class="ball"
+      [attr.cx]="match().ball.x"
+      [attr.cy]="match().ball.y"
+      [attr.r]="0.16 + match().ball.z * 0.05"
+    />
+    <g [attr.transform]="'translate(' + match().ball.x + ' -1.2)'">
+      <circle class="official" r=".32" />
+      <path
+        class="official-arm"
+        [attr.d]="match().phase === 'play' ? 'M0 .32V.8' : 'M0 .32V.8M0 .45L.65 .05'"
+      />
+      <text class="official-label" x="0" y="-.55" text-anchor="middle" font-size=".45">REF</text>
+    </g>
+  </svg>
+</ng-template>
+<ng-template #generationPanel>
   <section class="ds-card ds-stack" aria-labelledby="generations-heading">
     <h2 id="generations-heading">Generations ({{ generations().length }})</h2>
     <div class="ds-layout-context">
@@ -470,5 +498,5 @@
         </div>
       </div>
     </div>
-  </section>
-</section>
+  </section></ng-template
+>

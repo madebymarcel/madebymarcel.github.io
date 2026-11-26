@@ -181,3 +181,38 @@ summary {
   stroke: var(--water-text);
   stroke-width: 2px;
 }
+
+.match-view[open] {
+  position: fixed;
+  inset: 0;
+  margin: 0;
+  inline-size: 100%;
+  block-size: 100dvh;
+  max-inline-size: none;
+  max-block-size: none;
+  box-sizing: border-box;
+  border: 0;
+  padding: var(--space-1);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.viewer-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.match-view .pitch {
+  block-size: 100%;
+}
+
+.match-options {
+  max-block-size: 90dvh;
+  overflow: auto;
+}
+
+.match-options:not([open]) {
+  display: none;
+}

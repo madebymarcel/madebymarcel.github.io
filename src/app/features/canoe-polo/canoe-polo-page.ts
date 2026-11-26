@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import { Component, DestroyRef, afterNextRender, computed, inject, signal } from '@angular/core';
 import { COLLECT, FREE_THROW, HOLD } from './ball-play';
 import {
@@ -40,6 +41,7 @@ import {
 } from './training-rewards';
 
 @Component({
+  imports: [NgTemplateOutlet],
   templateUrl: './canoe-polo-page.html',
   styleUrl: './canoe-polo-page.scss',
 })
@@ -95,6 +97,9 @@ export class CanoePoloPage {
   readonly speed = signal(1);
   readonly training = signal(false);
   readonly ready = signal(false);
+  readonly immersive = signal(false);
+  private autoDelay = 30;
+  private sampleFrame = 0;
   readonly pace = signal(30);
   readonly rewards = signal<TrainingRewards>({ ...DEFAULT_REWARDS });
   readonly rewardControls: readonly { key: RewardKey; label: string }[] = [
@@ -159,6 +164,7 @@ export class CanoePoloPage {
     });
     this.destroyRef.onDestroy(() => {
       this.destroyed = true;
+      if (this.sampleFrame) cancelAnimationFrame(this.sampleFrame);
       clearInterval(this.timer);
       this.worker?.terminate();
     });
@@ -307,7 +313,42 @@ export class CanoePoloPage {
   setPace(event: Event): void {
     const delay = Number((event.target as HTMLSelectElement).value);
     this.pace.set(delay);
-    this.worker?.postMessage({ kind: 'pace', delay });
+    cancelAnimationFrame(this.sampleFrame);
+    this.autoDelay = 30;
+    if (delay === -1) this.monitorPlayback();
+    this.worker?.postMessage({ kind: 'pace', delay: this.workerDelay() });
+  }
+
+  private workerDelay(): number {
+    return this.pace() === -1 ? this.autoDelay : this.pace();
+  }
+
+  private monitorPlayback(): void {
+    let previous = 0;
+    let start = 0;
+    let lateFrames = 0;
+    const sample = (now: number) => {
+      if (this.training() && previous && now - previous < 1000) {
+        if (now - previous > 24) lateFrames++;
+        if (now - start >= 1000) {
+          // Poor frame pacing calls for a fast retreat. Probe for capacity gradually.
+          const delay =
+            lateFrames >= 3 ? Math.min(200, this.autoDelay + 15) : Math.max(0, this.autoDelay - 3);
+          if (delay !== this.autoDelay) {
+            this.autoDelay = delay;
+            this.worker?.postMessage({ kind: 'pace', delay });
+          }
+          start = now;
+          lateFrames = 0;
+        }
+      } else {
+        start = now;
+        lateFrames = 0;
+      }
+      previous = now;
+      this.sampleFrame = requestAnimationFrame(sample);
+    };
+    this.sampleFrame = requestAnimationFrame(sample);
   }
 
   updateReward(event: Event, key: RewardKey): void {
@@ -367,7 +408,7 @@ export class CanoePoloPage {
         kind: 'start',
         parent: this.find(this.parent()),
         seed: Math.floor(Math.random() * 4294967296),
-        delay: this.pace(),
+        delay: this.workerDelay(),
         rewards: this.rewards(),
       });
     } catch {
