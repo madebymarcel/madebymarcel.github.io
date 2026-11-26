@@ -111,17 +111,28 @@
         class="ds-button"
         type="button"
         (click)="resetTraining()"
-        [disabled]="!ready() || !(latest()?.iteration)"
+        [disabled]="!ready() || !seedValid()"
       >
         Restart learning
       </button>
+      <label>
+        Restart seed
+        <input
+          type="number"
+          min="1"
+          [max]="maxSeed"
+          step="1"
+          [value]="seedInput()"
+          (input)="setSeed($event)"
+        />
+      </label>
     </div>
     @if (trainingError()) {
     <p role="status">{{ trainingError() }}</p>
     } @if (latest(); as current) {
     <dl class="metrics">
       <div>
-        <dt>Iteration</dt>
+        <dt>Iteration (seed {{ activeSeed() }})</dt>
         <dd>{{ current.iteration }}</dd>
       </div>
       <div>

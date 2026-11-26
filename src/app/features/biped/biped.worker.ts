@@ -1,11 +1,10 @@
-import { Trainer, type Checkpoint } from './training';
+import { DEFAULT_SEED, Trainer, type Checkpoint } from './training';
 
 export type TrainingMessage =
-  { type: 'start' } | { type: 'pause' } | { type: 'reset'; epoch: number };
+  { type: 'start' } | { type: 'pause' } | { type: 'reset'; epoch: number; seed: number };
 export type TrainingUpdate = { epoch: number; checkpoint: Checkpoint };
-const seed = 42;
 let epoch = 0;
-let trainer = new Trainer(seed);
+let trainer = new Trainer(DEFAULT_SEED);
 let scheduled: ReturnType<typeof setTimeout> | undefined;
 let running = false;
 
@@ -35,7 +34,7 @@ addEventListener('message', ({ data }: MessageEvent<TrainingMessage>) => {
   } else if (data.type === 'reset') {
     pause();
     epoch = data.epoch;
-    trainer = new Trainer(seed);
+    trainer = new Trainer(data.seed);
     publish();
   }
 });

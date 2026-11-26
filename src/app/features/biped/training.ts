@@ -1,5 +1,7 @@
 import { ACTIONS, CONTROL_DT, OBSERVATIONS, TRACK_GOAL, Walker, type Start } from './walker';
 
+export const DEFAULT_SEED = 3;
+export const MAX_SEED = 0xffffffff;
 export const POLICY_SIZE = (ACTIONS / 2) * OBSERVATIONS;
 const POPULATION = 12;
 const ELITES = 5;

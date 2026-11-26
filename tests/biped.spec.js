@@ -22,8 +22,12 @@ test('portfolio opens biped, trains off the replay thread, and plays a checkpoin
   await page.getByRole('button', { name: 'Watch best' }).click();
   await expect(page.getByText(/Iteration [1-9]\d* ·/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Pause replay' })).toBeEnabled();
-  await expect(page.getByRole('button', { name: 'Restart learning' })).toBeEnabled();
-  await page.getByRole('button', { name: 'Restart learning' }).click();
+  const restart = page.getByRole('button', { name: 'Restart learning' });
+  await page.getByRole('spinbutton', { name: 'Restart seed' }).fill('0');
+  await expect(restart).toBeDisabled();
+  await page.getByRole('spinbutton', { name: 'Restart seed' }).fill('2');
+  await restart.click();
+  await expect(page.getByText('Iteration (seed 2)', { exact: true })).toBeVisible();
   await expect(start).toBeEnabled();
   await expect(page.getByRole('button', { name: 'Watch best' })).toBeDisabled();
 });

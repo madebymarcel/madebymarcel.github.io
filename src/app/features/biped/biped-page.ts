@@ -1,7 +1,14 @@
-import { Component, DestroyRef, afterNextRender, inject, signal } from '@angular/core';
+import { Component, DestroyRef, afterNextRender, computed, inject, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { CONTROL_DT, JOINT_NAMES, OBSERVATIONS, ACTIONS, TRACK_GOAL, Walker } from './walker';
-import { act, EVALUATION_STARTS, POLICY_SIZE, type Checkpoint } from './training';
+import {
+  act,
+  DEFAULT_SEED,
+  EVALUATION_STARTS,
+  MAX_SEED,
+  POLICY_SIZE,
+  type Checkpoint,
+} from './training';
 import type { TrainingMessage, TrainingUpdate } from './biped.worker';
 
 @Component({
@@ -21,6 +28,13 @@ export class BipedPage {
   private accumulator = 0;
   private epoch = 0;
 
+  readonly seedInput = signal(String(DEFAULT_SEED));
+  readonly seedValid = computed(() => {
+    const seed = Number(this.seedInput());
+    return Number.isInteger(seed) && seed >= 1 && seed <= MAX_SEED;
+  });
+  readonly activeSeed = signal(DEFAULT_SEED);
+  readonly maxSeed = MAX_SEED;
   readonly ready = signal(false);
   readonly playing = signal(false);
   readonly running = signal(false);
@@ -65,7 +79,7 @@ export class BipedPage {
           }
         };
         this.worker.onerror = () => this.failTraining();
-        this.send({ type: 'reset', epoch: this.epoch });
+        this.send({ type: 'reset', epoch: this.epoch, seed: this.activeSeed() });
       } catch {
         this.failTraining();
       }
@@ -96,7 +110,13 @@ export class BipedPage {
     this.send({ type: start ? 'start' : 'pause' });
   }
 
+  setSeed(event: Event) {
+    this.seedInput.set((event.target as HTMLInputElement).value);
+  }
+
   resetTraining() {
+    if (!this.seedValid()) return;
+    this.activeSeed.set(Number(this.seedInput()));
     this.running.set(false);
     this.latest.set(null);
     this.baseline.set(null);
@@ -104,7 +124,7 @@ export class BipedPage {
     this.initReplay(new Float64Array(POLICY_SIZE), 0);
     this.ready.set(false);
     this.epoch++;
-    this.send({ type: 'reset', epoch: this.epoch });
+    this.send({ type: 'reset', epoch: this.epoch, seed: this.activeSeed() });
   }
 
   setTrial(event: Event) {

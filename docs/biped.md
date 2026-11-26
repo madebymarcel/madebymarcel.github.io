@@ -3,8 +3,8 @@
 Route: `/projects/biped/`. Motion and training stay on-device. On the project page,
 choose **Start training** and then **Watch best** to compare with **Watch baseline**.
 Both use the selected test start; a new checkpoint does not change the current replay.
-**Restart learning** or a reload discards the current session. The browser starts at seed 42
-and does not load pretrained weights.
+**Restart learning** or a reload discards the current session. The browser starts at seed 3 and does not load
+pretrained weights. Edit **Restart seed** before choosing **Restart learning** to try a new run.
 
 ## Model
 
@@ -39,3 +39,8 @@ steps per trial. The untrained median was −1.05 m, with zero passes. Seeds 43 
 not reproduce five passes within 120 iterations. This establishes that the model can
 learn a walking gait on the test track, not that learning is yet robust across runs or
 terrain. Sprinting, terrain changes, and training to jump are outside this first task.
+
+The learner explores different trajectories between JavaScript engines. Chromium seed 3 reached
+5/5 at iteration 85 (13.40 m median) and seed 2 did so at iteration 90. Chromium seed 42 did
+not pass from scratch even though the Node-trained checkpoint passed 5/5 when evaluated in
+Chromium. Seed settings make runs repeatable within the same environment, not across engines.

@@ -90,8 +90,14 @@ svg {
   gap: 0.4rem;
 }
 
-.commands select {
+.commands select,
+.commands input[type='number'] {
   font: inherit;
+}
+
+.commands input[type='number'] {
+  inline-size: 7.5rem;
+  max-inline-size: 100%;
 }
 
 .metrics {
