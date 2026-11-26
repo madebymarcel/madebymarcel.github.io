@@ -122,6 +122,7 @@ test('mobile drawer pushes content and footer, keeps the header still and fades 
   const width = drawerBounds.width;
   expect(drawerBounds.y).toBeCloseTo(headerBefore.y + headerBefore.height, 0);
   expect(drawerBounds.y + drawerBounds.height).toBeCloseTo(844, 0);
+  await expect.poll(async () => (await main.boundingBox()).x).toBeCloseTo(before.x - width, 0);
   const after = await main.boundingBox();
   expect(after.x).toBeCloseTo(before.x - width, 0);
   expect(after.width).toBeCloseTo(before.width, 0);
@@ -140,22 +141,26 @@ test('mobile drawer pushes content and footer, keeps the header still and fades 
         globalThis.document.documentElement.clientWidth,
     ),
   ).toBeLessThanOrEqual(1);
-  await toggle.click();
-  const closing = await page.locator('.navigation-drawer').evaluate((element) => {
-    const animations = element.getAnimations();
+  const closing = await toggle.evaluate(async (element) => {
+    // Start and pause the exit in the same browser task, not across protocol round trips.
+    const dialog = element.closest('app-site-header').querySelector('.navigation-drawer');
+    element.click();
+    const animations = dialog.getAnimations();
+    for (const animation of animations) animation.pause();
+    await Promise.all(animations.map((animation) => animation.ready));
     for (const animation of animations) {
-      animation.pause();
       animation.currentTime = Number(animation.effect.getTiming().duration) / 2;
     }
-    const style = globalThis.getComputedStyle(element);
-    const state = { opacity: Number(style.opacity), display: style.display };
+    const style = globalThis.getComputedStyle(dialog);
+    const state = { opacity: Number(style.opacity), display: style.display, open: dialog.open };
     for (const animation of animations) animation.play();
     return state;
   });
+  expect(closing.open).toBe(true);
   expect(closing.display).not.toBe('none');
   expect(closing.opacity).toBeGreaterThan(0);
   expect(closing.opacity).toBeLessThan(1);
-  await expect(drawer).toBeHidden();
+  await expect(page.locator('.navigation-drawer')).toBeHidden();
   await expect(page.locator('.site-content')).toHaveCSS('transform', 'matrix(1, 0, 0, 1, 0, 0)');
   expect(await main.boundingBox()).toEqual(before);
   expect(await footer.boundingBox()).toEqual(footerBefore);
@@ -170,10 +175,17 @@ test('the shared toggle keeps the header usable and tabs into the sidebar', asyn
   await toggle.click();
   await expect(toggle).toHaveAccessibleName('Close');
   await expect(toggle).toBeFocused();
+  const drawer = page.locator('.navigation-drawer');
+  const home = drawer.getByRole('link', { name: 'Home' });
+  const about = drawer.getByRole('link', { name: 'About' });
   await page.keyboard.press('Tab');
-  await expect(
-    page.locator('.navigation-drawer').getByRole('link', { name: 'Home' }),
-  ).toBeFocused();
+  await expect(home).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(about).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(home).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(toggle).toBeFocused();
   await page.getByRole('link', { name: 'madebymarcel.' }).click();
   await expect(page).toHaveURL('/');
   await expect(toggle).toHaveAccessibleName('Menu');
@@ -204,10 +216,14 @@ test('mobile drawer respects reduced motion when opening and closing', async ({ 
   await page.getByRole('button', { name: 'Menu' }).click();
   const drawer = page.getByRole('dialog', { name: 'Menu' });
   await expect(drawer).toHaveCSS('opacity', '1');
-  expect((await main.boundingBox()).x).toBeLessThan(before.x);
+  const content = page.locator('.site-content');
+  await expect(content).toHaveCSS('transition-property', 'none');
+  const width = (await drawer.boundingBox()).width;
+  expect((await main.boundingBox()).x).toBeCloseTo(before.x - width, 0);
   await page.keyboard.press('Escape');
-  await expect(drawer).toBeHidden();
+  await expect(page.locator('.navigation-drawer')).toBeHidden();
   await expect(page.getByRole('button', { name: 'Menu' })).toBeFocused();
+  await expect(content).toHaveCSS('transform', 'matrix(1, 0, 0, 1, 0, 0)');
   expect(await main.boundingBox()).toEqual(before);
 });
 

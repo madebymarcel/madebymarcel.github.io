@@ -87,27 +87,28 @@ nav a.active {
   overflow: auto;
   overscroll-behavior: contain;
   box-shadow: var(--shadow-drawer);
-}
-
-.navigation-drawer {
   opacity: 0;
   transform: translateX(100%);
   transition:
     transform var(--drawer-motion),
-    opacity var(--drawer-motion),
-    display var(--drawer-duration) allow-discrete;
+    opacity var(--drawer-motion);
 }
 
-.navigation-drawer[open] {
+.navigation-drawer.is-open {
   opacity: 1;
   transform: translateX(0);
 }
 
-@starting-style {
-  .navigation-drawer[open] {
-    opacity: 0;
-    transform: translateX(100%);
+@media (min-width: 901px) {
+  .navigation-drawer {
+    display: none;
   }
+}
+
+// Switch the foreground and background palette together to maintain contrast.
+.menu-toggle,
+.theme-toggle {
+  transition: none;
 }
 
 .menu-toggle {
@@ -173,7 +174,9 @@ nav a.active {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .navigation-drawer {
+  .navigation-drawer,
+  .menu-icon span,
+  .menu-label > span {
     transition: none;
   }
 }

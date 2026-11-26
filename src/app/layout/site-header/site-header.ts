@@ -26,6 +26,7 @@ export class SiteHeader {
   private readonly drawer = viewChild<ElementRef<HTMLDialogElement>>('drawer');
 
   private outsidePointerId: number | null = null;
+  private drawerTransition = 0;
 
   protected readonly headerBottom = signal(0);
   readonly theme = inject(ThemeService);
@@ -47,12 +48,19 @@ export class SiteHeader {
 
   openMenu(): void {
     const drawer = this.drawer()?.nativeElement;
-    if (!drawer || drawer.open) return;
+    if (!drawer || this.menuOpen()) return;
 
+    this.drawerTransition++;
     this.updateHeaderBottom();
-    drawer.show();
+    drawer.inert = false;
+    if (!drawer.open) {
+      drawer.show();
+      // Establish the closed visual state before starting the entry transition.
+      drawer.getBoundingClientRect();
+    }
+    drawer.classList.add('is-open');
     this.menuOpen.set(true);
-    this.menuButton()?.nativeElement.focus();
+    this.menuButton()?.nativeElement.focus({ preventScroll: true });
   }
 
   toggleMenu(): void {
@@ -62,12 +70,27 @@ export class SiteHeader {
 
   closeMenu(): void {
     const drawer = this.drawer()?.nativeElement;
-    if (!drawer?.open) return;
+    if (!drawer?.open || !this.menuOpen()) return;
 
+    const transition = ++this.drawerTransition;
     this.outsidePointerId = null;
-    drawer.close();
     this.menuOpen.set(false);
-    this.menuButton()?.nativeElement.focus();
+    this.menuButton()?.nativeElement.focus({ preventScroll: true });
+    drawer.inert = true;
+    drawer.classList.remove('is-open');
+
+    // Keep the native dialog rendered until its exit transitions finish.
+    // A new opening invalidates this completion, including a reversed transition.
+    drawer.getBoundingClientRect();
+    const animations = drawer.getAnimations();
+    if (animations.length === 0) {
+      drawer.close();
+      return;
+    }
+
+    void Promise.allSettled(animations.map((animation) => animation.finished)).then(() => {
+      if (transition === this.drawerTransition && drawer.open) drawer.close();
+    });
   }
 
   onNavigate(): void {
@@ -77,9 +100,33 @@ export class SiteHeader {
   }
 
   onKeydown(event: KeyboardEvent): void {
-    if (event.key !== 'Escape' || !this.menuOpen()) return;
+    if (!this.menuOpen()) return;
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.closeMenu();
+    } else if (event.key === 'Tab' && !event.altKey && !event.ctrlKey && !event.metaKey) {
+      this.moveMenuFocus(event);
+    }
+  }
+
+  private moveMenuFocus(event: KeyboardEvent): void {
+    const button = this.menuButton()?.nativeElement;
+    const drawer = this.drawer()?.nativeElement;
+    if (!button || !drawer) return;
+
+    // Include links even in browsers that skip them during native tab navigation.
+    // Leave the ends of this sequence to the browser; the dialog is not modal.
+    const items = [
+      button,
+      ...drawer.querySelectorAll<HTMLElement>('a[href], button:not([disabled])'),
+    ];
+    const index = items.findIndex((item) => item === drawer.ownerDocument.activeElement);
+    const next = index < 0 ? undefined : items[index + (event.shiftKey ? -1 : 1)];
+    if (!next) return;
+
     event.preventDefault();
-    this.closeMenu();
+    next.focus();
   }
 
   onOutsidePointerDown(event: PointerEvent): void {

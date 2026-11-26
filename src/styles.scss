@@ -27,7 +27,7 @@
   }
 }
 
-:root:has(.navigation-drawer[open]) {
+:root:has(.navigation-drawer.is-open) {
   overflow-y: hidden;
 }
 
@@ -105,7 +105,7 @@ a {
 }
 
 @media (max-width: 900px) {
-  :root:has(.navigation-drawer[open]) .site-content {
+  :root:has(.navigation-drawer.is-open) .site-content {
     transform: translateX(calc(-1 * var(--drawer-offset)));
   }
 }
@@ -170,6 +170,10 @@ a {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .site-content {
+    transition: none;
+  }
+
   *,
   *::before,
   *::after {
