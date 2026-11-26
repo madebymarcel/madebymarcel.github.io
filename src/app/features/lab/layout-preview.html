@@ -28,7 +28,7 @@
     } @if (visualTypes.includes(node.appearance)) {
     <div class="ds-frame preview-art" aria-hidden="true"></div>
     } @if (node.appearance === 'list') {
-    <ul class="preview-list ds-stack">
+    <ul class="preview-list-items ds-stack">
       @for (item of node.items; track $index) {
       <li>{{ item }}</li>
       }

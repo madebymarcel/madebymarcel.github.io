@@ -43,3 +43,26 @@ test('all layout previews reflow when the browser becomes narrow', async ({ page
   );
   expect(overflow).toBeLessThanOrEqual(1);
 });
+
+test('layout previews leave framing to the tiles and keep list text inset', async ({ page }) => {
+  await page.goto('/lab/');
+  const editorial = page.locator('[data-pattern="editorial"]');
+  const editorialCard = editorial.locator('.preview-tile').first();
+  const listCard = page.locator('.preview-tile.preview-list').first();
+
+  for (const width of [1440, 390, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(editorial).toHaveCSS('border-top-width', '0px');
+    await expect(editorial).toHaveCSS('padding-left', '0px');
+    await expect(editorialCard).toHaveCSS('border-top-width', '1px');
+    const insets = await listCard.evaluate((element) => {
+      const card = element.getBoundingClientRect();
+      const title = element.querySelector('.preview-title').getBoundingClientRect();
+      const row = element.querySelector('li').getBoundingClientRect();
+      return { top: title.top - card.top, left: title.left - card.left, row: row.left - card.left };
+    });
+    expect(insets.top).toBeGreaterThan(6);
+    expect(insets.left).toBeGreaterThan(6);
+    expect(insets.row).toBeCloseTo(insets.left);
+  }
+});
