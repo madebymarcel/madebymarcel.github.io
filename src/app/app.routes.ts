@@ -29,6 +29,11 @@ export const routes: Routes = [
       import('./features/canoe-polo/canoe-polo-page').then((m) => m.CanoePoloPage),
   },
   {
+    path: 'projects/biped',
+    title: 'Biped robot | Made by Marcel',
+    loadComponent: () => import('./features/biped/biped-page').then((m) => m.BipedPage),
+  },
+  {
     path: 'lab',
     title: 'Lab | Made by Marcel',
     loadComponent: () => import('./features/lab/lab-page').then((m) => m.LabPage),

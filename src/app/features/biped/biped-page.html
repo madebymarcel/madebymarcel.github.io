@@ -1,0 +1,165 @@
+<section class="content-page ds-stack biped">
+  <h1>Biped robot</h1>
+  <div class="ds-card ds-stack">
+    <div class="stage">
+      @let pose = frame(); @let pan = camera(pose);
+      <svg
+        viewBox="0 0 3.6 1.95"
+        role="img"
+        aria-label="Side view of the biped robot on a level track"
+      >
+        <path class="floor" d="M 0 1.62 H 3.6 V 1.95 H 0 Z" />
+        <g [attr.transform]="'translate(' + pan + ' 1.62) scale(1 -1)'">
+          @for (mark of [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]; track mark) {
+          <path class="marker" [attr.d]="'M ' + mark + ' 0 v .09'" />
+          @if (mark === trackGoal) {
+          <path class="finish-line" [attr.d]="'M ' + mark + ' 0 v 1.5'" />
+          } } @for (leg of pose.legs; track $index) {
+          <g [class.near-leg]="$index === 1">
+            <polyline
+              class="link"
+              [attr.points]="leg.hip.x + ',' + leg.hip.y + ' ' + leg.knee.x + ',' + leg.knee.y + ' ' + leg.ankle.x + ',' + leg.ankle.y"
+            />
+            <line
+              class="foot"
+              [attr.x1]="leg.heel.x"
+              [attr.y1]="leg.heel.y"
+              [attr.x2]="leg.toe.x"
+              [attr.y2]="leg.toe.y"
+            />
+            <circle class="hinge" [attr.cx]="leg.knee.x" [attr.cy]="leg.knee.y" r=".044" />
+            <circle class="hinge" [attr.cx]="leg.ankle.x" [attr.cy]="leg.ankle.y" r=".044" />
+          </g>
+          }
+          <g
+            [attr.transform]="'translate(' + pose.torso.x + ' ' + pose.torso.y + ') rotate(' + (pose.torso.angle * 57.295779513) + ')'"
+          >
+            <rect class="torso" x="-.19" y="-.19" width=".38" height=".38" rx=".04" />
+            <path class="face" d="M .03 .06 h .08 M .07 .1 l .04 -.04 -.04 -.04" />
+            <circle class="hinge" cy="-.16" r=".05" />
+          </g>
+          @if (showSensors()) { @for (leg of pose.legs; track $index) {
+          <circle
+            class="contact"
+            [class.active]="pose.contacts[$index * 2]"
+            [attr.cx]="leg.heel.x"
+            [attr.cy]="leg.heel.y"
+            r=".025"
+          />
+          <circle
+            class="contact"
+            [class.active]="pose.contacts[$index * 2 + 1]"
+            [attr.cx]="leg.toe.x"
+            [attr.cy]="leg.toe.y"
+            r=".025"
+          />
+          } }
+        </g>
+      </svg>
+    </div>
+    <p>
+      Iteration {{ replayIteration() }} · {{ distance() | number: '1.2-2' }} m · {{ steps() }}
+      alternating steps
+    </p>
+    <p class="run-result" role="status">{{ finish() }}</p>
+    <div class="commands">
+      <button class="ds-button" type="button" (click)="replay('baseline')">Watch baseline</button>
+      <button class="ds-button" type="button" (click)="replay('best')" [disabled]="!best()">
+        Watch best
+      </button>
+      <button class="ds-button" type="button" (click)="togglePlayback()" [disabled]="!!finish()">
+        {{ playing() ? 'Pause replay' : 'Play replay' }}
+      </button>
+      <label>
+        Test start
+        <select [value]="trialIndex()" (change)="setTrial($event)">
+          @for (trial of trials; track $index) {
+          <option [value]="$index">{{ $index + 1 }}</option>
+          }
+        </select>
+      </label>
+      <label
+        ><input
+          type="checkbox"
+          [checked]="showSensors()"
+          (change)="showSensors.set(!showSensors())"
+        />
+        Show sensors</label
+      >
+    </div>
+    @if (showSensors()) {
+    <div class="sensor-readings">
+      @for (side of [0, 1]; track side) {
+      <p>
+        {{ side === 0 ? 'Far leg' : 'Near leg' }}: @for (name of jointNames; track name) { {{ name
+        }} {{ ($index === 1 ? -1 : 1) * (pose.angles[side * 3 + $index]) | number: '1.0-0' }}° · }
+        Heel {{ pose.contacts[side * 2] ? 'down' : 'up' }}, toe {{ pose.contacts[side * 2 + 1] ?
+        'down' : 'up' }}
+      </p>
+      }
+    </div>
+    }
+  </div>
+
+  <section class="ds-card ds-stack" aria-labelledby="biped-training">
+    <h2 id="biped-training">Training</h2>
+    <div class="commands">
+      <button class="ds-button" type="button" (click)="toggleTraining()" [disabled]="!ready()">
+        {{ running() ? 'Pause training' : 'Start training' }}
+      </button>
+      <button
+        class="ds-button"
+        type="button"
+        (click)="resetTraining()"
+        [disabled]="!ready() || !seedValid()"
+      >
+        Restart learning
+      </button>
+      <label>
+        Restart seed
+        <input
+          type="number"
+          min="1"
+          [max]="maxSeed"
+          step="1"
+          [value]="seedInput()"
+          (input)="setSeed($event)"
+        />
+      </label>
+    </div>
+    @if (trainingError()) {
+    <p role="status">{{ trainingError() }}</p>
+    } @if (latest(); as current) {
+    <dl class="metrics">
+      <div>
+        <dt>Iteration (seed {{ activeSeed() }})</dt>
+        <dd>{{ current.iteration }}</dd>
+      </div>
+      <div>
+        <dt>Median distance</dt>
+        <dd>{{ current.evaluation.medianDistance | number: '1.2-2' }} m</dd>
+      </div>
+      <div>
+        <dt>Baseline median</dt>
+        <dd>{{ baseline()?.evaluation?.medianDistance | number: '1.2-2' }} m</dd>
+      </div>
+      <div>
+        <dt>Latest passes</dt>
+        <dd>{{ current.evaluation.passes }} / {{ trials.length }}</dd>
+      </div>
+    </dl>
+    } @if (best(); as checkpoint) {
+    <p>
+      Best: iteration {{ checkpoint.iteration }} · {{ checkpoint.evaluation.passes }} / {{
+      trials.length }} passed · {{ checkpoint.evaluation.medianDistance | number: '1.2-2' }} m
+      median
+    </p>
+    }
+    <p>
+      Pass: finish a 12-second test upright, move at least {{ trackGoal }} m right with six
+      alternating steps, spend no more than 15% of the run airborne, and keep foot slide below a
+      quarter of the distance covered.
+    </p>
+    <p>Training runs in this tab. Reloading or leaving the project discards it.</p>
+  </section>
+</section>

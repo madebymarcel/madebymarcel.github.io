@@ -11,6 +11,11 @@ import { RouterLink } from '@angular/router';
         <p>Watch artificial athletes learn a sport through reinforcement learning and self-play.</p>
         <a class="ds-button" routerLink="/projects/canoe-polo">Explore canoe polo</a>
       </article>
+      <article class="ds-card ds-stack">
+        <h2>Biped robot</h2>
+        <p>Train a two-legged robot to walk using joint motors and foot sensors.</p>
+        <a class="ds-button" routerLink="/projects/biped">Explore biped robot</a>
+      </article>
     </section>
   `,
 })
