@@ -1,4 +1,4 @@
-import { assess, type Candidate, type Evaluation, type Stage } from './curriculum.mjs';
+import { assess, type Candidate, type Evaluation, type Stage } from './servo-search.mjs';
 
 export type EvaluationRequest = { id: number; stage: Stage; candidates: Candidate[] };
 export type EvaluationResponse = { id: number; evaluations: Evaluation[] };
