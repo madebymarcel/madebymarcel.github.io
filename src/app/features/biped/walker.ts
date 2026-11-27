@@ -34,13 +34,25 @@ export type Frame = {
   legs: { hip: Vec2Value; knee: Vec2Value; ankle: Vec2Value; toe: Vec2Value; heel: Vec2Value }[];
   contacts: Contacts;
   angles: number[];
+  tail?: { root: Vec2Value; tip: Vec2Value; angle: number; jointAngle: number };
 };
 export type Start = { tilt?: number; vx?: number; friction?: number; crouch?: number };
 export type Ground = { from: number; to: number; height: number };
 export const FLAT_GROUND: readonly Ground[] = [{ from: -100, to: 100, height: 0 }];
 type Collider = { x: number; y: number; halfWidth: number; halfHeight: number; density: number };
+export type TailMorphology = {
+  anchor: Vec2Value;
+  length: number;
+  halfHeight: number;
+  density: number;
+  limit: number;
+  maxTorque: number;
+  pitchGain: number;
+  velocityGain: number;
+};
 export type Morphology = {
   torso: readonly [Collider, ...Collider[]];
+  tail?: TailMorphology;
   hip: number;
   upper: number;
   lower: number;
@@ -89,6 +101,7 @@ function rotate(x: number, y: number, angle: number): Vec2 {
 export class Walker {
   readonly world = new World({ gravity: Vec2(0, -9.81), allowSleep: false });
   readonly torso: Body;
+  readonly tail?: { body: Body; joint: RevoluteJoint; length: number };
   readonly motors: Motor[] = [];
   readonly legs: { thigh: Body; shin: Body; foot: Body }[] = [];
   private readonly feet = new Map<Body, number>();
@@ -126,7 +139,7 @@ export class Walker {
   ) {
     this.ground = options.ground ?? FLAT_GROUND;
     this.morphology = options.morphology ?? BIPED;
-    const { hip: hipOffset, upper, lower, heel, toe, sole, neutral, torso } = this.morphology;
+    const { hip: hipOffset, upper, lower, heel, toe, sole, neutral, torso, tail } = this.morphology;
     for (const { from, to, height } of this.ground) {
       const depth = 0.5 + height;
       const body = this.world.createBody({ position: Vec2((from + to) / 2, height - depth / 2) });
@@ -157,7 +170,12 @@ export class Walker {
           halfHeight * Math.abs(Math.cos(tilt)),
       ),
     );
-    const minY = Math.min(...poses.map(({ lowest }) => lowest), bodyBottom);
+    const tailBottom = tail
+      ? rotate(tail.anchor.x - tail.length / 2, tail.anchor.y, tilt).y -
+        (tail.length / 2) * Math.abs(Math.sin(tilt)) -
+        tail.halfHeight * Math.abs(Math.cos(tilt))
+      : Infinity;
+    const minY = Math.min(...poses.map(({ lowest }) => lowest), bodyBottom, tailBottom);
     const floorOffset = 0.015 - minY;
     hip.y += floorOffset;
     const [core, ...extensions] = torso;
@@ -166,6 +184,30 @@ export class Walker {
     this.torso = this.body(Vec2(0, floorOffset), tilt, collider(core), core.density, start.vx ?? 0);
     for (const part of extensions) this.attach(this.torso, collider(part), part.density);
     this.torso.setLinearVelocity(Vec2(start.vx ?? 0, 0));
+
+    if (tail) {
+      const body = this.body(
+        this.torso.getWorldPoint(tail.anchor),
+        tilt,
+        Box(tail.length / 2, tail.halfHeight, Vec2(-tail.length / 2, 0)),
+        tail.density,
+        start.vx ?? 0,
+      );
+      const joint = new RevoluteJoint({
+        bodyA: this.torso,
+        bodyB: body,
+        localAnchorA: tail.anchor,
+        localAnchorB: Vec2(),
+        referenceAngle: 0,
+        lowerAngle: -tail.limit,
+        upperAngle: tail.limit,
+        enableLimit: true,
+        enableMotor: true,
+        maxMotorTorque: tail.maxTorque,
+      });
+      this.world.createJoint(joint);
+      this.tail = { body, joint, length: tail.length };
+    }
 
     for (let side = 0; side < 2; side++) {
       const { thighAngle, shinAngle, footAngle, knee, ankle } = poses[side];
@@ -295,6 +337,16 @@ export class Walker {
   }
 
   private stepWorld() {
+    if (this.tail && this.morphology.tail) {
+      const { joint } = this.tail;
+      const { pitchGain, velocityGain, limit } = this.morphology.tail;
+      const pitch = this.torso.getAngle();
+      const pitchRate = this.torso.getAngularVelocity();
+      // Accelerating the tail in the direction of body pitch generates an opposing
+      // reaction torque on the torso. The motor is internal, so there is no free external torque.
+      const target = clamp(pitchGain * pitch + velocityGain * pitchRate, -limit, limit);
+      joint.setMotorSpeed(clamp(14 * (target - joint.getJointAngle()), -4, 4));
+    }
     this.world.step(PHYSICS_DT, 10, 4);
   }
 
@@ -316,6 +368,11 @@ export class Walker {
       this.contacts = this.forces;
       this.slipDistance += this.slipSpeed * PHYSICS_DT;
       for (const { joint } of this.motors) {
+        effort +=
+          Math.abs(joint.getMotorTorque(1 / PHYSICS_DT) * joint.getJointSpeed()) * PHYSICS_DT;
+      }
+      if (this.tail) {
+        const { joint } = this.tail;
         effort +=
           Math.abs(joint.getMotorTorque(1 / PHYSICS_DT) * joint.getJointSpeed()) * PHYSICS_DT;
       }
@@ -397,6 +454,14 @@ export class Walker {
       })),
       contacts: [...this.contacts],
       angles: this.motors.map(({ joint }) => joint.getJointAngle() / radians),
+      ...(this.tail && {
+        tail: {
+          root: { ...this.tail.body.getPosition() },
+          tip: this.tail.body.getWorldPoint(Vec2(-this.tail.length, 0)),
+          angle: this.tail.body.getAngle(),
+          jointAngle: this.tail.joint.getJointAngle(),
+        },
+      }),
     };
   }
 }

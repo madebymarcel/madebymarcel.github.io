@@ -65,8 +65,25 @@
         <path class="thigh" [attr.d]="leg.thigh" />
       </g>
       }
+      <use class="rex-tail" href="trex.svg#trex-tail" [attr.transform]="tailTransform()" />
       <use href="trex.svg#trex-top" />
     </svg>
+    @if (side(); as rig) {
+    <svg
+      class="artwork side-rig"
+      viewBox="0 0 420 190"
+      role="img"
+      aria-label="Side-view physics rig showing tail counterbalance"
+    >
+      <path class="rig-ground" d="M 8 176 H 412" />
+      @for (leg of rig.legs; track $index) {
+      <polyline class="rig-leg" [attr.points]="leg" />
+      }
+      <polyline class="rig-tail" [attr.points]="rig.tail" />
+      <polyline class="rig-torso" [attr.points]="rig.torso" />
+    </svg>
+    <p class="ds-hint">Tail joint: {{ tailAngle().toFixed(1) }}° · pitch counterbalance</p>
+    }
     <p>
       Distance: {{ distance().toFixed(2) }} m · Alternating steps: {{ steps() }} @if
       (replayResult()) { · {{ replayResult() }} }

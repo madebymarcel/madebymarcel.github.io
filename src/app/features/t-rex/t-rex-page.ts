@@ -1,8 +1,8 @@
 import { Component, DestroyRef, inject, signal } from '@angular/core';
-import { type Checkpoint, type Practice } from '../biped/training';
+import { evaluate, type Checkpoint, type Practice } from '../biped/training';
 import { CONTROL_DT, type Frame } from '../biped/walker';
 import { REX_DEMO } from './t-rex-demo';
-import { rexReplay } from './t-rex-walker';
+import { rexReplay, rexWalker } from './t-rex-walker';
 import { type RexTrainingUpdate } from './t-rex.worker';
 
 function overhead(frame: Frame) {
@@ -24,6 +24,24 @@ function overhead(frame: Frame) {
   });
 }
 
+function sideView(frame: Frame) {
+  const x = (point: { x: number }) => 210 + (point.x - frame.torso.x) * 150;
+  const y = (point: { y: number }) => 176 - point.y * 150;
+  const point = (value: { x: number; y: number }) => x(value) + ',' + y(value);
+  const { torso, tail } = frame;
+  const nose = {
+    x: torso.x + 0.66 * Math.cos(torso.angle) - 0.13 * Math.sin(torso.angle),
+    y: torso.y + 0.66 * Math.sin(torso.angle) + 0.13 * Math.cos(torso.angle),
+  };
+  return {
+    torso: point(torso) + ' ' + point(nose),
+    tail: tail ? point(tail.root) + ' ' + point(tail.tip) : '',
+    legs: frame.legs.map(({ hip, knee, ankle, toe }) =>
+      [hip, knee, ankle, toe].map(point).join(' '),
+    ),
+  };
+}
+
 @Component({
   templateUrl: './t-rex-page.html',
   styleUrl: './t-rex-page.scss',
@@ -34,6 +52,9 @@ export class TRexPage {
   readonly iteration = signal(0);
   readonly best = signal<Checkpoint | undefined>(undefined);
   readonly limbs = signal<ReturnType<typeof overhead> | null>(null);
+  readonly side = signal<ReturnType<typeof sideView> | null>(null);
+  readonly tailTransform = signal('');
+  readonly tailAngle = signal(0);
   readonly distance = signal(0);
   readonly steps = signal(0);
   readonly replayResult = signal('');
@@ -76,7 +97,8 @@ export class TRexPage {
   }
 
   playDemo() {
-    this.play(REX_DEMO);
+    // The weights were learned on the old rigid-tail rig; rank trials on today's physics.
+    this.play({ ...REX_DEMO, evaluation: evaluate(REX_DEMO.policy, 'walk', rexWalker) });
   }
 
   playBest() {
@@ -122,7 +144,14 @@ export class TRexPage {
   }
 
   private publishPose(replay: Practice) {
-    this.limbs.set(overhead(replay.sim.frame()));
+    const frame = replay.sim.frame();
+    this.limbs.set(overhead(frame));
+    this.side.set(sideView(frame));
+    if (frame.tail) {
+      const projection = Math.max(0.05, Math.cos(frame.tail.angle));
+      this.tailTransform.set('translate(0 357) scale(1 ' + projection + ') translate(0 -357)');
+      this.tailAngle.set((frame.tail.jointAngle * 180) / Math.PI);
+    }
     this.distance.set(replay.sim.distance);
     this.steps.set(replay.sim.steps);
   }

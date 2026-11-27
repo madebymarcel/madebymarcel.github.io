@@ -38,6 +38,12 @@ test('a learned replay uses the overhead rig and keeps shins and feet behind thi
   const firstFoot = view.locator('.toe').first();
   const initialFoot = await firstFoot.getAttribute('transform');
   await expect(firstFoot).not.toHaveAttribute('transform', initialFoot);
+  const tail = view.locator('.rex-tail');
+  const initialTail = await tail.getAttribute('transform');
+  await expect(tail).not.toHaveAttribute('transform', initialTail);
+  const side = page.getByRole('img', { name: 'Side-view physics rig showing tail counterbalance' });
+  await expect(side).toBeVisible();
+  await expect(side.locator('.rig-tail')).not.toHaveAttribute('points', '');
   await page.getByRole('button', { name: 'Stop replay' }).click();
   await expect(page.getByRole('button', { name: 'Stop replay' })).toHaveCount(0);
 });
