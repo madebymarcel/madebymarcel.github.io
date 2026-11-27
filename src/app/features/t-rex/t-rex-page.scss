@@ -1,55 +1,286 @@
+.rex-workbench {
+  max-width: none;
+  padding-block: var(--space-3);
+  display: grid;
+  gap: var(--space-3);
+}
+
+.rex-workbench h1 {
+  font-size: var(--type-step-1);
+  letter-spacing: var(--tracking-tight);
+}
+
+.rex-workbench h2 {
+  font-size: var(--type-body);
+}
+
+.rex-title,
+.replay-caption,
+.progress-strip,
+.trial-description {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  min-inline-size: 0;
+}
+
+.rex-title .ds-hint,
+.replay-caption {
+  font-size: var(--type-small);
+}
+
+.training-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  align-items: end;
+}
+
+.skill-control {
+  display: grid;
+  gap: var(--space-1);
+  min-inline-size: 0;
+}
+
+.skill-control select {
+  padding-block: var(--space-2);
+  padding-inline: var(--space-3);
+}
+
+.headline-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-2) 0;
+  border-block: var(--border-width) solid var(--border);
+}
+
+.headline-metrics div {
+  min-inline-size: 0;
+  display: grid;
+  gap: var(--space-1);
+}
+
+.headline-metrics dt {
+  font-size: var(--type-small);
+  color: var(--muted);
+}
+
+.headline-metrics dd {
+  margin: 0;
+  font-size: var(--type-step-1);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--line-tight);
+}
+
+.viewer {
+  display: grid;
+  gap: var(--space-2);
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.projection {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-inline-size: 0;
+  overflow: hidden;
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-medium);
+  background: var(--surface);
+}
+
+.projection-label {
+  position: absolute;
+  inset: var(--space-2) auto auto var(--space-3);
+  color: var(--muted);
+  font-size: var(--type-small);
+  pointer-events: none;
+}
+
 .artwork {
   display: block;
-  inline-size: min(100%, 26.25rem);
-  block-size: auto;
-  margin-inline: auto;
+  inline-size: 100%;
+  block-size: clamp(5.5rem, 19dvh, 10rem);
 }
 
-.side-rig {
-  border: var(--border-width) solid var(--border);
-  border-radius: var(--radius-medium);
+@media (min-width: 42rem) {
+  .viewer {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .artwork {
+    block-size: clamp(6rem, 34dvh, 18rem);
+  }
+
+  .training-toolbar {
+    grid-template-columns: minmax(12rem, 20rem) auto;
+    justify-content: start;
+  }
 }
 
-.rex-metrics,
-.skill-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
-  gap: 0.75rem;
-  padding: 0;
-  margin: 0;
-}
-
-.rex-metrics div,
-.skill-grid li {
-  display: grid;
-  align-content: start;
-  gap: 0.25rem;
-  padding: 0.75rem;
-  border: var(--border-width) solid var(--border);
-  border-radius: var(--radius-medium);
-  min-inline-size: 0;
-}
-
-.rex-metrics dd {
-  margin: 0;
+.replay-caption {
+  color: var(--muted);
   font-variant-numeric: tabular-nums;
-  display: grid;
-  gap: 0.25rem;
 }
 
-.skill-grid li[aria-current='step'] {
-  outline: 2px solid currentColor;
-  outline-offset: 2px;
+.replay-caption strong {
+  color: var(--text);
 }
 
-.checkpoint-file,
-label {
+.replay-toolbar,
+.panel-nav,
+.trial-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.rex-workbench .ds-button {
+  padding-block: var(--space-2);
+  padding-inline: var(--space-3);
+  border-radius: var(--radius-medium);
+}
+
+.replay-toolbar .ds-button {
+  flex: 1 1 auto;
+}
+
+.progress-strip {
+  font-size: var(--type-small);
+  padding-block: var(--space-2);
+}
+
+.workbench-panels {
+  min-inline-size: 0;
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-medium);
+  background: var(--surface);
+}
+
+.panel-nav {
+  padding: var(--space-2);
+  border-block-end: var(--border-width) solid var(--border);
   display: grid;
-  gap: 0.25rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.panel-nav .ds-button {
+  min-inline-size: 0;
+  padding-inline: var(--space-1);
+}
+
+.panel-body {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3);
   min-inline-size: 0;
 }
 
-input,
-select {
+.trial-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.trial-choice {
+  display: grid;
+  gap: var(--space-1);
+  min-inline-size: 0;
+}
+
+.trial-choice span {
+  font-size: var(--type-small);
+}
+
+.trial-description {
+  font-size: var(--type-small);
+}
+
+.check-table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-size: var(--type-small);
+  font-variant-numeric: tabular-nums;
+  text-align: start;
+}
+
+.check-table :is(th, td) {
+  text-align: start;
+  padding: var(--space-2) var(--space-1);
+  border-block-end: var(--border-width) solid var(--border);
+  overflow-wrap: anywhere;
+}
+
+.check-table tbody th {
+  font-weight: var(--weight-regular);
+}
+
+.passed {
+  color: var(--success);
+  font-weight: var(--weight-semibold);
+}
+
+.failed {
+  color: var(--danger);
+  font-weight: var(--weight-semibold);
+}
+
+.record-list {
+  display: grid;
+  margin: 0;
+  gap: var(--space-1);
+  font-size: var(--type-small);
+}
+
+.record-list div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-block: var(--space-2);
+  border-block-end: var(--border-width) solid var(--border);
+}
+
+.record-list dd {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.setting {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-block-size: var(--target-size);
+}
+
+.checkpoint-file {
+  display: grid;
+  gap: var(--space-2);
+  min-inline-size: 0;
+}
+
+.checkpoint-file input {
   max-inline-size: 100%;
+}
+
+.sr-only {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (min-width: 42rem) and (max-height: 30rem) {
+  .artwork {
+    block-size: clamp(5rem, 27dvh, 12rem);
+  }
 }

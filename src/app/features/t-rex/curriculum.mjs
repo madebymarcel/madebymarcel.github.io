@@ -26,28 +26,118 @@ export function scenarios(stage) {
   ];
 }
 
-export function qualifies(stage, m) {
+function criterion(label, raw, threshold, operator, unit = '', scale = 1) {
+  const lower = operator === '>=' || operator === '>';
+  const inclusive = operator === '>=' || operator === '<=';
+  const gap = lower ? threshold - raw : raw - threshold;
+  const passed = inclusive ? gap <= 0 : gap < 0;
+  const deficit = passed ? 0 : Math.max(0.000001, gap / Math.max(0.01, Math.abs(threshold)));
+  return { label, value: raw * scale, limit: threshold * scale, operator, unit, passed, deficit };
+}
+
+// Qualification and the inspector share one source of truth. Scale only for display.
+export function trialChecks(stage, m) {
   const total = SECONDS[stage] * 120;
-  if (m.fell || m.ticks < total || m.stableTicks < total * 0.7) return false;
+  const checks = [
+    criterion('Falls', Number(m.fell), 0, '<='),
+    criterion('Duration', m.ticks, total, '>=', 's', 1 / 120),
+    criterion('Upright time', m.stableTicks, total * 0.7, '>=', 's', 1 / 120),
+  ];
   if (stage === 'balance' || stage === 'recover') {
-    return m.settledTicks >= total * 0.65 && m.pathDistance < 0.35;
+    return [
+      ...checks,
+      criterion('Settled time', m.settledTicks, total * 0.65, '>=', 's', 1 / 120),
+      criterion('Path distance', m.pathDistance, 0.35, '<', 'm'),
+    ];
   }
-  if (stage === 'shift') return m.shiftTicks > total * 0.35 && m.slip < 0.45;
-  if (m.slip > Math.max(0.35, m.distance * 0.25)) return false;
-  if (stage === 'step') return m.steps >= 3 && m.distance >= 0.45;
-  if (stage === 'walk') {
-    return m.steps >= 8 && m.distance >= 2.4 && m.flightTicks < total * 0.15;
+  if (stage === 'shift') {
+    return [
+      ...checks,
+      criterion('Weight transfer', m.shiftTicks, total * 0.35, '>', 's', 1 / 120),
+      criterion('Foot slip', m.slip, 0.45, '<', 'm'),
+    ];
   }
-  if (stage === 'run') {
-    return (
-      m.steps >= 8 &&
-      m.distance >= 6 &&
-      m.flights >= 4 &&
-      m.flightTicks < total * 0.55 &&
-      m.averageSpeed >= 0.75
+  checks.push(criterion('Foot slip', m.slip, Math.max(0.35, m.distance * 0.25), '<=', 'm'));
+  if (stage === 'step') {
+    return [
+      ...checks,
+      criterion('Alternating steps', m.steps, 3, '>='),
+      criterion('Forward distance', m.distance, 0.45, '>=', 'm'),
+    ];
+  }
+  if (stage === 'walk' || stage === 'run') {
+    checks.push(
+      criterion('Alternating steps', m.steps, 8, '>='),
+      criterion('Forward distance', m.distance, stage === 'walk' ? 2.4 : 6, '>=', 'm'),
+      criterion(
+        'Airborne time',
+        m.flightTicks,
+        total * (stage === 'walk' ? 0.15 : 0.55),
+        '<',
+        's',
+        1 / 120,
+      ),
     );
+    if (stage === 'run') {
+      checks.push(
+        criterion('Airborne strides', m.flights, 4, '>='),
+        criterion('Average speed', m.averageSpeed, 0.75, '>=', 'm/s'),
+      );
+    }
+    return checks;
   }
-  return m.steps >= 4 && m.distance > 1 && m.headingError / total < 0.3 && m.stoppingTicks >= 120;
+  return [
+    ...checks,
+    criterion('Alternating steps', m.steps, 4, '>='),
+    criterion('Forward distance', m.distance, 1, '>', 'm'),
+    criterion('Mean heading error', m.headingError / total, 0.3, '<', 'rad'),
+    criterion('Final settled time', m.stoppingTicks, 120, '>=', 's', 1 / 120),
+  ];
+}
+
+export function qualifies(stage, m) {
+  return trialChecks(stage, m).every((check) => check.passed);
+}
+
+function trialDeficit(stage, metrics) {
+  return trialChecks(stage, metrics).reduce((sum, check) => sum + check.deficit, 0);
+}
+
+export function evaluationDeficit(stage, evaluation) {
+  const gaps = evaluation.trials.map((m) => trialDeficit(stage, m));
+  return Math.max(...gaps) * 0.7 + gaps.reduce((sum, gap) => sum + gap, 0) * 0.1;
+}
+
+export const STAGNATION = 256;
+const POPULATION_LIMIT = 12;
+
+export function selectSkill(checkpoint, stage) {
+  if (!STAGES.includes(stage)) throw new Error('Unknown skill.');
+  return { ...checkpoint, stage };
+}
+
+export function skillProgress(checkpoint) {
+  return (
+    checkpoint.search?.[checkpoint.stage] ?? {
+      attempts: 0,
+      sinceImprovement: 0,
+      restarts: 0,
+      population: checkpoint.history
+        .filter((entry) => entry.stage === checkpoint.stage)
+        .slice(0, POPULATION_LIMIT),
+    }
+  );
+}
+
+export function seedFromEntry(checkpoint, entry) {
+  const selected = selectSkill(checkpoint, entry.stage);
+  return {
+    ...selected,
+    search: {
+      ...selected.search,
+      [entry.stage]: { ...skillProgress(selected), focus: entry },
+    },
+  };
 }
 
 function fitness(stage, m) {
@@ -94,6 +184,8 @@ export function emptyCheckpoint(seed = 536) {
     best: {},
     records: {},
     history: [],
+    search: {},
+    autoAdvance: false,
   };
 }
 
@@ -110,7 +202,7 @@ function seedPolicy(state, initial) {
 }
 
 // A wave uses the same parent throughout. Completion order and worker count do not alter learning.
-export function propose(checkpoint, initial) {
+export function legacyPropose(checkpoint, initial) {
   if (checkpoint.iteration >= MAX_ITERATION) throw new Error('Iteration limit reached.');
   const state = { ...checkpoint };
   const best = state.best[state.stage];
@@ -147,6 +239,112 @@ export function propose(checkpoint, initial) {
   return { rng: state.rng, candidates };
 }
 
+function transferPolicy(state, initial, gaitSeed) {
+  const index = STAGES.indexOf(state.stage);
+  for (let i = index - 1; i >= 0; i--) {
+    const parent = state.best[STAGES[i]];
+    if (parent) return parent.policy.slice();
+  }
+  return expandPolicy(index >= 3 ? gaitSeed : initial);
+}
+
+function mutate(state, policy, strength, probability) {
+  for (let k = 0; k < sensorDimension; k++) {
+    const axis = Math.floor(k / sensorCount);
+    const feature = k % sensorCount;
+    if (k < sensorDimension - 1 && axis >= 18 && axis % 2 === 0) continue;
+    if (
+      k < sensorDimension - 1 &&
+      (state.stage === 'balance' || state.stage === 'recover') &&
+      (feature === 7 || feature === 8)
+    )
+      continue;
+    if (random(state) < probability) {
+      policy[k] = Math.max(-24, Math.min(24, policy[k] + (random(state) - 0.5) * strength));
+    }
+  }
+  return policy;
+}
+
+// Eight deterministic proposals, alternating exploitation, competing parents and exploration.
+export function propose(checkpoint, initial, gaitSeed = initial) {
+  if (checkpoint.iteration >= MAX_ITERATION) throw new Error('Iteration limit reached.');
+  const state = { ...checkpoint };
+  const progress = skillProgress(state);
+  const best = state.best[state.stage];
+  const pool = progress.population;
+  const resumedPlateau =
+    !checkpoint.search?.[state.stage] && best && state.iteration - best.iteration >= STAGNATION;
+  const stagnating = Boolean(resumedPlateau) || progress.sinceImprovement >= STAGNATION;
+  const restart =
+    Boolean(resumedPlateau) || (stagnating && progress.sinceImprovement % STAGNATION < WAVE_SIZE);
+  const transfer = transferPolicy(state, initial, gaitSeed);
+  const candidates = [];
+  for (let i = 0; i < WAVE_SIZE; i++) {
+    const explorer = i >= (stagnating ? 5 : 7);
+    const alternative = pool.length ? pool[Math.floor(random(state) * pool.length)] : best;
+    const parent = progress.focus && i < 3 ? progress.focus : i < 3 ? best : alternative;
+    let policy = (explorer ? transfer : (parent?.policy ?? transfer)).slice();
+    const first = !best && i === 0 && !progress.focus;
+    const focused = progress.focus && i === 0;
+    if (!first && !focused) {
+      if (!explorer && i === 4 && best && alternative && alternative.iteration !== best.iteration) {
+        policy = policy.map((w, k) => (random(state) < 0.25 ? best.policy[k] : w));
+      }
+      const strength = explorer
+        ? restart
+          ? 3.2
+          : stagnating
+            ? 1.8
+            : 0.8
+        : [0.06, 0.18, 0.55, 0.24, 0.5, 0.9, 1.4, 1.8][i] * (stagnating ? 1.6 : 1);
+      const probability = explorer ? (stagnating ? 0.35 : 0.18) : i < 2 ? 0.06 : 0.13;
+      policy = mutate(state, policy, strength, probability);
+    }
+    candidates.push({ iteration: state.iteration + i + 1, policy });
+  }
+  return { rng: state.rng, candidates, restart };
+}
+
+function compare(a, b) {
+  const passes = b.evaluation.passes - a.evaluation.passes;
+  if (passes) return passes;
+  if (a.evaluation.passes !== 3) {
+    const deficit =
+      evaluationDeficit(a.stage, a.evaluation) - evaluationDeficit(b.stage, b.evaluation);
+    if (Math.abs(deficit) > 1e-9) return deficit;
+  }
+  return b.evaluation.score - a.evaluation.score;
+}
+
+function population(entries, champion) {
+  const unique = [...new Map(entries.map((entry) => [entry.iteration, entry])).values()];
+  const selected = new Map();
+  const add = (items) => {
+    for (const entry of items) selected.set(entry.iteration, entry);
+  };
+  if (champion) add([champion]);
+  add([...unique].sort(compare).slice(0, 4));
+  for (let index = 0; index < 3; index++) {
+    add(
+      [...unique]
+        .sort(
+          (a, b) =>
+            trialDeficit(a.stage, a.evaluation.trials[index]) -
+              trialDeficit(b.stage, b.evaluation.trials[index]) || compare(a, b),
+        )
+        .slice(0, 2),
+    );
+  }
+  const diversity = (entry) =>
+    entry.policy.reduce(
+      (sum, weight, index) => sum + (weight - (champion?.policy[index] ?? 0)) ** 2,
+      0,
+    );
+  add([...unique].sort((a, b) => diversity(b) - diversity(a)).slice(0, 2));
+  return [...selected.values()].slice(0, POPULATION_LIMIT);
+}
+
 function better(a, b) {
   return (
     !b ||
@@ -155,20 +353,35 @@ function better(a, b) {
   );
 }
 
-export function completeWave(checkpoint, wave, evaluations) {
+export function completeWave(checkpoint, wave, evaluations, legacy = false) {
   const state = {
     ...checkpoint,
     rng: wave.rng,
     best: { ...checkpoint.best },
     records: { ...checkpoint.records },
     history: [...checkpoint.history],
+    search: { ...checkpoint.search },
   };
+  const prior = skillProgress(checkpoint);
+  const progress = {
+    ...prior,
+    attempts: prior.attempts,
+    sinceImprovement: prior.sinceImprovement,
+    restarts: prior.restarts + Number(Boolean(wave.restart)),
+  };
+  delete progress.focus;
+  const entries = wave.restart ? [] : [...prior.population];
   for (const [index, candidate] of wave.candidates.entries()) {
+    progress.attempts++;
+    progress.sinceImprovement++;
     const evaluation = evaluations[index];
     const entry = { ...candidate, stage: state.stage, evaluation };
     state.iteration = candidate.iteration;
     state.physicsSteps += evaluation.trials.reduce((sum, m) => sum + m.ticks, 0);
-    if (better(entry, state.best[state.stage])) {
+    entries.push(entry);
+    const champion = state.best[state.stage];
+    if (legacy ? better(entry, champion) : !champion || compare(entry, champion) < 0) {
+      progress.sinceImprovement = 0;
       state.best[state.stage] = entry;
       state.history.unshift(entry);
       state.history.length = Math.min(state.history.length, HISTORY_LIMIT);
@@ -181,6 +394,8 @@ export function completeWave(checkpoint, wave, evaluations) {
       }
     }
   }
+  progress.population = legacy ? [] : population(entries, state.best[state.stage]);
+  state.search[state.stage] = progress;
   return state;
 }
 
@@ -196,11 +411,11 @@ function recordValues(m) {
 }
 
 export function nextStage(checkpoint) {
-  const index = STAGES.indexOf(checkpoint.stage);
-  if (index === STAGES.length - 1 || checkpoint.best[checkpoint.stage]?.evaluation.passes !== 3) {
-    return checkpoint;
-  }
-  return { ...checkpoint, stage: STAGES[index + 1] };
+  if (checkpoint.best[checkpoint.stage]?.evaluation.passes !== 3) return checkpoint;
+  const next = STAGES.slice(STAGES.indexOf(checkpoint.stage) + 1).find(
+    (stage) => checkpoint.best[stage]?.evaluation.passes !== 3,
+  );
+  return next ? selectSkill(checkpoint, next) : checkpoint;
 }
 
 const count = (x) => Number.isSafeInteger(x) && x >= 0;
@@ -298,9 +513,26 @@ export function parseCheckpoint(source) {
         record.trialIndex < 3 &&
         record.value === recordValues(record.entry.evaluation.trials[record.trialIndex])[key],
     ) ||
-    STAGES.slice(0, STAGES.indexOf(s.stage)).some(
-      (stage) => s.best[stage]?.evaluation.passes !== 3,
-    ) ||
+    (s.autoAdvance !== undefined && typeof s.autoAdvance !== 'boolean') ||
+    (s.search !== undefined &&
+      (!object(s.search) ||
+        !Object.entries(s.search).every(
+          ([stage, p]) =>
+            STAGES.includes(stage) &&
+            object(p) &&
+            count(p.attempts) &&
+            p.attempts <= s.iteration &&
+            count(p.sinceImprovement) &&
+            p.sinceImprovement <= p.attempts &&
+            count(p.restarts) &&
+            p.restarts <= p.attempts &&
+            Array.isArray(p.population) &&
+            p.population.length <= POPULATION_LIMIT &&
+            p.population.every((e) => e?.stage === stage && validEntry(e, s.iteration)) &&
+            (p.focus === undefined ||
+              (p.focus?.stage === stage && validEntry(p.focus, s.iteration))),
+        ) ||
+        Object.values(s.search).reduce((sum, p) => sum + p.attempts, 0) > s.iteration)) ||
     new Set(s.history.map((entry) => entry.iteration)).size !== s.history.length
   ) {
     throw new Error('Invalid or incompatible T. rex checkpoint.');

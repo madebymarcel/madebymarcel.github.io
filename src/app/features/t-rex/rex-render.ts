@@ -51,7 +51,8 @@ export function project(bones: Segment[], side: boolean) {
       const dx = after[0] - before[0];
       const dy = after[1] - before[1];
       const length = Math.hypot(dx, dy) || 1;
-      const width = i === centers.length - 1 ? 1.6 : tail[i].width * 72.5;
+      const width =
+        i === centers.length - 1 ? 1.6 : side ? tail[i].depth * 45 : tail[i].width * 72.5;
       return [center[0] - (sign * dy * width) / length, center[1] + (sign * dx * width) / length];
     });
   return {

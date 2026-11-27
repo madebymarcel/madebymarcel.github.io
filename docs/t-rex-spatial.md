@@ -62,3 +62,39 @@ node scripts/rex-locomotion.mjs 100 rex-training.json
 The output file can be imported into the browser. Rerunning the command resumes it.
 Candidate rates now refer to three trials per candidate, so compare physics steps per second
 rather than comparing the new candidate counter directly with the legacy single-trial trainer.
+
+## Interactive workbench and adaptive search
+
+Each skill can be selected directly. The current wave finishes before a requested
+skill switch takes effect. A skill keeps its own champion, competing policies,
+and improvement counters. Automatic progression is opt-in. Manual training stops
+when a previously incomplete skill passes all three scenarios; starting it again
+refines the completed skill. Selecting a historical policy supplies a new search
+seed without replacing the champion.
+
+The inspector and optimizer use the same qualification criteria and thresholds.
+It displays the exact measurements for all three trial conditions, and each
+condition can be replayed independently. The main viewer shows both projections
+and optionally replays new best policies while the workers continue training.
+This is replay of a completed candidate, not the worker's live simulation.
+
+Search retains up to twelve parents per skill, including overall leaders,
+scenario specialists and diverse policies. Candidates alternate local mutations,
+other parents, recombination and broader exploration. Within the same pass count,
+the worst and mean normalized qualification deficits take priority over fitness.
+After 256 candidates without improvement, the optimizer increases exploration
+and periodically refreshes the competing population while keeping the champion.
+Earlier checkpoint files remain importable; per-skill statistics start with the
+new implementation, because old checkpoints do not record exact per-skill counts.
+
+To compare optimizers at the same candidate budget, initial state and seed:
+
+```sh
+node scripts/rex-locomotion-benchmark.mjs both 3504 536
+```
+
+The benchmark keeps balance selected even after success and reports first passing
+candidate, best pass count, deficit, elapsed time and physics steps per second.
+It does not lower the qualification thresholds. Walking and running still require
+their own successful physical trials; a benchmark or passing CI is not evidence
+that those skills have been mastered.
