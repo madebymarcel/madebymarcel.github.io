@@ -22,6 +22,8 @@ export function rewardDelta(stage, sample) {
     upright,
     settled,
     lift,
+    clearanceProgress = 0,
+    swingProgress = 0,
     step,
     flight,
     shift,
@@ -47,6 +49,8 @@ export function rewardDelta(stage, sample) {
     clamp(dx, -maxSpeed * dt, maxSpeed * dt) +
     0.24 * step +
     0.06 * lift +
+    2 * clearanceProgress +
+    0.6 * swingProgress +
     0.035 * upright * dt -
     cost -
     (fell ? 0.8 : 0);
@@ -58,7 +62,7 @@ export function rewardDelta(stage, sample) {
 export function trial(policy, options = {}) {
   if (policy.length !== POLICY_SIZE) throw new Error('Invalid servo policy.');
   const stage = options.stage ?? 'walk';
-  const rig = createServoRig(options);
+  const rig = createServoRig({ ...options, startSplit: options.startSplit ?? 0.045 });
   const { dt } = rig;
   const duration = options.seconds ?? 8;
   const limit = Math.round(duration / dt);
@@ -102,6 +106,8 @@ export function trial(policy, options = {}) {
   const footX = feet.map((f) => f.position.x);
   const footZ = feet.map((f) => f.position.z);
   const landingX = feet.map((f) => f.position.x);
+  const swingClearance = [0, 0];
+  const swingForward = [0, 0];
 
   function advance() {
     if (fell || ticks >= limit) return;
@@ -128,6 +134,8 @@ export function trial(policy, options = {}) {
     const vertical = trunk.vectorToWorldFrame(rig.up);
     fell = trunk.position.y < 0.6 || vertical.y < 0.55 || bodyContact;
     let gainedLift = 0;
+    let gainedClearance = 0;
+    let gainedForward = 0;
     let gainedStep = 0;
     let gainedFlight = 0;
     let gainedSlip = 0;
@@ -139,6 +147,15 @@ export function trial(policy, options = {}) {
       const clearance = Math.max(0, foot.aabb.lowerBound.y);
       if (!fell && established[i] && !next[i] && next[other]) {
         maxClearance = Math.max(maxClearance, clearance);
+        if (i !== lastLanded) {
+          const height = Math.min(0.08, clearance);
+          const forward = clamp(foot.position.x - landingX[other], 0, 0.2);
+          gainedClearance += Math.max(0, height - swingClearance[i]);
+          gainedForward +=
+            Math.max(0, forward - swingForward[i]) * Math.min(1, clearance / 0.025);
+          swingClearance[i] = Math.max(swingClearance[i], height);
+          swingForward[i] = Math.max(swingForward[i], forward);
+        }
         if (clearance >= 0.025 && !lifted[i]) {
           lifted[i] = true;
           gainedLift++;
@@ -153,6 +170,8 @@ export function trial(policy, options = {}) {
           lastLanded = i;
         }
         lifted[i] = false;
+        swingClearance[i] = 0;
+        swingForward[i] = 0;
         established[i] = true;
         landingX[i] = foot.position.x;
       }
@@ -227,6 +246,8 @@ export function trial(policy, options = {}) {
       upright: fell ? 0 : Math.max(0, vertical.y),
       settled,
       lift: gainedLift,
+      clearanceProgress: gainedClearance,
+      swingProgress: gainedForward,
       step: gainedStep,
       flight: gainedFlight,
       shift: shifted ? dt : 0,

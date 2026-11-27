@@ -64,6 +64,7 @@ export function propose(checkpoint) {
   const state = { ...checkpoint };
   const skill = skillState(state);
   const centre = skill.weights;
+  const noise = skill.generations === 0 ? 0.25 : 0.08;
   const directions = [];
   const candidates = [];
   for (let i = 0; i < DIRECTIONS; i++) {
@@ -72,7 +73,7 @@ export function propose(checkpoint) {
     for (const sign of [1, -1]) {
       candidates.push({
         iteration: state.iteration + candidates.length + 1,
-        policy: centre.map((w, j) => clamp(w + sign * 0.08 * direction[j], -8, 8)),
+        policy: centre.map((w, j) => clamp(w + sign * noise * direction[j], -8, 8)),
       });
     }
   }

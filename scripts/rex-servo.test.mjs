@@ -71,6 +71,7 @@ test('reward makes a partial forward step valuable without qualifying a fall', (
     stopped: 0,
   };
   assert.ok(rewardDelta('walk', { ...sample, lift: 1, step: 1 }) > rewardDelta('walk', sample));
+  assert.ok(rewardDelta('walk', { ...sample, clearanceProgress: 0.01 }) > rewardDelta('walk', sample));
   assert.equal(rewardDelta('walk', { ...sample, fell: true }) - rewardDelta('walk', sample), -0.8);
   assert.equal(
     qualifies('walk', {
@@ -110,4 +111,55 @@ test('normal-ground evaluation, symmetric updates, independent skills and determ
     () => parseCheckpoint(JSON.stringify({ ...next, format: 'trex-locomotion-v2' })),
     /different controller/,
   );
+});
+
+test('the asymmetric start preserves all physical joint anchors and ground clearance', () => {
+  const rig = createServoRig({ startSplit: 0.045 });
+  for (const c of rig.world.constraints) {
+    if (!c.pivotA || !c.pivotB) continue;
+    const a = c.bodyA.pointToWorldFrame(c.pivotA);
+    const b = c.bodyB.pointToWorldFrame(c.pivotB);
+    assert.ok(a.distanceTo(b) < 1e-9);
+  }
+  for (const { body, name } of rig.bones) {
+    if (!name.startsWith('toes')) continue;
+    body.updateAABB();
+    assert.ok(body.aabb.lowerBound.y >= 0.0049);
+  }
+  assert.ok(Math.abs(rig.observeJoints()[8].angle.z - 0.045) < 1e-9);
+});
+
+test('real servos can lift a foot while the opposite foot supports the rig', () => {
+  const rig = createServoRig();
+  const targets = Array(32).fill(0);
+  const feet = rig.bones.filter((b) => b.name.startsWith('toes')).map((b) => b.body);
+  let planted = false;
+  let clearance = 0;
+  let forward = 0;
+  for (let i = 0; i < 100; i++) {
+    // A diagnostic joint command, never used by the learned policy.
+    if (i >= 16) {
+      targets[17] = 0.5;
+      targets[19] = -0.6;
+      targets[21] = 0.4;
+    }
+    rig.drive(targets);
+    const loaded = feet.map((foot) =>
+      rig.world.contacts.some(
+        (c) =>
+          ((c.bi === rig.ground && c.bj === foot) || (c.bj === rig.ground && c.bi === foot)) &&
+          c.multiplier > 0.01,
+      ),
+    );
+    if (loaded[0]) planted = true;
+    feet[0].updateAABB();
+    const upright = rig.trunk.body.vectorToWorldFrame(rig.up).y;
+    if (planted && !loaded[0] && loaded[1] && upright > 0.55 && rig.trunk.body.position.y > 0.6) {
+      clearance = Math.max(clearance, feet[0].aabb.lowerBound.y);
+      forward = Math.max(forward, feet[0].position.x - feet[1].position.x);
+    }
+    if (upright < 0.55 || rig.trunk.body.position.y < 0.6) break;
+  }
+  assert.ok(clearance > 0.025, 'one sole clears the ground while the other is loaded');
+  assert.ok(forward > 0.05, 'the swinging foot can move ahead of the supporting foot');
 });

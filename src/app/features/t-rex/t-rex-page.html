@@ -187,7 +187,7 @@
       class="details-toggle ds-button ds-button--secondary"
       type="button"
       [attr.aria-expanded]="detailsOpen()"
-      aria-controls="rex-details"
+      [attr.aria-controls]="detailsOpen() ? 'rex-details' : null"
       (click)="detailsOpen.set(!detailsOpen())"
     >
       Training details <span aria-hidden="true">{{ detailsOpen() ? '−' : '+' }}</span>

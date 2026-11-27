@@ -17,11 +17,14 @@ and torque impulse. There is no gait clock, external propulsion or predefined
 animation. A zero-weight policy is an untrained baseline, not a standing policy.
 
 Each skill starts independently on normal ground (friction 0.85, no initial
-lateral disturbance). Search uses symmetric perturbations of a centre policy
+lateral disturbance). The initial stance has a 0.045 rad left/right split,
+like the original biped, with unchanged joint anchors and level soles. Search uses symmetric perturbations of a centre policy
 and normalized reward differences, following the original biped experiment.
 Twelve candidates per generation run in workers. Dense rewards distinguish
 forward displacement, supported foot lifts, alternating forward landings,
-sliding, energy use, airtime and falls. Strict goal thresholds are separate
+sliding, energy use, airtime and falls. Incremental clearance and forward swing
+credit are bounded within each supported swing. The first generation explores
+more widely; subsequent generations use the biped's 0.08 perturbation scale. Strict goal thresholds are separate
 from the reward; a fall does not qualify. Robustness tests are deliberately
 deferred until a basic gait has been demonstrated.
 
