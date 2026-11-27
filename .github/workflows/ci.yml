@@ -68,8 +68,11 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     permissions:
       contents: read
+      actions: read
       pages: write
       id-token: write
+    env:
+      PAGES_ARTIFACT_NAME: github-pages-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -81,8 +84,35 @@ jobs:
       - run: npm run build
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
+        id: pages-artifact
         with:
+          name: ${{ env.PAGES_ARTIFACT_NAME }}
           path: dist/portfolio/browser
+      - name: Wait for Pages artifact availability
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PAGES_ARTIFACT_ID: ${{ steps.pages-artifact.outputs.artifact_id }}
+        run: |
+          # Artifact upload and artifact listing can become consistent at different times.
+          # Match the exact artifact ID and name; a retry must not pick up a previous attempt.
+          for attempt in {1..12}; do
+            if artifact_id="$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" \
+              -f name="$PAGES_ARTIFACT_NAME" \
+              --jq '.artifacts | map(select(.expired == false)) | if length == 1 then .[0].id else empty end')" \
+              && [[ -n "$PAGES_ARTIFACT_ID" && "$artifact_id" == "$PAGES_ARTIFACT_ID" ]]; then
+              echo "Pages artifact $artifact_id is available."
+              # Allow the Pages action's artifact service to converge as well.
+              sleep 5
+              exit 0
+            fi
+            echo "Pages artifact not yet available (attempt $attempt of 12)."
+            sleep 5
+          done
+          echo "::error::Uploaded Pages artifact did not become available."
+          exit 1
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v5
+        with:
+          artifact_name: ${{ env.PAGES_ARTIFACT_NAME }}
