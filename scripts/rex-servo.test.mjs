@@ -42,9 +42,7 @@ test('feedback controller has no clock and responds to asymmetric foot contact',
   const p = neutralPolicy();
   assert.equal(p.length, POLICY_SIZE);
   p[12] = 1;
-  assert.ok(
-    targetsFor(rig, neutralPolicy(), [true, false], 0.65, 0, [1, 0]).every((x) => x === 0),
-  );
+  assert.ok(targetsFor(rig, neutralPolicy(), [true, false], 0.65, 0, [1, 0]).every((x) => x === 0));
   const a = targetsFor(rig, p, [true, false], 0.65, 0, [1, 0]);
   const b = targetsFor(rig, p, [false, true], 0.65, 0, [0, 1]);
   assert.equal(a[17], b[25]);
@@ -70,7 +68,9 @@ test('reward makes a partial forward step valuable without qualifying a fall', (
     stopped: 0,
   };
   assert.ok(rewardDelta('walk', { ...sample, lift: 1, step: 1 }) > rewardDelta('walk', sample));
-  assert.ok(rewardDelta('walk', { ...sample, clearanceProgress: 0.01 }) > rewardDelta('walk', sample));
+  assert.ok(
+    rewardDelta('walk', { ...sample, clearanceProgress: 0.01 }) > rewardDelta('walk', sample),
+  );
   assert.equal(rewardDelta('walk', { ...sample, fell: true }) - rewardDelta('walk', sample), -0.8);
   assert.equal(
     qualifies('walk', {

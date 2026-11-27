@@ -62,7 +62,9 @@ export function createServoRig(options = {}) {
     for (let side = 0; side < 2; side++) {
       const index = 8 + 4 * side;
       const hip = rig.joints[index];
-      const hipConstraint = rig.world.constraints.find((c) => c.bodyA === hip.a && c.bodyB === hip.b);
+      const hipConstraint = rig.world.constraints.find(
+        (c) => c.bodyA === hip.a && c.bodyB === hip.b,
+      );
       const pivot = hip.a.pointToWorldFrame(hipConstraint.pivotA);
       const rotation = new Quaternion().setFromAxisAngle(
         axis,
@@ -70,7 +72,9 @@ export function createServoRig(options = {}) {
       );
       for (let i = index; i < index + 4; i++) rotateAbout(rig.joints[i].b, pivot, rotation);
       const toe = rig.joints[index + 3];
-      const toeConstraint = rig.world.constraints.find((c) => c.bodyA === toe.a && c.bodyB === toe.b);
+      const toeConstraint = rig.world.constraints.find(
+        (c) => c.bodyA === toe.a && c.bodyB === toe.b,
+      );
       rotateAbout(toe.b, toe.b.pointToWorldFrame(toeConstraint.pivotB), rotation.inverse());
     }
     const feet = rig.bones.filter((bone) => bone.name.startsWith('toes')).map((bone) => bone.body);

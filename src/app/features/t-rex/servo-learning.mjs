@@ -151,8 +151,7 @@ export function trial(policy, options = {}) {
           const height = Math.min(0.08, clearance);
           const forward = clamp(foot.position.x - landingX[other], 0, 0.2);
           gainedClearance += Math.max(0, height - swingClearance[i]);
-          gainedForward +=
-            Math.max(0, forward - swingForward[i]) * Math.min(1, clearance / 0.025);
+          gainedForward += Math.max(0, forward - swingForward[i]) * Math.min(1, clearance / 0.025);
           swingClearance[i] = Math.max(swingClearance[i], height);
           swingForward[i] = Math.max(swingForward[i], forward);
         }
