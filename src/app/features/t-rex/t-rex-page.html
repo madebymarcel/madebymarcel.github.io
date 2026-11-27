@@ -1,181 +1,41 @@
-<section class="content-page ds-stack">
-  <h1>T. rex</h1>
-  <p>Learn to balance, walk and run with a physical skeleton and a persistent locomotion policy.</p>
-  <div class="ds-card ds-stack">
-    <h2>Training</h2>
-    <div class="ds-cluster">
-      <button
-        class="ds-button"
-        type="button"
-        (click)="toggleTraining()"
-        [disabled]="!ready() || (busy() && !training())"
-      >
-        {{ training() ? 'Pause training' : busy() ? 'Finishing batch' : 'Start training' }}
-      </button>
-      <button
-        class="ds-button ds-button--secondary"
-        type="button"
-        (click)="exportTraining()"
-        [disabled]="!ready()"
-      >
-        Export checkpoint
-      </button>
-      <label class="checkpoint-file">
-        Import checkpoint
-        <input
-          type="file"
-          accept=".json,application/json"
-          (change)="importTraining($event)"
-          [disabled]="!ready() || training() || busy()"
-        />
-      </label>
-      <button
-        class="ds-button ds-button--secondary"
-        type="button"
-        (click)="resetTraining()"
-        [disabled]="!ready() || training() || busy()"
-      >
-        Reset training
-      </button>
-    </div>
-    <p role="status">{{ storageStatus() }}</p>
-    @if (error()) {
-    <p role="alert">{{ error() }}</p>
-    }
-    <p>Current skill: <strong>{{ labels[state().stage] }}</strong></p>
-    <dl class="rex-metrics">
-      <div>
-        <dt>Candidates evaluated</dt>
-        <dd data-testid="rex-iterations">{{ state().iteration }}</dd>
-      </div>
-      <div>
-        <dt>Candidates/s (last measurement)</dt>
-        <dd>{{ candidatesPerSecond() | number: '1.1-1' }}</dd>
-      </div>
-      <div>
-        <dt>Physics steps/s (last measurement)</dt>
-        <dd>{{ stepsPerSecond() | number: '1.0-0' }}</dd>
-      </div>
-      <div>
-        <dt>Physics steps</dt>
-        <dd>{{ state().physicsSteps | number: '1.0-0' }}</dd>
-      </div>
-      <div>
-        <dt>Workers</dt>
-        <dd>{{ cores() }}</dd>
-      </div>
-      <div>
-        <dt>Best current fitness</dt>
-        <dd>{{ currentBest() ? (currentBest()?.evaluation?.score | number: '1.2-2') : '—' }}</dd>
-      </div>
-    </dl>
-    <h3>Curriculum</h3>
-    <ol class="skill-grid">
-      @for (stage of stages; track stage) { @let entry = state().best[stage];
-      <li [attr.aria-current]="state().stage === stage ? 'step' : null">
-        <strong>{{ labels[stage] }}</strong>
-        <span>{{ entry?.evaluation?.passes ?? 0 }}/3 trials passed</span>
-        @if (entry) {
-        <button class="ds-button ds-button--secondary" type="button" (click)="replayEntry(entry)">
-          Replay {{ labels[stage] }}
-        </button>
-        }
-      </li>
-      }
-    </ol>
-    <p class="ds-hint">
-      Each candidate runs three trials. All must pass before the next skill unlocks.
-    </p>
-    <h3>Personal records</h3>
-    <dl class="rex-metrics">
-      @for (record of records; track record.key) { @let saved = state().records[record.key];
-      <div>
-        <dt>{{ record.name }}</dt>
-        <dd>
-          @if (saved) {
-          <span>{{ saved.value | number: '1.0-2' }} {{ record.unit }}</span>
-          <button
-            class="ds-button ds-button--secondary"
-            type="button"
-            (click)="watchRecord(record.key)"
-            [attr.aria-label]="'Replay ' + record.name"
-          >
-            Replay
-          </button>
-          } @else { — }
-        </dd>
-      </div>
-      }
-    </dl>
-    <h3>Checkpoint history</h3>
-    <label>
-      Choose a previous improvement
-      <select [value]="selected()" (change)="selectHistory($event)">
-        <option value="0">Select checkpoint</option>
-        @for (entry of history(); track entry.iteration) {
-        <option [value]="entry.iteration">
-          #{{ entry.iteration }} · {{ labels[entry.stage] }} · {{ entry.evaluation.passes }}/3
-          passed · {{ entry.evaluation.score | number: '1.2-2' }}
-        </option>
+<section class="content-page rex-workbench">
+  <div class="rex-title">
+    <h1>T. rex</h1>
+    <span class="ds-hint">{{ storageStatus() }}</span>
+  </div>
+  <div class="training-toolbar">
+    <label class="skill-control">
+      <span class="ds-hint">Training skill</span>
+      <select class="ds-input" [value]="chosenSkill()" (change)="chooseSkill($event)" [disabled]="!ready()">
+        @for (stage of stages; track stage) {
+        <option [value]="stage">{{ labels[stage] }} · {{ state().best[stage]?.evaluation?.passes ?? 0 }}/3</option>
         }
       </select>
     </label>
-    @if (selectedEntry(); as entry) {
-    <div class="ds-cluster">
-      <button class="ds-button ds-button--secondary" type="button" (click)="replayEntry(entry)">
-        Watch checkpoint
-      </button>
-      <button
-        class="ds-button ds-button--secondary"
-        type="button"
-        (click)="resumeFrom(entry)"
-        [disabled]="training() || busy()"
-      >
-        Resume from checkpoint
-      </button>
-    </div>
-    }
-    <p class="ds-hint">
-      The latest 40 fitness improvements and all personal records are saved locally. Export a
-      checkpoint for backup or training on another device.
-    </p>
+    <button class="ds-button" type="button" (click)="toggleTraining()" [disabled]="!ready() || (busy() && !training())">
+      {{ training() ? 'Pause training' : busy() ? 'Finishing batch' : 'Start training' }}
+    </button>
   </div>
-  <div class="ds-card ds-stack">
-    <h2>Physical replay</h2>
-    <div class="ds-cluster">
-      <button class="ds-button ds-button--secondary" type="button" (click)="play()">
-        Watch learned demo
-      </button>
-      <button
-        class="ds-button ds-button--secondary"
-        type="button"
-        (click)="play(standingPolicy, 'balance')"
-      >
-        Watch balance test
-      </button>
-      <button
-        class="ds-button ds-button--secondary"
-        type="button"
-        [disabled]="!best()"
-        (click)="replayBest()"
-      >
-        Watch your best
-      </button>
-      <button
-        class="ds-button ds-button--secondary"
-        type="button"
-        [attr.aria-pressed]="debug()"
-        (click)="debug.set(!debug())"
-      >
-        Show physics skeleton
-      </button>
-      @if (playing()) {
-      <button class="ds-button" type="button" (click)="stopReplay()">Stop replay</button>
-      }
+  <dl class="headline-metrics">
+    <div>
+      <dt>Candidates</dt>
+      <dd data-testid="rex-iterations">{{ state().iteration }}</dd>
     </div>
-    <svg
+    <div>
+      <dt>Trials passed</dt>
+      <dd data-testid="rex-passes">{{ currentBest()?.evaluation?.passes ?? 0 }}/3</dd>
+    </div>
+    <div>
+      <dt>Candidates/s</dt>
+      <dd>{{ candidatesPerSecond() | number: '1.1-1' }}</dd>
+    </div>
+  </dl>
+  <div class="viewer" aria-label="Physical replay">
+    <div class="projection">
+      <span class="projection-label">Top</span>
+      <svg
       class="artwork"
-      viewBox="0 0 420 650"
+      viewBox="0 0 650 260"
       role="img"
       aria-label="Tyrannosaurus rex seen from above"
     >
@@ -195,6 +55,7 @@
           <stop offset="1" stop-color="#54734e" />
         </linearGradient>
       </defs>
+      <g transform="translate(650 -80) rotate(90)">
       <rect width="420" height="650" fill="url(#rex-track)" />
       @if (!debug()) {
       <path
@@ -218,8 +79,12 @@
       <circle [attr.cx]="eye[0]" [attr.cy]="eye[1]" r="3.4" fill="#263524" />
       <circle [attr.cx]="eye[0]" [attr.cy]="eye[1]" r="1.7" fill="#e0bf70" />
       } } }
+      </g>
     </svg>
-    <svg
+    </div>
+    <div class="projection">
+      <span class="projection-label">Side</span>
+      <svg
       class="artwork side-rig"
       viewBox="0 0 420 210"
       role="img"
@@ -236,6 +101,128 @@
       />
       }
     </svg>
-    <p>{{ status() }}</p>
+    </div>
+  </div>
+  <div class="replay-caption">
+    <strong>{{ replayLabel() }}</strong>
+    <span>{{ status() }}</span>
+  </div>
+  <div class="replay-toolbar">
+    <button class="ds-button ds-button--secondary" type="button" [disabled]="!best()" (click)="replayBest()">Watch your best</button>
+    <button class="ds-button ds-button--secondary" type="button" [attr.aria-pressed]="debug()" (click)="debug.set(!debug())">Skeleton<span class="sr-only">: show physics skeleton</span></button>
+    <button class="ds-button ds-button--secondary" type="button" [disabled]="!playing() && !followBest()" (click)="stopWatching()">Stop replay</button>
+  </div>
+  @if (error()) {
+  <p class="ds-error" role="alert">{{ error() }}</p>
+  }
+  <div class="progress-strip">
+    <strong>{{ trainingMessage() }}</strong>
+    <span class="ds-hint">{{ progress().sinceImprovement }} candidates since improvement · {{ progress().attempts }} tracked for this skill</span>
+  </div>
+  <div class="workbench-panels">
+    <div class="panel-nav" role="group" aria-label="Training details">
+      @for (item of panels; track item) {
+      <button type="button" class="ds-button ds-button--secondary" [attr.aria-pressed]="panel() === item" (click)="panel.set(item)">{{ panelLabels[item] }}</button>
+      }
+    </div>
+    <div class="panel-body">
+      @switch (panel()) {
+        @case ('trials') {
+          <h2>{{ labels[state().stage] }} trials</h2>
+          <div class="trial-list" role="group" aria-label="Trial scenario">
+            @for (row of trialRows(); track $index) {
+              <button class="ds-button ds-button--secondary trial-choice" type="button" [attr.aria-pressed]="trialIndex() === $index" (click)="trialIndex.set($index)">
+                <strong>{{ row.name }}</strong>
+                <span>{{ row.passed === undefined ? 'Not tested' : row.passed ? 'Passed' : row.failures + ' failed' }}</span>
+              </button>
+            }
+          </div>
+          @let inspected = inspection();
+          <div class="trial-description">
+            <span>Friction {{ inspected.options.friction | number: '1.2-2' }} · lateral velocity {{ inspected.options.lateralVelocity ?? 0 | number: '1.0-3' }} m/s</span>
+            <button class="ds-button ds-button--secondary" type="button" [disabled]="!best()" (click)="watchTrial(trialIndex())">Replay trial</button>
+          </div>
+          @if (inspected.checks.length) {
+          <table class="check-table">
+            <caption class="sr-only">Actual values and required thresholds</caption>
+            <thead><tr><th scope="col">Criterion</th><th scope="col">Actual</th><th scope="col">Target</th><th scope="col">Result</th></tr></thead>
+            <tbody>
+              @for (check of inspected.checks; track check.label) {
+              <tr>
+                <th scope="row">{{ check.label }}</th>
+                <td>{{ check.value | number: '1.0-3' }} {{ check.unit }}</td>
+                <td>{{ check.operator }} {{ check.limit | number: '1.0-3' }} {{ check.unit }}</td>
+                <td [class.passed]="check.passed" [class.failed]="!check.passed">{{ check.passed ? 'Pass' : 'Fail' }}</td>
+              </tr>
+              }
+            </tbody>
+          </table>
+          } @else {
+          <p class="ds-hint">Start training to evaluate this skill. All three scenarios are tested for each candidate.</p>
+          }
+          <p class="ds-hint">The controller must pass every criterion in all three trials. A completion time cannot be predicted reliably.</p>
+        }
+        @case ('records') {
+          <h2>Personal records</h2>
+          <dl class="record-list">
+            @for (record of records; track record.key) { @let saved = state().records[record.key];
+            <div>
+              <dt>{{ record.name }}</dt>
+              <dd>
+                @if (saved) {
+                <strong>{{ saved.value | number: '1.0-2' }} {{ record.unit }}</strong>
+                <button class="ds-button ds-button--secondary" type="button" (click)="watchRecord(record.key)" [attr.aria-label]="'Replay ' + record.name">Replay</button>
+                } @else { <span>—</span> }
+              </dd>
+            </div>
+            }
+          </dl>
+        }
+        @case ('history') {
+          <h2>{{ labels[state().stage] }} history</h2>
+          <p class="ds-hint">Last 40 improvements across all skills. Smaller deficit is better; fitness breaks ties.</p>
+          <app-stable-select controlId="rex-history" label="Checkpoint" [options]="historyOptions()" [value]="selected()" (valueChange)="selected.set($event)" />
+          @if (selectedEntry(); as entry) {
+          <div class="replay-toolbar">
+            <button class="ds-button ds-button--secondary" type="button" (click)="followBest.set(false); replayEntry(entry)">Watch checkpoint</button>
+            <button class="ds-button ds-button--secondary" type="button" (click)="resumeFrom(entry)" [disabled]="training() || busy()">Train from checkpoint</button>
+          </div>
+          }
+          <table class="check-table">
+            <caption class="sr-only">Recent skill improvements</caption>
+            <thead><tr><th scope="col">Candidate</th><th scope="col">Trials</th><th scope="col">Deficit</th><th scope="col">Fitness</th></tr></thead>
+            <tbody>
+              @for (entry of history().slice(0, 8); track entry.iteration) {
+              <tr><th scope="row">#{{ entry.iteration }}</th><td>{{ entry.evaluation.passes }}/3</td><td>{{ entryDeficit(entry) | number: '1.0-4' }}</td><td>{{ entry.evaluation.score | number: '1.2-2' }}</td></tr>
+              }
+            </tbody>
+          </table>
+        }
+        @case ('settings') {
+          <h2>Training settings</h2>
+          <label class="setting"><input type="checkbox" [checked]="state().autoAdvance ?? false" (change)="toggleAutoAdvance()" /> Auto-advance after passing a skill</label>
+          <label class="setting"><input type="checkbox" [checked]="followBest()" (change)="followBest.set(!followBest())" /> Automatically replay new best policies</label>
+          <dl class="record-list">
+            <div><dt>Physics steps/s</dt><dd>{{ stepsPerSecond() | number: '1.0-0' }}</dd></div>
+            <div><dt>Total physics steps</dt><dd>{{ state().physicsSteps | number: '1.0-0' }}</dd></div>
+            <div><dt>Workers</dt><dd>{{ cores() }}</dd></div>
+            <div><dt>Competing policies</dt><dd>{{ progress().population.length }}</dd></div>
+            <div><dt>Exploration restarts</dt><dd>{{ progress().restarts }}</dd></div>
+            <div><dt>Best fitness</dt><dd>{{ currentBest()?.evaluation?.score | number: '1.2-2' }}</dd></div>
+            <div><dt>Qualification deficit</dt><dd>{{ deficit() | number: '1.0-4' }}</dd></div>
+          </dl>
+          <div class="replay-toolbar">
+            <button class="ds-button ds-button--secondary" type="button" (click)="play()">Watch learned demo</button>
+            <button class="ds-button ds-button--secondary" type="button" (click)="play(standingPolicy, 'balance')">Watch balance test</button>
+            <button class="ds-button ds-button--secondary" type="button" (click)="exportTraining()" [disabled]="!ready()">Export checkpoint</button>
+            <button class="ds-button ds-button--secondary" type="button" (click)="resetTraining()" [disabled]="!ready() || training() || busy()">Reset training</button>
+          </div>
+          <label class="checkpoint-file">Import checkpoint
+            <input type="file" accept=".json,application/json" (change)="importTraining($event)" [disabled]="!ready() || training() || busy()" />
+          </label>
+          <p class="ds-hint">Policies are saved locally per skill. Manual training pauses when a previously incomplete skill passes. You can continue refining it afterwards. Export to back up your learning.</p>
+        }
+      }
+    </div>
   </div>
 </section>
