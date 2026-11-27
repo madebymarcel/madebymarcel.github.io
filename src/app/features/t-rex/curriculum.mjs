@@ -288,7 +288,7 @@ export function propose(checkpoint, initial, gaitSeed = initial) {
     const first = !best && i === 0 && !progress.focus;
     const focused = progress.focus && i === 0;
     if (!first && !focused) {
-      if (!explorer && i === 4 && best && alternative && alternative !== best) {
+      if (!explorer && i === 4 && best && alternative && alternative.iteration !== best.iteration) {
         policy = policy.map((w, k) => (random(state) < 0.25 ? best.policy[k] : w));
       }
       const strength = explorer
