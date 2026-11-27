@@ -16,8 +16,7 @@
 
 .rex-title,
 .replay-caption,
-.progress-strip,
-.trial-description {
+.progress-strip {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
@@ -132,9 +131,7 @@
   color: var(--text);
 }
 
-.replay-toolbar,
-.panel-nav,
-.trial-list {
+.replay-toolbar {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
@@ -162,42 +159,11 @@
   background: var(--surface);
 }
 
-.panel-nav {
-  padding: var(--space-2);
-  border-block-end: var(--border-width) solid var(--border);
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.panel-nav .ds-button {
-  min-inline-size: 0;
-  padding-inline: var(--space-1);
-}
-
 .panel-body {
   display: grid;
   gap: var(--space-3);
   padding: var(--space-3);
   min-inline-size: 0;
-}
-
-.trial-list {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.trial-choice {
-  display: grid;
-  gap: var(--space-1);
-  min-inline-size: 0;
-}
-
-.trial-choice span {
-  font-size: var(--type-small);
-}
-
-.trial-description {
-  font-size: var(--type-small);
 }
 
 .check-table {
@@ -282,5 +248,37 @@
 @media (min-width: 42rem) and (max-height: 30rem) {
   .artwork {
     block-size: clamp(5rem, 27dvh, 12rem);
+  }
+}
+
+.headline-metrics dd span {
+  font-size: var(--type-small);
+  font-weight: var(--weight-regular);
+}
+
+.learning-progress {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.reward-chart {
+  display: block;
+  inline-size: 100%;
+  max-block-size: 7rem;
+}
+
+.details-toggle {
+  inline-size: 100%;
+  justify-content: space-between;
+  border-color: transparent;
+}
+
+.panel-body {
+  border-block-start: var(--border-width) solid var(--border);
+}
+
+@media (min-width: 42rem) {
+  .learning-progress {
+    max-inline-size: 45rem;
   }
 }

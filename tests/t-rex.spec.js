@@ -27,8 +27,8 @@ test('one physical rig drives both the continuous skin and debug skeleton', asyn
   const view = page.getByRole('img', { name: 'Tyrannosaurus rex seen from above' });
   const skin = view.getByTestId('rex-tail-skin');
   const initial = await skin.getAttribute('d');
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('button', { name: 'Watch learned demo' }).click();
+  await page.getByRole('button', { name: 'Training details' }).click();
+  await page.getByRole('button', { name: 'Watch untrained baseline' }).click();
   await expect(skin).not.toHaveAttribute('d', initial);
   await page.getByRole('button', { name: /show physics skeleton/i }).click();
   await expect(view.locator('[data-bone^="tail-"]')).toHaveCount(6);
@@ -51,14 +51,14 @@ test('training persists across reloads and restores an exported checkpoint', asy
     timeout: 30_000,
   });
   const iterations = await count.textContent();
-  const raw = await page.evaluate(() => localStorage.getItem('made-by-marcel-trex-locomotion-v2'));
+  const raw = await page.evaluate(() => localStorage.getItem('made-by-marcel-trex-servo-v3'));
   expect(raw).toBeTruthy();
   await page.reload();
   await expect(count).toHaveText(iterations);
   await expect(best).toBeEnabled();
   await best.click();
   await expect(page.getByRole('img', { name: 'Tyrannosaurus rex seen from above' })).toBeVisible();
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Training details' }).click();
   const downloading = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export checkpoint' }).click();
   const download = await downloading;
@@ -100,29 +100,29 @@ test('both projections fit within the first viewport on desktop and phones', asy
   }
 });
 
-test('direct skill selection preserves champions and exposes exact trial failures', async ({
-  page,
-}) => {
+test('normal-ground learning, diagnostics and skill switching', async ({ page }) => {
   test.setTimeout(90_000);
   await page.goto('/projects/t-rex/');
   const skill = page.getByLabel('Training skill');
   const start = page.getByRole('button', { name: 'Start training' });
   const pause = page.getByRole('button', { name: 'Pause training' });
   const best = page.getByRole('button', { name: 'Watch your best' });
-  await expect(skill).toBeEnabled();
-  await skill.selectOption('walk');
-  await expect(page.getByRole('heading', { name: 'Walking trials' })).toBeVisible();
+  await expect(skill).toHaveValue('walk');
+  const details = page.getByRole('button', { name: 'Training details' });
+  await expect(details).toHaveAttribute('aria-expanded', 'false');
   await start.click();
   await expect(best).toBeEnabled({ timeout: 30_000 });
+  await expect(page.getByTestId('rex-progress-path')).toBeVisible();
+  await details.click();
+  await expect(page.getByRole('heading', { name: 'Walking goal · normal ground' })).toBeVisible();
   await expect(
     page.getByRole('table', { name: 'Actual values and required thresholds' }),
   ).toBeVisible();
-  await page.getByRole('button', { name: /Slipperier/ }).click();
-  await expect(page.getByText(/Friction 0.76/)).toBeVisible();
-  await page.getByRole('button', { name: 'Replay trial' }).click();
-  await expect(page.getByText(/Walking · Slipperier · #/)).toBeVisible();
+  await expect(page.getByRole('button', { name: /Slipperier|Grippier/ })).toHaveCount(0);
+  await best.click();
+  await expect(page.getByText(/Candidate #/)).toBeVisible();
   await skill.selectOption('balance');
-  await expect(page.getByRole('heading', { name: 'Balance trials' })).toBeVisible({
+  await expect(page.getByRole('heading', { name: 'Balance goal · normal ground' })).toBeVisible({
     timeout: 30_000,
   });
   if (await pause.isVisible()) await pause.click();
@@ -132,4 +132,5 @@ test('direct skill selection preserves champions and exposes exact trial failure
   await page.reload();
   await expect(skill).toHaveValue('walk');
   await expect(best).toBeEnabled();
+  await expect(details).toHaveAttribute('aria-expanded', 'false');
 });
