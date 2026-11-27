@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
 
-test('T. rex keeps the physical artwork and exposes only start/pause', async ({ page }) => {
+test('T. rex displays replay, start/pause, export and iterations', async ({ page }) => {
   await page.goto('/projects/');
   const project = page.locator('main article').nth(2);
   await expect(project.getByRole('heading')).toHaveText('T. rex');
@@ -14,7 +15,9 @@ test('T. rex keeps the physical artwork and exposes only start/pause', async ({ 
   await expect(side.getByTestId('rex-side-skin')).toBeVisible();
   const start = page.getByRole('button', { name: 'Start training' });
   await expect(start).toBeEnabled();
-  await expect(page.locator('main').getByRole('button')).toHaveCount(1);
+  await expect(page.getByRole('button', { name: 'Export training' })).toBeEnabled();
+  await expect(page.getByTestId('rex-iterations')).toHaveText('Iterations: 0');
+  await expect(page.locator('main').getByRole('button')).toHaveCount(2);
   await expect(page.locator('main select')).toHaveCount(0);
   const initial = await top.getByTestId('rex-tail-skin').getAttribute('d');
   await expect(top.getByTestId('rex-tail-skin')).not.toHaveAttribute('d', initial);
@@ -43,10 +46,23 @@ test('training and replay are independent and progress survives reload', async (
   await pause.click();
   await expect(start).toBeEnabled();
   const iteration = await savedIteration();
+  await expect(page.getByTestId('rex-iterations')).toHaveText('Iterations: ' + iteration);
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export training' }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe('trex-training-' + iteration + '.json');
+  const snapshot = JSON.parse(await readFile(await download.path(), 'utf8'));
+  expect(snapshot.iteration).toBe(iteration);
+  expect(snapshot.best.policy).toHaveLength(28);
+  expect(snapshot.best.metrics.steps).toBeGreaterThanOrEqual(4);
+  expect(snapshot.diagnostics.training).toBe(false);
+  expect(snapshot.diagnostics.recentBatches.length).toBeGreaterThan(0);
+  expect(snapshot.diagnostics.recentBatches.at(-1).iteration).toBe(iteration);
   const cycle = await viewer.getAttribute('data-replay-cycle');
   await expect(viewer).not.toHaveAttribute('data-replay-cycle', cycle, { timeout: 12_000 });
   expect(await savedIteration()).toBe(iteration);
   await page.reload();
   await expect(start).toBeEnabled();
+  await expect(page.getByTestId('rex-iterations')).toHaveText('Iterations: ' + iteration);
   expect(await savedIteration()).toBe(iteration);
 });

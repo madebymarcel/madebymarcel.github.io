@@ -1,4 +1,4 @@
-import { Component, DestroyRef, afterNextRender, inject, signal } from '@angular/core';
+import { Component, DestroyRef, afterNextRender, computed, inject, signal } from '@angular/core';
 import { trial, type Metrics } from './servo-learning.mjs';
 import {
   completeWave,
@@ -12,12 +12,23 @@ import {
 import { project } from './rex-render';
 import type { EvaluationRequest, EvaluationResponse } from './t-rex.worker';
 
+type BatchSummary = {
+  iteration: number;
+  bestIteration: number;
+  bestScore: number;
+  maxSteps: number;
+  maxDistance: number;
+  maxTicks: number;
+  falls: number;
+};
+
 @Component({
   templateUrl: './t-rex-page.html',
   styleUrl: './t-rex-page.scss',
 })
 export class TRexPage {
   private readonly state = signal(emptyCheckpoint());
+  readonly iterations = computed(() => this.state().iteration);
   readonly ready = signal(false);
   readonly training = signal(false);
   readonly notice = signal('');
@@ -35,6 +46,8 @@ export class TRexPage {
   private timer?: ReturnType<typeof setTimeout>;
   private noticeTimer?: ReturnType<typeof setTimeout>;
   private disposed = false;
+  private replayIteration = 0;
+  private readonly recentBatches: BatchSummary[] = [];
 
   constructor() {
     afterNextRender(() => {
@@ -137,6 +150,16 @@ export class TRexPage {
         try {
           const next = completeWave(before, wave, evaluations);
           this.state.set(next);
+          this.recentBatches.push({
+            iteration: next.iteration,
+            bestIteration: next.best.iteration,
+            bestScore: next.best.metrics.score,
+            maxSteps: Math.max(...evaluations.map((m) => m.steps)),
+            maxDistance: Math.max(...evaluations.map((m) => m.distance)),
+            maxTicks: Math.max(...evaluations.map((m) => m.ticks)),
+            falls: evaluations.filter((m) => m.fell).length,
+          });
+          if (this.recentBatches.length > 12) this.recentBatches.shift();
           this.flush();
           const gained = (Object.keys(next.records) as Milestone[]).filter(
             (key) => !before.records[key],
@@ -152,6 +175,27 @@ export class TRexPage {
     });
   }
 
+  exportTraining() {
+    const state = this.state();
+    const snapshot = {
+      ...state,
+      diagnostics: {
+        training: this.training(),
+        replayIteration: this.replayIteration,
+        workers: this.workers.length,
+        pendingWorkerRequests: this.pending.size,
+        recentBatches: this.recentBatches,
+      },
+    };
+    const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'trex-training-' + state.iteration + '.json';
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
   private announce(message: string) {
     this.notice.set(message);
     clearTimeout(this.noticeTimer);
@@ -162,7 +206,9 @@ export class TRexPage {
   // Only the next episode uses a newly retained best policy.
   private replay() {
     if (this.disposed) return;
-    const run = trial(this.state().best.policy);
+    const best = this.state().best;
+    this.replayIteration = best.iteration;
+    const run = trial(best.policy);
     this.cycle.update((value) => value + 1);
     let last = 0;
     let accumulator = 0;
