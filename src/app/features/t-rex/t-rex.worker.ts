@@ -1,8 +1,7 @@
-import { assess, type Candidate } from './servo-search.mjs';
-import type { Metrics } from './servo-learning.mjs';
+import { assess, type Candidate, type Evaluation } from './servo-search.mjs';
 
 export type EvaluationRequest = { id: number; candidates: Candidate[] };
-export type EvaluationResponse = { id: number; evaluations: Metrics[] };
+export type EvaluationResponse = { id: number; evaluations: Evaluation[] };
 
 const scope = globalThis as unknown as {
   onmessage: (event: MessageEvent<EvaluationRequest>) => void;

@@ -34,9 +34,13 @@ export type Metrics = {
   flightTicks: number;
   phaseProgress: number;
   score: number;
+  lateralDistance: number;
+  supportTotal: number;
+  forwardUpright: number;
 };
 
 export const POLICY_SIZE: number;
+export const GAIT_DEFAULTS: number[];
 export const TRIAL_SECONDS: number;
 export const PARAMETER_SCALE: number[];
 export function boundPolicy(policy: number[]): number[];

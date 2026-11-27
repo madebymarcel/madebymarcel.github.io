@@ -1,11 +1,12 @@
 import { createServoRig } from './servo-rig.mjs';
 
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
-export const POLICY_SIZE = 28;
-export const TRIAL_SECONDS = 8;
+export const POLICY_SIZE = 32;
+export const TRIAL_SECONDS = 12;
+export const GAIT_DEFAULTS = [0.07, 0.025, 0.05, 0];
 export const PARAMETER_SCALE = [
   0.18, 0.2, 0.2, 0.15, 0.25, 0.16, 1, 0.4, 0.5, 0.4, 0.6, 0.3, 0.3, 0.3, 0.25, 0.3, 0.3, 0.3, 0.25,
-  0.16, 0.3, 0.3, 0.2, 0.08, 0.2, 0.2, 0.08, 0.2,
+  0.16, 0.3, 0.3, 0.2, 0.08, 0.2, 0.2, 0.08, 0.2, 0.15, 0.06, 0.12, 0.25,
 ];
 
 // Controller parameters describe feedback gains and joint target offsets, not poses or timings.
@@ -16,6 +17,10 @@ export function boundPolicy(policy) {
     if (i === 5) return clamp(value, 0.05, 0.3);
     if (i === 6) return clamp(value, 0, 4);
     if (i === 7) return clamp(value, 0, 2);
+    if (i === 28) return clamp(value, 0.055, 0.45);
+    if (i === 29) return clamp(value, 0.025, 0.16);
+    if (i === 30) return clamp(value, 0.05, 0.35);
+    if (i === 31) return clamp(value, -0.2, 0.35);
     return clamp(value, -3, 3);
   });
 }
@@ -57,6 +62,11 @@ export function trial(policy, options = {}) {
   let work = 0;
   let flightTicks = 0;
   let phaseProgress = 0;
+  let lateralDistance = 0;
+  let supportTotal = 0;
+  let forwardUpright = 0;
+  let previousX = origin;
+  const originZ = trunk.position.z;
 
   function advance() {
     if (fell || ticks >= limit) return;
@@ -87,13 +97,13 @@ export function trial(policy, options = {}) {
     if (phase === 1 && loads[support] > p[4] && Math.abs(desiredZ - comZ) < p[5]) {
       phase = 2;
     }
-    if (phase === 2 && !contacts[swing] && contacts[support] && h > 0.025) {
+    if (phase === 2 && !contacts[swing] && contacts[support] && h > p[29]) {
       phase = 3;
       lifts++;
     }
-    if (phase === 3 && ahead > 0.07 && travel > 0.07) phase = 4;
+    if (phase === 3 && ahead > p[28] && travel > p[28]) phase = 4;
     if (phase === 4 && contacts[swing] && h < 0.025) {
-      if (contacts[support] && ahead > 0.05 && travel > 0.05 && vertical.y > 0.9) {
+      if (contacts[support] && ahead > p[30] && travel > p[30] && vertical.y > 0.9) {
         steps++;
         swing = support;
       }
@@ -110,7 +120,7 @@ export function trial(policy, options = {}) {
     for (let side = 0; side < 2; side++) {
       const j = 16 + 8 * side;
       targets[j] = lateral;
-      targets[j + 1] = p[0] + p[9] * pitch + p[10] * (comX - desiredX);
+      targets[j + 1] = p[0] + p[9] * pitch + p[10] * (comX - desiredX + p[31]);
       targets[j + 3] = p[1];
       targets[j + 5] = p[2];
       targets[j + 7] = p[3];
@@ -151,6 +161,11 @@ export function trial(policy, options = {}) {
     if (fell) return;
     slip += slipSpeed * dt;
     distance = trunk.position.x - origin;
+    lateralDistance = Math.abs(trunk.position.z - originZ);
+    const dx = trunk.position.x - previousX;
+    previousX = trunk.position.x;
+    forwardUpright += dx < 0 ? dx : dx * clamp((up - 0.55) / 0.35, 0, 1);
+    if (contacts[0] !== contacts[1] && Math.max(...loads) > 0.45 && up > 0.9) supportTotal++;
     if (up > 0.9 && trunk.position.y > 0.8) stableTicks++;
     if (contacts[0] && contacts[1] && up > 0.94 && trunk.velocity.length() < 0.18) {
       settled++;
@@ -178,16 +193,16 @@ export function trial(policy, options = {}) {
   }
 
   function metrics() {
+    // Distance is the objective; the bounded step bonus only assists first exploration.
     const score =
-      5 * steps +
-      3 * Math.min(maxClearance, 0.1) +
-      4 * Math.min(Math.max(maxForward, 0), 0.2) +
-      0.08 * phaseProgress +
-      (0.8 * stableTicks) / limit +
-      0.4 * distance -
-      0.08 * slip -
-      0.00002 * work -
-      (fell ? 0.2 : 0);
+      4 * forwardUpright +
+      (0.5 * stableTicks) / 120 +
+      (0.5 * supportTotal) / 120 +
+      0.15 * Math.min(steps, 2) -
+      1.5 * slip -
+      0.8 * lateralDistance -
+      0.0004 * work -
+      (fell ? 1.5 : 0);
     return {
       ticks,
       fell,
@@ -204,6 +219,9 @@ export function trial(policy, options = {}) {
       flightTicks,
       phaseProgress,
       score,
+      lateralDistance,
+      supportTotal,
+      forwardUpright,
     };
   }
 
