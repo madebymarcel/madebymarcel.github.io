@@ -33,6 +33,7 @@ export function skillState(state, stage = state.stage) {
     weights: neutralPolicy(),
     attempts: 0,
     generations: 0,
+    sinceImprovement: 0,
     best: null,
     history: [],
   };
@@ -93,9 +94,11 @@ export function completeWave(state, wave, evaluations) {
   };
   let physicsSteps = state.physicsSteps;
   for (const [i, candidate] of wave.candidates.entries()) {
-    const entry = { ...candidate, stage: state.stage, evaluation: evaluations[i] };
+    const entry = { ...candidate, stage: state.stage, skillAttempt: previous.attempts + i + 1, evaluation: evaluations[i] };
+    skill.sinceImprovement++;
     physicsSteps += entry.evaluation.metrics.ticks;
     if (better(entry, skill.best)) {
+      skill.sinceImprovement = 0;
       skill.best = entry;
       skill.history.unshift(entry);
     }
@@ -154,7 +157,8 @@ const metricsKeys = [
 function validEntry(entry, stage, max) {
   if (
     !object(entry) || entry.stage !== stage || !count(entry.iteration) ||
-    entry.iteration === 0 || entry.iteration > max || !validPolicy(entry.policy) ||
+    entry.iteration === 0 || entry.iteration > max || !count(entry.skillAttempt) ||
+    entry.skillAttempt === 0 || entry.skillAttempt > entry.iteration || !validPolicy(entry.policy) ||
     !object(entry.evaluation) || typeof entry.evaluation.passed !== 'boolean' ||
     !object(entry.evaluation.metrics)
   ) return false;
@@ -181,7 +185,8 @@ export function parseCheckpoint(source) {
     !count(s.physicsSteps) || !STAGES.includes(s.stage) || !object(s.skills) ||
     !Object.entries(s.skills).every(([stage, skill]) =>
       STAGES.includes(stage) && object(skill) && validPolicy(skill.weights) &&
-      count(skill.attempts) && count(skill.generations) &&
+      count(skill.attempts) && count(skill.generations) && count(skill.sinceImprovement) &&
+      skill.sinceImprovement <= skill.attempts &&
       skill.attempts === skill.generations * WAVE_SIZE &&
       (skill.best === null || validEntry(skill.best, stage, s.iteration)) &&
       Array.isArray(skill.history) && skill.history.length <= HISTORY_LIMIT &&

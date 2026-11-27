@@ -1,43 +1,15 @@
 import { Component, DestroyRef, afterNextRender, computed, inject, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { StableSelect } from '../../core/ui/stable-select';
-import { trial, type TrialOptions } from './spatial-learning.mjs';
+import { trial } from './servo-learning.mjs';
+import { neutralPolicy } from './servo-rig.mjs';
 import {
-  completeWave,
-  emptyCheckpoint,
-  evaluationDeficit,
-  LABELS,
-  nextStage,
-  parseCheckpoint,
-  propose,
-  qualifies,
-  scenarios,
-  seedFromEntry,
-  selectSkill,
-  skillProgress,
-  STAGNATION,
-  STAGES,
-  trialChecks,
-  STORAGE_KEY,
-  type Checkpoint,
-  type Entry,
-  type Evaluation,
-  type RecordKey,
-  type Stage,
-} from './curriculum.mjs';
+  completeWave, emptyCheckpoint, LABELS, LEGACY_KEY, optionsFor, parseCheckpoint, propose,
+  seedFromEntry, selectSkill, skillState, STAGES, STORAGE_KEY, trialChecks,
+  type Checkpoint, type Entry, type Evaluation, type Stage,
+} from './servo-search.mjs';
 import { project } from './rex-render';
 import type { EvaluationRequest, EvaluationResponse } from './t-rex.worker';
-import checkpoint from './spatial-checkpoint.json';
-import standing from './spatial-standing.json';
-
-const RECORDS: { key: RecordKey; name: string; unit: string }[] = [
-  { key: 'distance', name: 'Farthest forward', unit: 'm' },
-  { key: 'path', name: 'Longest path', unit: 'm' },
-  { key: 'upright', name: 'Longest without falling', unit: 's' },
-  { key: 'steps', name: 'Alternating steps', unit: '' },
-  { key: 'speed', name: 'Best completed trial speed', unit: 'm/s' },
-  { key: 'flights', name: 'Alternating airborne strides', unit: '' },
-];
 
 @Component({
   imports: [DecimalPipe, StableSelect],
@@ -51,7 +23,7 @@ export class TRexPage {
   readonly busy = signal(false);
   readonly playing = signal(false);
   readonly debug = signal(false);
-  readonly status = signal('Ready');
+  readonly status = signal('Initial pose');
   readonly storageStatus = signal('Not loaded');
   readonly error = signal('');
   readonly distance = signal(0);
@@ -60,79 +32,76 @@ export class TRexPage {
   readonly cores = signal(0);
   readonly stages = STAGES;
   readonly labels = LABELS;
-  readonly records = RECORDS;
-  readonly entryDeficit = (entry: Entry) => evaluationDeficit(entry.stage, entry.evaluation);
-  readonly currentBest = computed(() => this.state().best[this.state().stage]);
+  readonly legacyAvailable = signal(false);
+  readonly progress = computed(() => skillState(this.state()));
+  readonly currentBest = computed(() => this.progress().best);
   readonly best = computed(() => this.currentBest()?.policy ?? null);
-  readonly progress = computed(() => skillProgress(this.state()));
   readonly pendingSkill = signal<Stage | null>(null);
   readonly chosenSkill = computed(() => this.pendingSkill() ?? this.state().stage);
   readonly followBest = signal(true);
-  readonly panel = signal<'trials' | 'records' | 'history' | 'settings'>('trials');
-  readonly panels = ['trials', 'records', 'history', 'settings'] as const;
-  readonly panelLabels = {
-    trials: 'Trials',
-    records: 'Records',
-    history: 'History',
-    settings: 'Settings',
-  };
-  readonly trialIndex = signal(0);
-  readonly trialRows = computed(() => {
-    const stage = this.state().stage;
-    const metrics = this.currentBest()?.evaluation.trials;
-    return scenarios(stage).map((options, index) => {
-      const result = metrics?.[index];
-      const checks = result ? trialChecks(stage, result) : [];
-      return {
-        name: ['Normal', 'Slipperier', 'Grippier'][index],
-        options,
-        checks,
-        passed: result ? checks.every((check) => check.passed) : undefined,
-        failures: checks.filter((check) => !check.passed).length,
-      };
-    });
-  });
-  readonly inspection = computed(() => this.trialRows()[this.trialIndex()]);
-  readonly deficit = computed(() => {
-    const entry = this.currentBest();
-    return entry ? evaluationDeficit(entry.stage, entry.evaluation) : undefined;
-  });
-  readonly trainingMessage = computed(() => {
-    if (this.pendingSkill()) return 'Switching after the current batch.';
-    const best = this.currentBest();
-    const progress = this.progress();
-    if (!best) return 'No policy evaluated for this skill yet.';
-    if (best.evaluation.passes === 3)
-      return this.training() ? 'Passed · refining policy' : 'All trials passed';
-    if (progress.sinceImprovement >= STAGNATION) return 'Plateau detected · exploring new policies';
-    if (!progress.attempts) return 'Restored policy · new search statistics begin on resume';
-    if (progress.sinceImprovement === 0) return 'New best policy';
-    return 'Searching for a better policy';
-  });
-  readonly history = computed(() =>
-    this.state().history.filter((e) => e.stage === this.state().stage),
-  );
+  readonly detailsOpen = signal(false);
+  readonly history = computed(() => this.progress().history);
   readonly historyOptions = computed(() => [
     { id: '0', label: 'Select checkpoint' },
     ...this.history().map((entry) => ({
       id: String(entry.iteration),
-      label:
-        '#' +
-        entry.iteration +
-        ' · ' +
-        entry.evaluation.passes +
-        '/3 · fitness ' +
-        entry.evaluation.score.toFixed(2),
+      label: '#' + entry.iteration + ' · reward ' + entry.evaluation.metrics.score.toFixed(2),
     })),
   ]);
   readonly selected = signal('0');
   readonly selectedEntry = computed(() =>
     this.history().find((entry) => String(entry.iteration) === this.selected()),
   );
+  readonly checks = computed(() => {
+    const best = this.currentBest();
+    return best ? trialChecks(best.stage, best.evaluation.metrics) : [];
+  });
+  readonly headline = computed(() => {
+    const stage = this.state().stage;
+    const m = this.currentBest()?.evaluation.metrics;
+    const item = (label: string, value: number, unit = '', digits = '1.0-0') => ({ label, value, unit, digits });
+    const upright = item('Upright', (m?.stableTicks ?? 0) / 120, 's', '1.1-1');
+    if (stage === 'balance' || stage === 'recover') {
+      return [upright, item('Settled', (m?.settledTicks ?? 0) / 120, 's', '1.1-1'),
+        item('Drift', m?.pathDistance ?? 0, 'm', '1.2-2')];
+    }
+    if (stage === 'shift') {
+      return [item('Weight transfer', (m?.shiftTicks ?? 0) / 120, 's', '1.1-1'),
+        item('Foot lifts', m?.lifts ?? 0), upright];
+    }
+    if (stage === 'run') {
+      return [item('Speed', m?.averageSpeed ?? 0, 'm/s', '1.2-2'),
+        item('Steps', m?.steps ?? 0), upright];
+    }
+    return [item('Steps', m?.steps ?? 0), item('Distance', m?.distance ?? 0, 'm', '1.2-2'), upright];
+  });
+  readonly graph = computed(() => {
+    const history = [...this.history()].reverse();
+    const values = history.map((entry) => entry.evaluation.metrics.score);
+    if (!values.length) return null;
+    const low = Math.min(...values), high = Math.max(...values);
+    const span = Math.max(0.001, high - low);
+    const first = history[0].skillAttempt;
+    const last = Math.max(first + 1, this.progress().attempts);
+    const x = (iteration: number) => 4 + 312 * (iteration - first) / (last - first);
+    const y = (score: number) => 74 - 64 * (score - low) / span;
+    const path = history.map((entry, i) =>
+      i === 0 ? 'M ' + x(entry.skillAttempt) + ' ' + y(values[i]) :
+        'H ' + x(entry.skillAttempt) + ' V ' + y(values[i]),
+    ).join(' ') + ' H 316';
+    return { path, low, high, latest: values[values.length - 1], first };
+  });
+  readonly trainingMessage = computed(() => {
+    if (this.pendingSkill()) return 'Switching after the current batch';
+    const best = this.currentBest();
+    if (!best) return this.training() ? 'Evaluating first candidates' : 'Ready to train';
+    if (best.evaluation.passed) return 'Normal-ground goal reached';
+    if (this.training()) return this.progress().sinceImprovement >= 240 ? 'No recent improvement' : 'Learning';
+    return 'Paused · goal not reached';
+  });
   readonly replayLabel = signal('Initial pose');
   private lastAutoReplay = 0;
-  readonly standingPolicy = standing.policy;
-  private readonly initialFrame = trial(standing.policy).rig.frame();
+  private readonly initialFrame = trial(neutralPolicy()).rig.frame();
   readonly overhead = signal(project(this.initialFrame, false));
   readonly side = signal(project(this.initialFrame, true));
   private workers: Worker[] = [];
@@ -152,6 +121,7 @@ export class TRexPage {
       try {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) this.state.set(parseCheckpoint(saved));
+        this.legacyAvailable.set(Boolean(localStorage.getItem(LEGACY_KEY)));
         this.storageStatus.set(saved ? 'Restored local checkpoint' : 'Ready to save locally');
       } catch {
         this.storageStatus.set('Local checkpoint could not be restored');
@@ -221,6 +191,7 @@ export class TRexPage {
     this.training.set(false);
     this.busy.set(false);
     clearTimeout(this.timer);
+    this.pendingSkill.set(null);
     this.stopWorkers();
     this.flush();
   }
@@ -237,6 +208,7 @@ export class TRexPage {
     if (!this.workers.length) this.makeWorkers();
     if (!this.workers.length) return;
     this.training.set(true);
+    this.followBest.set(true);
     this.rateStart = performance.now();
     this.rateCount = 0;
     this.rateSteps = 0;
@@ -247,7 +219,7 @@ export class TRexPage {
   private runWave() {
     if (!this.training() || this.disposed) return;
     const before = this.state();
-    const wave = propose(before, standing.policy, checkpoint.policy);
+    const wave = propose(before);
     const evaluations: Evaluation[] = [];
     const size = Math.ceil(wave.candidates.length / this.workers.length);
     const chunks = [];
@@ -264,25 +236,13 @@ export class TRexPage {
           evaluations[offset + i] = evaluation;
         });
         if (--remaining) return;
-        const result = {
-          ...completeWave(before, wave, evaluations),
-          autoAdvance: this.state().autoAdvance ?? false,
-        };
+        const result = completeWave(before, wave, evaluations);
         const requested = this.pendingSkill();
         this.pendingSkill.set(null);
-        const advanced = requested
-          ? selectSkill(result, requested)
-          : result.autoAdvance
-            ? nextStage(result)
-            : result;
-        const passed = result.best[result.stage]?.evaluation.passes === 3;
+        const advanced = requested ? selectSkill(result, requested) : result;
         if (advanced.stage !== before.stage) {
           this.clearSkillView();
-        } else if (
-          passed &&
-          !requested &&
-          (result.autoAdvance || before.best[before.stage]?.evaluation.passes !== 3)
-        ) {
+        } else if (!skillState(before).best?.evaluation.passed && skillState(result).best?.evaluation.passed) {
           this.training.set(false);
         }
         this.state.set(advanced);
@@ -307,7 +267,7 @@ export class TRexPage {
           this.rateCount = 0;
           this.rateSteps = 0;
         }
-        if (!this.training() || performance.now() - this.lastSave >= 2000) this.flush();
+        if (requested || !this.training() || performance.now() - this.lastSave >= 2000) this.flush();
         this.busy.set(false);
         if (this.training()) this.timer = setTimeout(() => this.runWave(), 0);
       });
@@ -318,14 +278,7 @@ export class TRexPage {
 
   exportTraining() {
     this.flush();
-    const url = URL.createObjectURL(
-      new Blob([JSON.stringify(this.state(), null, 2)], { type: 'application/json' }),
-    );
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'trex-training-' + this.state().iteration + '.json';
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    this.download(JSON.stringify(this.state(), null, 2), 'trex-training-' + this.state().iteration + '.json');
   }
 
   async importTraining(event: Event) {
@@ -379,16 +332,9 @@ export class TRexPage {
     this.flush();
   }
 
-  toggleAutoAdvance() {
-    this.state.update((state) => ({ ...state, autoAdvance: !state.autoAdvance }));
-    this.dirty = true;
-    this.flush();
-  }
-
   private clearSkillView() {
     this.stopReplay();
     this.selected.set('0');
-    this.trialIndex.set(0);
     this.lastAutoReplay = 0;
     this.replayLabel.set('Initial pose');
     this.status.set('Ready');
@@ -406,28 +352,13 @@ export class TRexPage {
     this.flush();
   }
 
-  watchTrial(index: number) {
-    const entry = this.currentBest();
-    if (entry) {
-      this.followBest.set(false);
-      this.replayEntry(entry, index);
-    }
-  }
-
   stopWatching() {
     this.followBest.set(false);
     this.stopReplay();
   }
 
-  replayEntry(entry: Entry, trialIndex = 0) {
-    this.play(entry.policy, entry.stage, scenarios(entry.stage)[trialIndex], true);
-    this.replayLabel.set(
-      this.labels[entry.stage] +
-        ' · ' +
-        ['Normal', 'Slipperier', 'Grippier'][trialIndex] +
-        ' · #' +
-        entry.iteration,
-    );
+  replayEntry(entry: Entry) {
+    this.play(entry.policy, entry.stage, 'Candidate #' + entry.iteration);
   }
 
   replayBest() {
@@ -438,26 +369,34 @@ export class TRexPage {
     }
   }
 
-  watchRecord(key: RecordKey) {
-    const record = this.state().records[key];
-    if (record) {
-      this.followBest.set(false);
-      this.replayEntry(record.entry, record.trialIndex);
+  watchBaseline() {
+    this.followBest.set(false);
+    this.play(neutralPolicy(), this.state().stage, 'Untrained baseline');
+  }
+
+  exportLegacy() {
+    try {
+      const raw = localStorage.getItem(LEGACY_KEY);
+      if (!raw) return;
+      this.download(raw, 'trex-legacy-torque-training.json');
+    } catch {
+      this.error.set('Legacy checkpoint could not be read.');
     }
   }
 
-  play(
-    policy = checkpoint.policy,
-    stage: Stage = 'walk',
-    options: TrialOptions = { stage, seconds: 5 },
-    learned = false,
-  ) {
+  private download(source: string, filename: string) {
+    const url = URL.createObjectURL(new Blob([source], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  play(policy: number[], stage: Stage, label: string) {
     this.stopReplay();
-    if (!learned) this.followBest.set(false);
-    this.replayLabel.set(
-      learned ? this.labels[stage] : 'Historical ' + this.labels[stage] + ' demo',
-    );
-    const run = trial(policy, options);
+    this.replayLabel.set(label);
+    const run = trial(policy, optionsFor(stage));
     const draw = () => {
       const frame = run.rig.frame();
       this.overhead.set(project(frame, false));
@@ -465,23 +404,9 @@ export class TRexPage {
       const m = run.metrics();
       this.distance.set(m.distance);
       this.status.set(
-        m.distance.toFixed(2) +
-          ' m · ' +
-          m.steps +
-          ' steps · ' +
-          m.flights +
-          ' strides · ' +
-          (m.ticks / 120).toFixed(2) +
-          ' s' +
-          (m.fell
-            ? ' · Fell'
-            : run.done
-              ? learned && qualifies(stage, m)
-                ? ' · Trial passed'
-                : learned
-                  ? ' · Trial failed'
-                  : ' · Demo complete'
-              : ''),
+        m.steps + ' steps · ' + m.distance.toFixed(2) + ' m · ' +
+        (m.ticks / 120).toFixed(1) + ' s' +
+        (m.fell ? ' · Fell' : run.done ? ' · Complete' : ''),
       );
     };
     draw();

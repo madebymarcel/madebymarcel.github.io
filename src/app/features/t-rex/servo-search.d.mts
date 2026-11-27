@@ -3,11 +3,12 @@ export type { Stage };
 export type Metrics = LegacyMetrics & { lifts: number; maxClearance: number };
 export type Evaluation = { metrics: Metrics; passed: boolean };
 export type Candidate = { iteration: number; policy: number[] };
-export type Entry = Candidate & { stage: Stage; evaluation: Evaluation };
+export type Entry = Candidate & { stage: Stage; skillAttempt: number; evaluation: Evaluation };
 export type SkillState = {
   weights: number[];
   attempts: number;
   generations: number;
+  sinceImprovement: number;
   best: Entry | null;
   history: Entry[];
 };
