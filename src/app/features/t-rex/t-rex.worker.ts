@@ -1,15 +1,16 @@
-import { trainer } from './spatial-learning.mjs';
-const iterate = trainer(536);
-let running = false;
-function train() {
-  if (!running) return;
-  postMessage(iterate());
-  setTimeout(train, 0);
-}
-onmessage = ({ data }) => {
-  if (data === 'pause') running = false;
-  if (data === 'start' && !running) {
-    running = true;
-    train();
-  }
+import { assess, type Candidate, type Evaluation, type Stage } from './curriculum.mjs';
+
+export type EvaluationRequest = { id: number; stage: Stage; candidates: Candidate[] };
+export type EvaluationResponse = { id: number; evaluations: Evaluation[] };
+
+const scope = globalThis as unknown as {
+  onmessage: (event: MessageEvent<EvaluationRequest>) => void;
+  postMessage: (message: EvaluationResponse) => void;
+};
+
+scope.onmessage = ({ data }) => {
+  scope.postMessage({
+    id: data.id,
+    evaluations: data.candidates.map((candidate) => assess(data.stage, candidate.policy)),
+  });
 };
