@@ -24,7 +24,7 @@ export function createRig({
 } = {}) {
   const world = new World({ gravity: vec(0, -9.81, 0) });
   world.solver = new GSSolver();
-  world.solver.iterations = 22;
+  world.solver.iterations = 30;
   world.defaultContactMaterial.friction = friction;
   const ground = new Body({ mass: 0, shape: new Plane(), collisionFilterGroup: 2 });
   ground.quaternion.setFromAxisAngle(forward, -Math.PI / 2);
@@ -128,27 +128,10 @@ export function createRig({
     const shin = bone('shin' + side, knee, hock, 0.1, 0.11, 0.36);
     const met = bone('metatarsus' + side, hock, ball, 0.075, 0.08, 0.19);
     const toes = bone('toes' + side, ball, vec(0.22, 0.045, z), 0.15, 0.08, 0.11);
-    join(trunk, thigh, hip, 0.85, 90);
-    join(thigh, shin, knee, 0.85, 33);
-    join(shin, met, hock, 0.7, 18);
-    join(met, toes, ball, 0.65, 9);
-  }
-
-  const requested = vec(0, 0, 0);
-  const couple = vec(0, 0, 0);
-  function step(actions = [], respectHinges = false) {
-    for (const [i, joint] of joints.entries()) {
-      if (joint.immobile) continue;
-      const hinge = /^(shin|metatarsus|toes)/.test(joint.name);
-      const lateral = respectHinges && hinge ? 0 : actions[2 * i] || 0;
-      const hip = joint.name.startsWith('thigh');
-      requested.set(hip ? lateral : 0, hip ? 0 : lateral, actions[2 * i + 1] || 0);
-      requested.scale(joint.torque / Math.max(1, requested.length()), requested);
-      joint.a.vectorToWorldFrame(requested, couple);
-      joint.b.torque.vadd(couple, joint.b.torque);
-      joint.a.torque.vsub(couple, joint.a.torque);
-    }
-    world.step(dt);
+    join(trunk, thigh, hip, 1.1, 120);
+    join(thigh, shin, knee, 1.15, 60);
+    join(shin, met, hock, 0.95, 45);
+    join(met, toes, ball, 0.8, 22);
   }
 
   function frame() {
@@ -207,5 +190,5 @@ export function createRig({
       };
     });
   }
-  return { world, ground, bones, joints, trunk, frame, step, dt, up };
+  return { world, ground, bones, joints, trunk, frame, dt, up };
 }

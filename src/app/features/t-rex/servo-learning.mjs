@@ -1,286 +1,212 @@
-import { CONTROL_STEPS, createServoRig, POLICY_SIZE, targetsFor } from './servo-rig.mjs';
+import { createServoRig } from './servo-rig.mjs';
 
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+export const POLICY_SIZE = 28;
+export const TRIAL_SECONDS = 8;
+export const PARAMETER_SCALE = [
+  0.18, 0.2, 0.2, 0.15, 0.25, 0.16, 1, 0.4, 0.5, 0.4, 0.6, 0.3, 0.3, 0.3, 0.25, 0.3, 0.3, 0.3, 0.25,
+  0.16, 0.3, 0.3, 0.2, 0.08, 0.2, 0.2, 0.08, 0.2,
+];
 
-export function command(stage, time) {
-  if (stage === 'maneuver') return { speed: time < 6 ? 0.55 : 0, heading: time < 2 ? 0 : 0.6 };
-  return {
-    speed: stage === 'run' ? 1.4 : stage === 'walk' ? 0.65 : stage === 'step' ? 0.3 : 0,
-    heading: 0,
-  };
-}
-
-// Strict pass conditions are separate from this dense learning reward. In particular,
-// an incomplete physical step can be useful, and a fall is not a 100-point penalty.
-export function rewardDelta(stage, sample) {
-  const {
-    dt,
-    dx,
-    dz,
-    slip,
-    air,
-    upright,
-    settled,
-    lift,
-    clearanceProgress = 0,
-    swingProgress = 0,
-    step,
-    flight,
-    shift,
-    fell,
-    work,
-    heading,
-    stopped,
-  } = sample;
-  const cost = 0.8 * slip + 0.00025 * work + 1.2 * air;
-  if (stage === 'balance' || stage === 'recover') {
-    return (
-      dt * (0.4 * upright + 0.8 * Number(settled)) -
-      1.5 * Math.hypot(dx, dz) -
-      cost -
-      (fell ? 0.8 : 0)
-    );
-  }
-  if (stage === 'shift') {
-    return 0.4 * upright * dt + 0.7 * shift + 0.08 * lift - cost - Math.abs(dx) - (fell ? 0.8 : 0);
-  }
-  const maxSpeed = stage === 'run' ? 1.7 : 0.85;
-  let reward =
-    clamp(dx, -maxSpeed * dt, maxSpeed * dt) +
-    0.24 * step +
-    0.06 * lift +
-    2 * clearanceProgress +
-    0.6 * swingProgress +
-    0.035 * upright * dt -
-    cost -
-    (fell ? 0.8 : 0);
-  if (stage === 'run') reward += 0.35 * flight + 0.9 * air;
-  if (stage === 'maneuver') reward += 0.5 * stopped - 0.2 * heading * dt;
-  return reward;
+// Controller parameters describe feedback gains and joint target offsets, not poses or timings.
+// The support/lift/swing/plant transitions are triggered by measured contacts and foot placement.
+export function boundPolicy(policy) {
+  return policy.map((value, i) => {
+    if (i === 4) return clamp(value, 0.12, 0.9);
+    if (i === 5) return clamp(value, 0.05, 0.3);
+    if (i === 6) return clamp(value, 0, 4);
+    if (i === 7) return clamp(value, 0, 2);
+    return clamp(value, -3, 3);
+  });
 }
 
 export function trial(policy, options = {}) {
-  if (policy.length !== POLICY_SIZE) throw new Error('Invalid servo policy.');
-  const stage = options.stage ?? 'walk';
+  if (policy.length !== POLICY_SIZE || !policy.every(Number.isFinite)) {
+    throw new Error('Invalid locomotion policy.');
+  }
+  const p = boundPolicy(policy);
   const rig = createServoRig({ ...options, startSplit: options.startSplit ?? 0.045 });
-  const { dt } = rig;
-  const duration = options.seconds ?? 8;
-  const limit = Math.round(duration / dt);
+  const { bones, world, ground, dt } = rig;
   const trunk = rig.trunk.body;
-  const feet = rig.bones.filter((bone) => bone.name.startsWith('toes')).map((bone) => bone.body);
+  const feet = bones.filter((b) => b.name.startsWith('toes')).map((b) => b.body);
   const forbidden = new Set(
-    rig.bones.filter((b) => /^(skull|neck|trunk|tail)/.test(b.name)).map((b) => b.body),
+    bones.filter((b) => /^(trunk|skull|neck|tail)/.test(b.name)).map((b) => b.body),
   );
-  const mass = rig.bones.reduce((sum, b) => sum + b.body.mass, 0);
+  const mass = bones.reduce((sum, b) => sum + b.body.mass, 0);
+  const limit = Math.round((options.seconds ?? TRIAL_SECONDS) / dt);
   const origin = trunk.position.x;
-  let x = origin;
-  let z = trunk.position.z;
-  let targets = Array(32).fill(0);
+  const loads = [0, 0];
+  const contacts = [false, false];
+  let phase = 0;
+  let swing = options.startSplit < 0 ? 0 : 1;
+  let start = feet[swing].position.x;
+  let prevComZ = 0;
   let ticks = 0;
-  let fell = false;
-  let score = 0;
   let steps = 0;
   let lifts = 0;
+  let fell = false;
+  let distance = 0;
   let maxClearance = 0;
-  let maxDistance = 0;
-  let pathDistance = 0;
-  let stableTicks = 0;
+  let maxForward = 0;
   let settledTicks = 0;
-  let supportedTicks = 0;
-  let bothFeetTicks = 0;
-  let shiftTicks = 0;
-  let flightTicks = 0;
-  let flights = 0;
+  let settled = 0;
+  let supportTicks = 0;
+  let supported = 0;
+  let stableTicks = 0;
   let slip = 0;
-  let headingError = 0;
-  let stoppingTicks = 0;
-  let lastLanded = -1;
-  let lastFlight = -1;
-  let airTicks = 0;
-  let takeoff = -1;
-  const contacts = [false, false];
-  const loads = [0, 0];
-  const next = [false, false];
-  const lifted = [false, false];
-  const established = [false, false];
-  const footX = feet.map((f) => f.position.x);
-  const footZ = feet.map((f) => f.position.z);
-  const landingX = feet.map((f) => f.position.x);
-  const swingClearance = [0, 0];
-  const swingForward = [0, 0];
+  let work = 0;
+  let flightTicks = 0;
+  let phaseProgress = 0;
 
   function advance() {
     if (fell || ticks >= limit) return;
-    const target = command(stage, ticks * dt);
-    if (ticks % CONTROL_STEPS === 0)
-      targets = targetsFor(rig, policy, contacts, target.speed, target.heading, loads);
-    const beforeSupport = Number(contacts[0]) + Number(contacts[1]);
-    const beforeFoot = contacts[0] ? 0 : contacts[1] ? 1 : -1;
+    let comX = 0;
+    let comZ = 0;
+    for (const { body } of bones) {
+      comX += body.position.x * body.mass;
+      comZ += body.position.z * body.mass;
+    }
+    comX /= mass;
+    comZ /= mass;
+    const comVz = (comZ - prevComZ) / dt;
+    prevComZ = comZ;
+    const vertical = trunk.vectorToWorldFrame(rig.up);
+    const roll = vertical.z;
+    const pitch = vertical.x;
+    const support = 1 - swing;
+    const desiredZ = feet[support].position.z;
+    const desiredX = (feet[support].position.x + feet[swing].position.x) / 2;
+    feet[swing].updateAABB();
+    const h = feet[swing].aabb.lowerBound.y;
+    const ahead = feet[swing].position.x - feet[support].position.x;
+    const travel = feet[swing].position.x - start;
+    if (phase === 0 && contacts[0] && contacts[1] && loads[support] > 0.25) {
+      phase = 1;
+      start = feet[swing].position.x;
+    }
+    if (phase === 1 && loads[support] > p[4] && Math.abs(desiredZ - comZ) < p[5]) {
+      phase = 2;
+    }
+    if (phase === 2 && !contacts[swing] && contacts[support] && h > 0.025) {
+      phase = 3;
+      lifts++;
+    }
+    if (phase === 3 && ahead > 0.07 && travel > 0.07) phase = 4;
+    if (phase === 4 && contacts[swing] && h < 0.025) {
+      if (contacts[support] && ahead > 0.05 && travel > 0.05 && vertical.y > 0.9) {
+        steps++;
+        swing = support;
+      }
+      phase = 1;
+      start = feet[swing].position.x;
+    } else if (phase === 3 && contacts[swing]) {
+      phase = 1;
+      start = feet[swing].position.x;
+    }
+    phaseProgress = Math.max(phaseProgress, phase);
+    const goalZ = phase === 0 ? 0 : desiredZ;
+    const lateral = clamp(p[6] * (goalZ - comZ) - p[7] * comVz + p[8] * roll, -0.32, 0.32);
+    const targets = Array(32).fill(0);
+    for (let side = 0; side < 2; side++) {
+      const j = 16 + 8 * side;
+      targets[j] = lateral;
+      targets[j + 1] = p[0] + p[9] * pitch + p[10] * (comX - desiredX);
+      targets[j + 3] = p[1];
+      targets[j + 5] = p[2];
+      targets[j + 7] = p[3];
+      if (side === swing && phase >= 2) {
+        targets[j] += p[19] * (side === 0 ? -1 : 1) + p[20] * comVz + p[21] * roll;
+        const offset = phase === 4 ? 15 : 11;
+        for (let k = 0; k < 4; k++) targets[j + 1 + 2 * k] += p[offset + k];
+      }
+    }
+    // Each axial joint uses physical feedback; the tail remains a massive, freely moving chain.
+    for (let i = 0; i < 8; i++) {
+      const scale = i < 2 ? 0.35 : 1 - (i - 2) * 0.1;
+      targets[2 * i] = scale * (p[22] * roll + p[23] * trunk.angularVelocity.x + p[24] * comVz);
+      targets[2 * i + 1] =
+        scale * (p[25] * pitch + p[26] * trunk.angularVelocity.z + p[27] * trunk.velocity.x);
+    }
     rig.drive(targets);
     ticks++;
-    next.fill(false);
     loads.fill(0);
     let bodyContact = false;
-    for (const c of rig.world.contacts) {
-      const body = c.bi === rig.ground ? c.bj : c.bj === rig.ground ? c.bi : null;
+    let slipSpeed = 0;
+    for (const c of world.contacts) {
+      const body = c.bi === ground ? c.bj : c.bj === ground ? c.bi : null;
       if (!body || c.multiplier <= 0.01) continue;
       const index = feet.indexOf(body);
       if (index >= 0) {
-        next[index] = true;
         loads[index] += c.multiplier / (mass * 9.81);
+        const offset = body === c.bi ? c.ri : c.rj;
+        const point = body.position.vadd(offset);
+        const velocity = body.velocity.vadd(body.angularVelocity.cross(point.vsub(body.position)));
+        slipSpeed = Math.max(slipSpeed, Math.hypot(velocity.x, velocity.z));
       }
       if (forbidden.has(body)) bodyContact = true;
     }
-    const vertical = trunk.vectorToWorldFrame(rig.up);
-    fell = trunk.position.y < 0.6 || vertical.y < 0.55 || bodyContact;
-    let gainedLift = 0;
-    let gainedClearance = 0;
-    let gainedForward = 0;
-    let gainedStep = 0;
-    let gainedFlight = 0;
-    let gainedSlip = 0;
-    for (const [i, foot] of feet.entries()) {
-      const other = 1 - i;
-      if (contacts[i] && next[i])
-        gainedSlip += Math.hypot(foot.position.x - footX[i], foot.position.z - footZ[i]);
-      foot.updateAABB();
-      const clearance = Math.max(0, foot.aabb.lowerBound.y);
-      if (!fell && established[i] && !next[i] && next[other]) {
+    for (let i = 0; i < 2; i++) contacts[i] = loads[i] > 0.01;
+    const up = trunk.vectorToWorldFrame(rig.up).y;
+    fell = trunk.position.y < 0.6 || up < 0.55 || bodyContact;
+    if (fell) return;
+    slip += slipSpeed * dt;
+    distance = trunk.position.x - origin;
+    if (up > 0.9 && trunk.position.y > 0.8) stableTicks++;
+    if (contacts[0] && contacts[1] && up > 0.94 && trunk.velocity.length() < 0.18) {
+      settled++;
+      settledTicks = Math.max(settledTicks, settled);
+    } else settled = 0;
+    if (!contacts[swing] && contacts[1 - swing]) {
+      feet[swing].updateAABB();
+      const clearance = feet[swing].aabb.lowerBound.y;
+      if (clearance > 0.025) {
         maxClearance = Math.max(maxClearance, clearance);
-        if (i !== lastLanded) {
-          const height = Math.min(0.08, clearance);
-          const forward = clamp(foot.position.x - landingX[other], 0, 0.2);
-          gainedClearance += Math.max(0, height - swingClearance[i]);
-          gainedForward += Math.max(0, forward - swingForward[i]) * Math.min(1, clearance / 0.025);
-          swingClearance[i] = Math.max(swingClearance[i], height);
-          swingForward[i] = Math.max(swingForward[i], forward);
-        }
-        if (clearance >= 0.025 && !lifted[i]) {
-          lifted[i] = true;
-          gainedLift++;
-        }
-      }
-      if (next[i]) {
-        const forward = foot.position.x > landingX[other] + 0.05;
-        if (!fell && lifted[i] && !contacts[i] && i !== lastLanded && forward) {
-          gainedStep++;
-          lastLanded = i;
-        } else if (lastLanded === -1) {
-          lastLanded = i;
-        }
-        lifted[i] = false;
-        swingClearance[i] = 0;
-        swingForward[i] = 0;
-        established[i] = true;
-        landingX[i] = foot.position.x;
-      }
-      footX[i] = foot.position.x;
-      footZ[i] = foot.position.z;
-    }
-    const support = Number(next[0]) + Number(next[1]);
-    if (!fell) {
-      if (support) {
-        supportedTicks++;
-        if (support === 2) bothFeetTicks++;
-        if (airTicks >= 4 && takeoff >= 0 && support === 1) {
-          const land = next[0] ? 0 : 1;
-          if (land !== takeoff && land !== lastFlight) {
-            gainedFlight++;
-            lastFlight = land;
-          }
-        }
-        airTicks = 0;
-      } else {
-        if (beforeSupport) takeoff = beforeSupport === 1 ? beforeFoot : -1;
-        airTicks++;
-        flightTicks++;
-      }
-    }
-    contacts[0] = next[0];
-    contacts[1] = next[1];
-    const stable = !fell && vertical.y > 0.9 && trunk.position.y > 0.8;
-    const settled =
-      stable &&
-      support === 2 &&
-      vertical.y > 0.94 &&
-      trunk.position.y > 0.85 &&
-      trunk.velocity.length() < 0.18 &&
-      trunk.angularVelocity.length() < 0.8;
-    if (stable) stableTicks++;
-    if (settled) settledTicks++;
-    const shifted = !fell && support === 1;
-    if (shifted) shiftTicks++;
-    const yaw = Math.atan2(
-      2 * (trunk.quaternion.x * trunk.quaternion.z - trunk.quaternion.w * trunk.quaternion.y),
-      1 - 2 * (trunk.quaternion.y ** 2 + trunk.quaternion.z ** 2),
-    );
-    const error = Math.abs(
-      Math.atan2(Math.sin(target.heading - yaw), Math.cos(target.heading - yaw)),
-    );
-    const stopped = ticks * dt >= 6 && settled;
-    stoppingTicks = stopped ? stoppingTicks + 1 : 0;
-    headingError += error;
-    const dx = fell ? 0 : trunk.position.x - x;
-    const dz = fell ? 0 : trunk.position.z - z;
-    pathDistance += Math.hypot(dx, dz);
-    x += dx;
-    z += dz;
-    maxDistance = Math.max(maxDistance, x - origin);
-    steps += gainedStep;
-    lifts += gainedLift;
-    flights += gainedFlight;
-    slip += gainedSlip;
-    let work = 0;
+        maxForward = Math.max(maxForward, feet[swing].position.x - feet[1 - swing].position.x);
+        if (loads[1 - swing] > 0.45 && up > 0.9) {
+          supported++;
+          supportTicks = Math.max(supportTicks, supported);
+        } else supported = 0;
+      } else supported = 0;
+    } else supported = 0;
+    if (!contacts[0] && !contacts[1]) flightTicks++;
     for (const { joint, items } of rig.motors) {
       const relative = joint.a.angularVelocity.vsub(joint.b.angularVelocity);
-      for (const { motor } of items)
+      for (const { motor } of items) {
         work += Math.abs(motor.multiplier * relative.dot(motor.axisA)) * dt;
+      }
     }
-    score += rewardDelta(stage, {
-      dt,
-      dx,
-      dz,
-      slip: gainedSlip,
-      air: !support && !fell ? dt : 0,
-      upright: fell ? 0 : Math.max(0, vertical.y),
-      settled,
-      lift: gainedLift,
-      clearanceProgress: gainedClearance,
-      swingProgress: gainedForward,
-      step: gainedStep,
-      flight: gainedFlight,
-      shift: shifted ? dt : 0,
-      fell,
-      work,
-      heading: error,
-      stopped: stopped ? dt : 0,
-    });
   }
 
   function metrics() {
+    const score =
+      5 * steps +
+      3 * Math.min(maxClearance, 0.1) +
+      4 * Math.min(Math.max(maxForward, 0), 0.2) +
+      0.08 * phaseProgress +
+      (0.8 * stableTicks) / limit +
+      0.4 * distance -
+      0.08 * slip -
+      0.00002 * work -
+      (fell ? 0.2 : 0);
     return {
       ticks,
       fell,
-      distance: x - origin,
+      distance,
       steps,
       lifts,
       maxClearance,
-      maxDistance,
-      pathDistance,
+      maxForward,
       stableTicks,
       settledTicks,
-      supportedTicks,
-      bothFeetTicks,
-      shiftTicks,
-      flights,
-      flightTicks,
+      supportTicks,
       slip,
-      headingError,
-      stoppingTicks,
-      averageSpeed: ticks ? (x - origin) / (ticks * dt) : 0,
+      work,
+      flightTicks,
+      phaseProgress,
       score,
     };
   }
+
   return {
     rig,
     advance,

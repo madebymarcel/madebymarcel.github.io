@@ -38,11 +38,8 @@ const featureTests = {
 const featureScripts = {
   'scripts/biped-experiment.mjs': 'biped',
   'scripts/canoe-polo-experiment.mjs': 'canoe-polo',
-  'scripts/rex-locomotion.mjs': 't-rex',
-  'scripts/rex-spatial-experiment.mjs': 't-rex',
-  'scripts/rex-spatial-refine.mjs': 't-rex',
-  'scripts/rex-spatial-stand.mjs': 't-rex',
-  'scripts/rex-spatial.test.mjs': 't-rex',
+  'scripts/rex-servo-experiment.mjs': 't-rex',
+  'scripts/rex-servo.test.mjs': 't-rex',
 };
 const prefix = 'src/app/features/';
 const testPath = (name) => 'tests/' + name;

@@ -1,4 +1,4 @@
-import type { Segment } from './spatial-learning.mjs';
+import type { Segment } from './servo-learning.mjs';
 
 type Point = [number, number];
 const pair = (p: Point) => p.map((value) => value.toFixed(2)).join(' ');
@@ -33,7 +33,6 @@ export function project(bones: Segment[], side: boolean) {
       return {
         name: b.name,
         eyes: b.eyes.map(position),
-        outline: 'M ' + points.map(pair).join(' L ') + ' Z',
         skin: b.name.startsWith('toes')
           ? 'M ' + points.map(pair).join(' L ') + ' Z'
           : rounded(points),

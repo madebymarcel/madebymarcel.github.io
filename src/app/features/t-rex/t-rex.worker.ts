@@ -1,7 +1,8 @@
-import { assess, type Candidate, type Evaluation, type Stage } from './servo-search.mjs';
+import { assess, type Candidate } from './servo-search.mjs';
+import type { Metrics } from './servo-learning.mjs';
 
-export type EvaluationRequest = { id: number; stage: Stage; candidates: Candidate[] };
-export type EvaluationResponse = { id: number; evaluations: Evaluation[] };
+export type EvaluationRequest = { id: number; candidates: Candidate[] };
+export type EvaluationResponse = { id: number; evaluations: Metrics[] };
 
 const scope = globalThis as unknown as {
   onmessage: (event: MessageEvent<EvaluationRequest>) => void;
@@ -11,6 +12,6 @@ const scope = globalThis as unknown as {
 scope.onmessage = ({ data }) => {
   scope.postMessage({
     id: data.id,
-    evaluations: data.candidates.map((candidate) => assess(data.stage, candidate.policy)),
+    evaluations: data.candidates.map((candidate) => assess(candidate.policy)),
   });
 };

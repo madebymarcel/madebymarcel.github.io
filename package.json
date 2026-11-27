@@ -15,7 +15,7 @@
     "typecheck": "tsc --noEmit --project tsconfig.app.json",
     "format": "prettier --write .",
     "format:check": "prettier --check . || (prettier src/app/features/lab/layout-preview.html && exit 1)",
-    "test:unit": "node --test scripts/rex-spatial.test.mjs scripts/rex-servo.test.mjs scripts/test-impact.test.mjs && ng test --watch=false",
+    "test:unit": "node --test scripts/rex-servo.test.mjs scripts/test-impact.test.mjs && ng test --watch=false",
     "test:e2e": "playwright test",
     "lighthouse": "lhci autorun",
     "experiment:canoe-polo": "node --experimental-transform-types scripts/canoe-polo-experiment.mjs",
