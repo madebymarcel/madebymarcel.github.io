@@ -366,3 +366,97 @@ const passing = variants.flatMap(([variant]) => fixtures.filter((f) =>
   results.filter((r) => r.variant === variant && r.iteration === f.iteration).every((r) => r.passes),
 ).map((f) => ({ variant, iteration: f.iteration })));
 console.log('ACCEPTANCE ' + JSON.stringify({ passing, deployable: false, reason: 'Independent holdout validation required' }));
+
+
+// Stage 2: isolate whether failures originate before or after swing. Then screen
+// specific lateral control mechanisms, without changing bodies, motors or rewards.
+const neutral = replaceOnce(instrumented,
+  'if (phase === 0 && contacts[0] && contacts[1] && loads[support] > 0.25)',
+  'if (false && phase === 0 && contacts[0] && contacts[1] && loads[support] > 0.25)');
+const transfer = replaceOnce(instrumented,
+  'if (phase === 1 && loads[support] > p[4] && Math.abs(desiredZ - comZ) < p[5])',
+  'if (false && phase === 1 && loads[support] > p[4] && Math.abs(desiredZ - comZ) < p[5])');
+
+const followup = [
+  ['neutral-stance', neutral],
+  ['transfer-without-lift', transfer],
+];
+const goalLine = 'const goalZ = phase === 0 ? 0 : desiredZ;';
+for (const fraction of [0.25, 0.5, 0.75]) {
+  const goal = 'const goalZ = phase === 0 ? 0 : ' +
+    '(feet[0].position.z + feet[1].position.z) / 2 + ' + fraction +
+    ' * (feet[1 - swing].position.z - (feet[0].position.z + feet[1].position.z) / 2);';
+  followup.push(['transfer-fraction-' + fraction, replaceOnce(instrumented, goalLine, goal)]);
+}
+followup.push(['fresh-support-reference', replaceOnce(instrumented, goalLine,
+  'const goalZ = phase === 0 ? 0 : feet[1 - swing].position.z;')]);
+const lateralLine = 'targets[j] += p[19] * (side === 0 ? -1 : 1) + p[20] * comVz + p[21] * roll;';
+for (const gain of [0.8, 1.6, 3.2]) {
+  followup.push(['swing-lateral-placement-' + gain, replaceOnce(instrumented, lateralLine, lateralLine +
+    '\n        const sign = side === 0 ? -1 : 1;' +
+    '\n        const supportZ = feet[1 - side].position.z;' +
+    '\n        const predictedZ = comZ + 0.2 * comVz + sign * 0.12;' +
+    '\n        const targetZ = supportZ + sign * clamp(sign * (predictedZ - supportZ), 0.18, 0.55);' +
+    '\n        targets[j] += clamp(-' + gain + ' * (targetZ - feet[side].position.z), -0.18, 0.18);')]);
+}
+const lateralGainLine = 'p[6] * (goalZ - comZ) - p[7] * comVz + p[8] * roll';
+for (const factor of [0.5, 1.5, 2.5, 4]) {
+  followup.push(['lateral-damping-' + factor, replaceOnce(instrumented, lateralGainLine,
+    'p[6] * (goalZ - comZ) - ' + factor + ' * p[7] * comVz + p[8] * roll')]);
+}
+const followupResults = [];
+for (const [variant, variantSource] of followup) {
+  const { trial } = await import('data:text/javascript;base64,' + Buffer.from(variantSource).toString('base64'));
+  const rows = [];
+  for (const fixture of fixtures) {
+    for (const [i, scenario] of scenarios.entries()) {
+      let lastPhase = -1;
+      let firstTransfer = null;
+      let firstLift = null;
+      let maxSupportLoad = 0;
+      let maxSideError = 0;
+      let last = null;
+      const run = trial(fixture.policy, {
+        ...scenario,
+        observe: (state) => {
+          maxSupportLoad = Math.max(maxSupportLoad, state.loads[1 - state.swing]);
+          if (state.ticks % 12 === 0 || state.phase !== lastPhase || state.fell) {
+            const sample = snapshot(state);
+            const support = sample.feet[1 - sample.swing].position;
+            maxSideError = Math.max(maxSideError, Math.abs(sample.com[2] - support[2]));
+            if (state.phase === 1 && !firstTransfer) firstTransfer = sample;
+            if (state.phase === 2 && !firstLift) firstLift = sample;
+            last = sample;
+          }
+          lastPhase = state.phase;
+        },
+      });
+      while (!run.done) run.advance();
+      const metrics = run.metrics();
+      const row = {
+        variant, iteration: fixture.iteration, scenario: i, metrics,
+        passes: passes(metrics, scenario.seconds), firstTransfer, firstLift, last,
+        maxSupportLoad, maxSideError,
+      };
+      rows.push(row);
+      followupResults.push(row);
+      console.log('FOLLOWUP_TRIAL ' + JSON.stringify({
+        variant, iteration: fixture.iteration, scenario: i, metrics,
+        maxSupportLoad, maxSideError,
+        finalPhase: last?.phase, finalCom: last?.com, finalMomentum: last?.momentum,
+      }));
+    }
+  }
+  const mean = (get) => rows.reduce((sum, r) => sum + get(r), 0) / rows.length;
+  console.log('FOLLOWUP_SUMMARY ' + JSON.stringify({
+    variant, falls: rows.filter((r) => r.metrics.fell).length,
+    acceptancePasses: rows.filter((r) => r.passes).length,
+    meanSpeed: mean((r) => r.metrics.distance / scenarios[r.scenario].seconds),
+    stableFraction: mean((r) => r.metrics.stableTicks / (120 * scenarios[r.scenario].seconds)),
+    meanSteps: mean((r) => r.metrics.steps),
+    meanSlip: mean((r) => r.metrics.slip),
+    meanSupportTicks: mean((r) => r.metrics.supportTicks),
+    maxSupportLoad: Math.max(...rows.map((r) => r.maxSupportLoad)),
+  }));
+}
+writeFileSync('rex-diagnostic-results.json', JSON.stringify({ results, traces, followupResults }, null, 2));
