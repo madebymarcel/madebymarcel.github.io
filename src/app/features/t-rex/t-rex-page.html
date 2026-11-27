@@ -71,9 +71,20 @@
     </div>
   </div>
   <div class="training-control">
-    <button class="ds-button" type="button" (click)="toggleTraining()" [disabled]="!ready()">
-      {{ training() ? 'Pause training' : 'Start training' }}
-    </button>
+    <div class="training-actions">
+      <button class="ds-button" type="button" (click)="toggleTraining()" [disabled]="!ready()">
+        {{ training() ? 'Pause training' : 'Start training' }}
+      </button>
+      <button
+        class="ds-button ds-button--secondary"
+        type="button"
+        (click)="exportTraining()"
+        [disabled]="!ready()"
+      >
+        Export training
+      </button>
+    </div>
+    <p class="iteration-count" data-testid="rex-iterations">Iterations: {{ iterations() }}</p>
     <p class="milestone" role="status">{{ notice() }}</p>
     @if (error()) {
     <p class="ds-error" role="alert">{{ error() }}</p>
