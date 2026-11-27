@@ -278,3 +278,9 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+@media (min-width: 42rem) and (max-height: 30rem) {
+  .artwork {
+    block-size: clamp(5rem, 27dvh, 12rem);
+  }
+}

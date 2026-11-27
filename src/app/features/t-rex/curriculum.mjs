@@ -121,7 +121,9 @@ export function skillProgress(checkpoint) {
     attempts: 0,
     sinceImprovement: 0,
     restarts: 0,
-    population: [],
+    population: checkpoint.history
+      .filter((entry) => entry.stage === checkpoint.stage)
+      .slice(0, POPULATION_LIMIT),
   };
 }
 
@@ -268,8 +270,12 @@ export function propose(checkpoint, initial, gaitSeed = initial) {
   const progress = skillProgress(state);
   const best = state.best[state.stage];
   const pool = progress.population;
-  const stagnating = progress.sinceImprovement >= STAGNATION;
-  const restart = stagnating && progress.sinceImprovement % STAGNATION < WAVE_SIZE;
+  const resumedPlateau =
+    !checkpoint.search?.[state.stage] && best && state.iteration - best.iteration >= STAGNATION;
+  const stagnating = Boolean(resumedPlateau) || progress.sinceImprovement >= STAGNATION;
+  const restart =
+    Boolean(resumedPlateau) ||
+    (stagnating && progress.sinceImprovement % STAGNATION < WAVE_SIZE);
   const transfer = transferPolicy(state, initial, gaitSeed);
   const candidates = [];
   for (let i = 0; i < WAVE_SIZE; i++) {

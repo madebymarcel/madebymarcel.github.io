@@ -30,7 +30,7 @@
       <dd>{{ candidatesPerSecond() | number: '1.1-1' }}</dd>
     </div>
   </dl>
-  <div class="viewer" aria-label="Physical replay">
+  <div class="viewer" role="group" aria-label="Physical replay">
     <div class="projection">
       <span class="projection-label">Top</span>
       <svg
@@ -90,16 +90,20 @@
       role="img"
       aria-label="Side view of the physical skeleton"
     >
-      <path d="M 0 195 H 420" stroke="currentColor" />
+      <path d="M 0 195 H 420" stroke="currentColor" opacity=".35" />
+      @if (!debug()) {
+      <path data-testid="rex-side-skin" [attr.d]="side().tail" fill="#77965c" stroke="#344e35" />
+      }
       @for (b of side().segments; track b.name) {
+      @if (debug() || !b.name.startsWith('tail-')) {
       <path
         [attr.data-bone]="b.name"
         [attr.d]="b.d"
         [attr.stroke]="b.fill"
-        [attr.stroke-width]="b.width"
+        [attr.stroke-width]="debug() ? b.width * 0.45 : b.width"
         stroke-linecap="round"
       />
-      }
+      } }
     </svg>
     </div>
   </div>

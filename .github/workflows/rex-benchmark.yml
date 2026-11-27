@@ -1,0 +1,44 @@
+name: T. rex learning benchmark
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - scripts/rex-locomotion-benchmark.mjs
+      - .github/workflows/rex-benchmark.yml
+  workflow_dispatch:
+    inputs:
+      candidates:
+        description: Candidate budget per optimizer (multiple of eight)
+        default: '3504'
+        required: true
+      seed:
+        description: Random seed
+        default: '536'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    name: Balance benchmark (${{ matrix.algorithm }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        algorithm: [legacy, adaptive]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - run: npm ci --no-audit --no-fund
+      - name: Compare at a fixed budget
+        env:
+          ALGORITHM: ${{ matrix.algorithm }}
+          CANDIDATES: ${{ inputs.candidates || '3504' }}
+          SEED: ${{ inputs.seed || '536' }}
+        run: node scripts/rex-locomotion-benchmark.mjs "$ALGORITHM" "$CANDIDATES" "$SEED"

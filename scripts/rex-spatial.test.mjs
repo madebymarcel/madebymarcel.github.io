@@ -177,3 +177,16 @@ test('diagnostics use exactly the qualification limits, including strict boundar
   assert.equal(qualifies('balance', { ...balance, pathDistance: 0.35 }), false);
   assert.equal(qualifies('balance', { ...balance, settledTicks: 389 }), false);
 });
+
+test('an older plateau checkpoint resumes with exploration and preserves its champion', () => {
+  const start = emptyCheckpoint();
+  const wave = propose(start, initial);
+  const evaluation = assess('balance', wave.candidates[0].policy);
+  const trained = completeWave(start, wave, wave.candidates.map(() => evaluation));
+  const legacy = { ...trained, iteration: STAGNATION * 2 };
+  delete legacy.search;
+  delete legacy.autoAdvance;
+  const restored = parseCheckpoint(JSON.stringify(legacy));
+  assert.equal(propose(restored, initial).restart, true);
+  assert.deepEqual(restored.best.balance, trained.best.balance);
+});
