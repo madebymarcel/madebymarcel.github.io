@@ -7,6 +7,9 @@
         {{training()?'Pause training':'Start training'}}
       </button>
       <button class="ds-button ds-button--secondary" (click)="play()">Watch learned demo</button>
+      <button class="ds-button ds-button--secondary" (click)="play(standingPolicy)">
+        Watch balance test
+      </button>
       <button class="ds-button ds-button--secondary" [disabled]="!best()" (click)="play(best()!)">
         Watch your best
       </button>
@@ -20,6 +23,18 @@
       role="img"
       aria-label="Tyrannosaurus rex walking, seen from above"
     >
+      <defs>
+        <pattern
+          id="rex-track"
+          patternUnits="userSpaceOnUse"
+          width="420"
+          height="72.5"
+          [attr.y]="distance()*145"
+        >
+          <path d="M12 36h12 M396 36h12" stroke="currentColor" opacity=".4" />
+        </pattern>
+      </defs>
+      <rect width="420" height="650" fill="url(#rex-track)" />
       @for(b of overhead();track b.name){
       <path
         [attr.data-bone]="b.name"
@@ -29,15 +44,17 @@
         stroke-width="1"
         stroke-linejoin="round"
       />
-      }
+      @for(eye of b.eyes;track $index){
+      <circle [attr.cx]="eye[0]" [attr.cy]="eye[1]" r="2.5" fill="#263524" />
+      } }
     </svg>
     <svg
       class="artwork side-rig"
-      viewBox="0 0 420 185"
+      viewBox="0 0 420 210"
       role="img"
       aria-label="Side view of the physical skeleton"
     >
-      <path d="M 0 171 H 420" stroke="currentColor" />
+      <path d="M 0 195 H 420" stroke="currentColor" />
       @for(b of side();track b.name){
       <path
         [attr.data-bone]="b.name"

@@ -1,6 +1,7 @@
 type Point = { x: number; y: number; z: number };
 export type Segment = {
   outline: Point[];
+  eyes: Point[];
   name: string;
   width: number;
   depth: number;

@@ -103,9 +103,9 @@ export function createRig({ locked = false, lateralVelocity = 0, friction = 0.85
   let parent = trunk,
     base = root;
   for (const [index, width] of [0.33, 0.27, 0.21, 0.15, 0.1, 0.055].entries()) {
-    const tip = base.vadd(vec(-0.34, -0.025, 0));
+    const tip = base.vadd(vec(-0.34, 0.025, 0));
     const tail = bone('tail-' + index, base, tip, width, width * 0.88, 12 * width ** 2);
-    join(parent, tail, base, 0.32, 450 * width ** 3, locked);
+    join(parent, tail, base, 0.32, 1100 * width ** 3, locked);
     parent = tail;
     base = tip;
   }
@@ -113,13 +113,13 @@ export function createRig({ locked = false, lateralVelocity = 0, friction = 0.85
     const z = side * 0.195;
     const hip = vec(-0.09, 1.04, z),
       knee = vec(0.12, 0.68, z),
-      hock = vec(-0.19, 0.34, z),
-      ball = vec(-0.09, 0.045, z);
+      hock = vec(-0.29, 0.34, z),
+      ball = vec(-0.1, 0.045, z);
     const thigh = bone('thigh' + side, hip, knee, 0.15, 0.18, 0.86);
     const shin = bone('shin' + side, knee, hock, 0.1, 0.11, 0.36);
     const met = bone('metatarsus' + side, hock, ball, 0.075, 0.08, 0.19);
-    const toes = bone('toes' + side, ball, vec(0.19, 0.045, z), 0.15, 0.08, 0.11);
-    join(trunk, thigh, hip, 0.85, 45);
+    const toes = bone('toes' + side, ball, vec(0.22, 0.045, z), 0.15, 0.08, 0.11);
+    join(trunk, thigh, hip, 0.85, 90);
     join(thigh, shin, knee, 0.85, 33);
     join(shin, met, hock, 0.7, 18);
     join(met, toes, ball, 0.65, 9);
@@ -128,7 +128,9 @@ export function createRig({ locked = false, lateralVelocity = 0, friction = 0.85
   function step(actions = []) {
     for (const [i, joint] of joints.entries()) {
       if (joint.immobile) continue;
-      const requested = vec(0, actions[2 * i] || 0, actions[2 * i + 1] || 0);
+      const lateral = actions[2 * i] || 0;
+      const hip = joint.name.startsWith('thigh');
+      const requested = vec(hip ? lateral : 0, hip ? 0 : lateral, actions[2 * i + 1] || 0);
       requested.scale(joint.torque / Math.max(1, requested.length()), requested);
       const couple = joint.a.vectorToWorldFrame(requested);
       joint.b.torque.vadd(couple, joint.b.torque);
@@ -179,6 +181,12 @@ export function createRig({ locked = false, lateralVelocity = 0, friction = 0.85
       );
       return {
         outline,
+        eyes:
+          name === 'skull'
+            ? [-1, 1].map((k) =>
+                body.pointToWorldFrame(vec(-0.18 * length, depth * 0.3, k * width * 0.35)),
+              )
+            : [],
         name,
         width,
         depth,

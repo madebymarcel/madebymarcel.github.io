@@ -1,6 +1,7 @@
 import { writeFileSync } from 'node:fs';
 import { evaluate, trainer } from '../src/app/features/t-rex/spatial-learning.mjs';
-const train = trainer(1938);
+const seed = Number(process.argv[3] || 1938);
+const train = trainer(seed);
 let best;
 for (let i = 0; i < Number(process.argv[2] || 100); i++) best = train();
 const pairs = [-0.2, -0.1, 0, 0.1, 0.2].map((lateralVelocity, i) => {
@@ -12,7 +13,7 @@ const pairs = [-0.2, -0.1, 0, 0.1, 0.2].map((lateralVelocity, i) => {
   };
 });
 writeFileSync(
-  new URL('../src/app/features/t-rex/spatial-checkpoint.json', import.meta.url),
-  JSON.stringify({ seed: 1938, ...best, pairs }, null, 2) + '\n',
+  process.argv[4] || new URL('../src/app/features/t-rex/spatial-checkpoint.json', import.meta.url),
+  JSON.stringify({ seed, ...best, pairs }, null, 2) + '\n',
 );
 console.log(JSON.stringify(pairs));

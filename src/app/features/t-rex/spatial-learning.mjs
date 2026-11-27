@@ -1,6 +1,6 @@
 import { createRig } from './spatial-rig.mjs';
-const weightsPerAxis = 7;
-export const dimension = 16 * 2 * weightsPerAxis;
+const weightsPerAxis = 9;
+export const dimension = 12 * 2 * weightsPerAxis + 1;
 export function generator(seed) {
   return () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296;
 }
@@ -20,6 +20,7 @@ export function trial(policy, options = {}) {
   function advance() {
     const trunk = rig.trunk.body,
       vertical = trunk.vectorToWorldFrame(rig.up);
+    const phase = ticks * rig.dt * (5 + 3 * Math.tanh(policy[dimension - 1]));
     const features = [
       1,
       vertical.x,
@@ -28,22 +29,38 @@ export function trial(policy, options = {}) {
       trunk.angularVelocity.z * 0.2,
       Number(contact[0]),
       Number(contact[1]),
+      0,
+      0,
     ];
     const actions = [];
     for (const [i, { a, b }] of rig.joints.entries()) {
+      features[7] = i >= 8 ? Math.sin(phase) : 0;
+      features[8] = i >= 8 ? Math.cos(phase) : 0;
       const target = a.quaternion.mult(rests[i]);
       const displacement = a.quaternion
         .inverse()
         .mult(b.quaternion.mult(target.inverse()))
         .mult(a.quaternion);
       const rate = a.vectorToLocalFrame(b.angularVelocity.vsub(a.angularVelocity));
-      for (const axis of ['y', 'z']) {
-        const offset = actions.length * weightsPerAxis;
-        const active = features.reduce((sum, value, j) => sum + value * policy[offset + j], 0);
+      const right = i >= 12,
+        mirror = right ? -1 : 1;
+      features[2] = vertical.z * mirror;
+      features[3] = trunk.angularVelocity.x * 0.2 * mirror;
+      features[5] = Number(contact[right ? 1 : 0]);
+      features[6] = Number(contact[right ? 0 : 1]);
+      features[7] *= mirror;
+      features[8] *= mirror;
+      const hip = i === 8 || i === 12;
+      for (const axis of [hip ? 'x' : 'y', 'z']) {
+        const offset = ((right ? i - 4 : i) * 2 + Number(axis === 'z')) * weightsPerAxis;
+        const cyclic = features[7] * policy[offset + 7] + features[8] * policy[offset + 8];
+        const active = features
+          .slice(0, 7)
+          .reduce((sum, value, j) => sum + value * policy[offset + j], 0);
         actions.push(
-          Math.tanh(active) -
-            4 * displacement[axis] * Math.sign(displacement.w) -
-            0.018 * rate[axis],
+          (Math.tanh(active) + 3 * Math.tanh(cyclic)) * (axis === 'z' ? 1 : mirror) -
+            (i >= 2 && i < 8 ? 36 : 10) * displacement[axis] * Math.sign(displacement.w) -
+            (i < 8 ? 0.018 : 0.08) * rate[axis],
         );
       }
     }
@@ -76,7 +93,13 @@ export function trial(policy, options = {}) {
   }
   function metrics() {
     const distance = rig.trunk.body.position.x - start;
-    return { ticks, fell, distance, steps, score: (ticks + upright) / 120 + steps + distance };
+    return {
+      ticks,
+      fell,
+      distance,
+      steps,
+      score: (ticks + upright) / 400 + 4 * Math.min(steps, 8) + 2 * distance,
+    };
   }
   return {
     rig,
@@ -94,12 +117,14 @@ export function evaluate(policy, options) {
 }
 export function trainer(seed) {
   const random = generator(seed);
-  let best = Array.from({ length: dimension }, () => (random() - 0.5) * 0.4);
+  let best = Array.from({ length: dimension }, () => (random() - 0.5) * 0.08);
   let score = -Infinity,
     iteration = 0;
   return () => {
     const candidate = iteration
-      ? best.map((w) => (random() < 0.18 ? w + (random() - 0.5) * 0.7 : w))
+      ? best.map((w) =>
+          random() < 0.18 ? w + (random() - 0.5) * [0.04, 0.15, 0.5, 1.2][iteration % 4] : w,
+        )
       : best;
     const result = evaluate(candidate, {});
     if (result.score > score) {
@@ -108,34 +133,4 @@ export function trainer(seed) {
     }
     return { iteration: ++iteration, policy: best, score };
   };
-}
-
-// Fine-tune the newly trained checkpoint against starts excluded from the test pairs.
-export function refine(initial, objective, seed, candidates) {
-  const random = generator(seed);
-  const starts = [
-    {},
-    { lateralVelocity: -0.075, friction: 0.8 },
-    { lateralVelocity: 0.065, friction: 0.9 },
-  ];
-  function fitness(policy) {
-    const scores = starts.map((start) => {
-      const m = evaluate(policy, start);
-      if (objective === 'stand') return m.ticks / 120 - Math.abs(m.distance);
-      return m.ticks / 120 + Math.min(m.steps, 8) * 0.75 + m.distance;
-    });
-    return Math.min(...scores) * 0.65 + (scores.reduce((a, b) => a + b, 0) / scores.length) * 0.35;
-  }
-  let policy = initial.slice(),
-    score = fitness(policy);
-  for (let i = 0; i < candidates; i++) {
-    const magnitude = [0.01, 0.04, 0.12, 0.4][i % 4];
-    const candidate = policy.map((w) => (random() < 0.08 ? w + (random() - 0.5) * magnitude : w));
-    const value = fitness(candidate);
-    if (value > score) {
-      score = value;
-      policy = candidate;
-    }
-  }
-  return { policy, score };
 }

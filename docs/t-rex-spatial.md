@@ -17,11 +17,13 @@ Use Node 24 and run these commands from the checkout.
 ```sh
 npm ci
 node --test scripts/rex-spatial.test.mjs
-node scripts/rex-spatial-experiment.mjs 2500
+node scripts/rex-spatial-experiment.mjs 650 211
+node scripts/rex-spatial-refine.mjs 1300
+node scripts/rex-spatial-stand.mjs 1300
 npm run build
 npx playwright test tests/t-rex.spec.js --project=desktop-chromium --project=mobile-chromium
 ```
 
-The experiment uses seed 1938 to generate a fresh feedback policy and hill-climb its weights. Inputs include trunk tilt, angular velocity and foot contact. Each joint combines the learned command with passive local stiffness and damping. Browser training starts independently with seed 536. The trial clock advances at 120 Hz and ends at five seconds or a fall. Trunk height, tilt or non-limb ground contact can end a trial. A counted step requires an airborne interval of six ticks, alternating contact, and a landing at least 5 cm ahead of the last accepted landing. The first accepted landing establishes the baseline.
+The experiment uses seed 211 to generate a fresh feedback policy and hill-climb its weights. Inputs include trunk tilt, angular velocity and foot contact. A shared bilateral hindlimb policy receives opposite phases of a clock with learned frequency. Training determines the sign and amplitude of leg commands. Tail and neck commands depend only on sensed state. Each joint combines the learned command with passive local stiffness and damping. Browser training starts independently with seed 536. The trial clock advances at 120 Hz and ends at five seconds or a fall. Trunk height, tilt or non-limb ground contact can end a trial. A counted step requires an airborne interval of six ticks, alternating contact, and a landing at least 5 cm ahead of the last accepted landing. The first accepted landing establishes the baseline.
 
 The JSON checkpoint contains every paired evaluation with elapsed ticks, fall flag, signed trunk displacement and alternating step count. The five lateral velocity/friction combinations are excluded from candidate selection. The locked case replaces all six tail joints with rigid locks and preserves every segment's mass and starting pose. A successful sustained walk requires surviving the five seconds and several forward alternating steps. Individual reported footfalls during collapse are insufficient evidence.
