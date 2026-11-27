@@ -15,6 +15,35 @@ import {
   WAVE_SIZE,
 } from '../src/app/features/t-rex/servo-search.mjs';
 
+// Replay metrics must agree across JS engines. Discrete physical events stay exact;
+// only continuous quantities permit insignificant floating-point rounding.
+function assertReplayMetrics(actual, expected) {
+  assert.deepEqual(Object.keys(actual).sort(), Object.keys(expected).sort());
+  const continuous = new Set([
+    'distance',
+    'maxClearance',
+    'maxForward',
+    'slip',
+    'work',
+    'score',
+    'lateralDistance',
+    'forwardUpright',
+  ]);
+  for (const [key, value] of Object.entries(expected)) {
+    if (continuous.has(key)) {
+      const tolerance = 1e-8 * Math.max(1, Math.abs(value));
+      assert.ok(Math.abs(actual[key] - value) <= tolerance, key + ' differs from reference');
+    } else {
+      assert.equal(actual[key], value, key + ' differs from reference');
+    }
+  }
+}
+
+function assertReplayTrials(actual, expected) {
+  assert.equal(actual.length, expected.length);
+  actual.forEach((metrics, i) => assertReplayMetrics(metrics, expected[i]));
+}
+
 test('physical skeleton retains all 17 bodies and 16 articulated joints', () => {
   const rig = createServoRig({ startSplit: 0.045 });
   assert.equal(rig.bones.length, 17);
@@ -117,16 +146,16 @@ test('legacy checkpoint migration preserves weights, count and behavior, and res
   assert.equal(state.rng, old.rng);
   assert.equal(state.best.iteration, old.best.iteration);
   assert.deepEqual(state.best.policy, [...old.best.policy, ...GAIT_DEFAULTS]);
-  assert.deepEqual(state.best.metrics, seed.metrics);
-  assert.deepEqual(state.best.trials, seed.trials);
-  assert.equal(state.best.fitness, robustFitness(seed.metrics, seed.trials));
+  assertReplayMetrics(state.best.metrics, seed.metrics);
+  assertReplayTrials(state.best.trials, seed.trials);
+  assert.equal(state.best.fitness, robustFitness(state.best.metrics, state.best.trials));
   assert.deepEqual(parseCheckpoint(JSON.stringify(state)), state);
 });
 
 test('the seed has reproducible nominal and disturbed evaluations', () => {
   const result = assess(seed.policy);
-  assert.deepEqual(result.metrics, seed.metrics);
-  assert.deepEqual(result.trials, seed.trials);
+  assertReplayMetrics(result.metrics, seed.metrics);
+  assertReplayTrials(result.trials, seed.trials);
 });
 
 test('extra steps alone cannot replace effective forward motion', () => {
