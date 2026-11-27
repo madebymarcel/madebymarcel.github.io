@@ -1,11 +1,6 @@
 name: T. rex learning benchmark
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - scripts/rex-locomotion-benchmark.mjs
-      - .github/workflows/rex-benchmark.yml
   workflow_dispatch:
     inputs:
       candidates:
