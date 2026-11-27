@@ -100,7 +100,9 @@ test('both projections fit within the first viewport on desktop and phones', asy
   }
 });
 
-test('direct skill selection preserves champions and exposes exact trial failures', async ({ page }) => {
+test('direct skill selection preserves champions and exposes exact trial failures', async ({
+  page,
+}) => {
   test.setTimeout(90_000);
   await page.goto('/projects/t-rex/');
   const skill = page.getByLabel('Training skill');
@@ -112,13 +114,17 @@ test('direct skill selection preserves champions and exposes exact trial failure
   await expect(page.getByRole('heading', { name: 'Walking trials' })).toBeVisible();
   await start.click();
   await expect(best).toBeEnabled({ timeout: 30_000 });
-  await expect(page.getByRole('table', { name: 'Actual values and required thresholds' })).toBeVisible();
+  await expect(
+    page.getByRole('table', { name: 'Actual values and required thresholds' }),
+  ).toBeVisible();
   await page.getByRole('button', { name: /Slipperier/ }).click();
   await expect(page.getByText(/Friction 0.76/)).toBeVisible();
   await page.getByRole('button', { name: 'Replay trial' }).click();
   await expect(page.getByText(/Walking · Slipperier · #/)).toBeVisible();
   await skill.selectOption('balance');
-  await expect(page.getByRole('heading', { name: 'Balance trials' })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('heading', { name: 'Balance trials' })).toBeVisible({
+    timeout: 30_000,
+  });
   if (await pause.isVisible()) await pause.click();
   await expect(start).toBeEnabled({ timeout: 30_000 });
   await skill.selectOption('walk');

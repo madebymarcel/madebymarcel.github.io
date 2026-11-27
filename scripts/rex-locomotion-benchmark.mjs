@@ -64,7 +64,11 @@ for (const mode of algorithm === 'both' ? ['legacy', 'adaptive'] : [algorithm]) 
   if (process.env.GITHUB_STEP_SUMMARY) {
     appendFileSync(
       process.env.GITHUB_STEP_SUMMARY,
-      '## Balance benchmark: ' + mode + '\n\n```json\n' + JSON.stringify(summary, null, 2) + '\n```\n',
+      '## Balance benchmark: ' +
+        mode +
+        '\n\n```json\n' +
+        JSON.stringify(summary, null, 2) +
+        '\n```\n',
     );
   }
 }

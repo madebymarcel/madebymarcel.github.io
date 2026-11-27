@@ -70,7 +70,12 @@ export class TRexPage {
   readonly followBest = signal(true);
   readonly panel = signal<'trials' | 'records' | 'history' | 'settings'>('trials');
   readonly panels = ['trials', 'records', 'history', 'settings'] as const;
-  readonly panelLabels = { trials: 'Trials', records: 'Records', history: 'History', settings: 'Settings' };
+  readonly panelLabels = {
+    trials: 'Trials',
+    records: 'Records',
+    history: 'History',
+    settings: 'Settings',
+  };
   readonly trialIndex = signal(0);
   readonly trialRows = computed(() => {
     const stage = this.state().stage;
@@ -97,19 +102,26 @@ export class TRexPage {
     const best = this.currentBest();
     const progress = this.progress();
     if (!best) return 'No policy evaluated for this skill yet.';
-    if (best.evaluation.passes === 3) return this.training() ? 'Passed · refining policy' : 'All trials passed';
+    if (best.evaluation.passes === 3)
+      return this.training() ? 'Passed · refining policy' : 'All trials passed';
     if (progress.sinceImprovement >= STAGNATION) return 'Plateau detected · exploring new policies';
     if (!progress.attempts) return 'Restored policy · new search statistics begin on resume';
     if (progress.sinceImprovement === 0) return 'New best policy';
     return 'Searching for a better policy';
   });
-  readonly history = computed(() => this.state().history.filter((e) => e.stage === this.state().stage));
+  readonly history = computed(() =>
+    this.state().history.filter((e) => e.stage === this.state().stage),
+  );
   readonly historyOptions = computed(() => [
     { id: '0', label: 'Select checkpoint' },
     ...this.history().map((entry) => ({
       id: String(entry.iteration),
       label:
-        '#' + entry.iteration + ' · ' + entry.evaluation.passes + '/3 · fitness ' +
+        '#' +
+        entry.iteration +
+        ' · ' +
+        entry.evaluation.passes +
+        '/3 · fitness ' +
         entry.evaluation.score.toFixed(2),
     })),
   ]);
@@ -267,7 +279,8 @@ export class TRexPage {
         if (advanced.stage !== before.stage) {
           this.clearSkillView();
         } else if (
-          passed && !requested &&
+          passed &&
+          !requested &&
           (result.autoAdvance || before.best[before.stage]?.evaluation.passes !== 3)
         ) {
           this.training.set(false);
@@ -275,7 +288,12 @@ export class TRexPage {
         this.state.set(advanced);
         this.dirty = true;
         const entry = this.currentBest();
-        if (this.followBest() && !this.playing() && entry && entry.iteration !== this.lastAutoReplay) {
+        if (
+          this.followBest() &&
+          !this.playing() &&
+          entry &&
+          entry.iteration !== this.lastAutoReplay
+        ) {
           this.lastAutoReplay = entry.iteration;
           this.replayEntry(entry);
         }
@@ -404,8 +422,11 @@ export class TRexPage {
   replayEntry(entry: Entry, trialIndex = 0) {
     this.play(entry.policy, entry.stage, scenarios(entry.stage)[trialIndex], true);
     this.replayLabel.set(
-      this.labels[entry.stage] + ' · ' + ['Normal', 'Slipperier', 'Grippier'][trialIndex] +
-      ' · #' + entry.iteration,
+      this.labels[entry.stage] +
+        ' · ' +
+        ['Normal', 'Slipperier', 'Grippier'][trialIndex] +
+        ' · #' +
+        entry.iteration,
     );
   }
 
@@ -433,7 +454,9 @@ export class TRexPage {
   ) {
     this.stopReplay();
     if (!learned) this.followBest.set(false);
-    this.replayLabel.set(learned ? this.labels[stage] : 'Historical ' + this.labels[stage] + ' demo');
+    this.replayLabel.set(
+      learned ? this.labels[stage] : 'Historical ' + this.labels[stage] + ' demo',
+    );
     const run = trial(policy, options);
     const draw = () => {
       const frame = run.rig.frame();
@@ -455,7 +478,9 @@ export class TRexPage {
             : run.done
               ? learned && qualifies(stage, m)
                 ? ' · Trial passed'
-                : learned ? ' · Trial failed' : ' · Demo complete'
+                : learned
+                  ? ' · Trial failed'
+                  : ' · Demo complete'
               : ''),
       );
     };

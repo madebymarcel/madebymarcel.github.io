@@ -129,7 +129,11 @@ test('manual skill selection and historical seeds preserve champions and old che
   const walk = selectSkill(emptyCheckpoint(), 'walk');
   const wave = propose(walk, initial);
   const result = assess('walk', wave.candidates[0].policy);
-  const trained = completeWave(walk, wave, wave.candidates.map(() => result));
+  const trained = completeWave(
+    walk,
+    wave,
+    wave.candidates.map(() => result),
+  );
   const champion = trained.best.walk;
   assert.equal(skillProgress(trained).attempts, WAVE_SIZE);
   assert.ok(skillProgress(trained).population.length > 1);
@@ -149,14 +153,22 @@ test('stagnation restarts exploration deterministically without discarding a cha
   const start = emptyCheckpoint();
   const wave = propose(start, initial);
   const result = assess('balance', wave.candidates[0].policy);
-  const state = completeWave(start, wave, wave.candidates.map(() => result));
+  const state = completeWave(
+    start,
+    wave,
+    wave.candidates.map(() => result),
+  );
   state.iteration = STAGNATION;
   state.search.balance.attempts = STAGNATION;
   state.search.balance.sinceImprovement = STAGNATION;
   const restart = propose(state, initial);
   assert.equal(restart.restart, true);
   assert.deepEqual(restart, propose(parseCheckpoint(JSON.stringify(state)), initial));
-  const updated = completeWave(state, restart, restart.candidates.map(() => result));
+  const updated = completeWave(
+    state,
+    restart,
+    restart.candidates.map(() => result),
+  );
   assert.deepEqual(updated.best.balance, state.best.balance);
   assert.equal(skillProgress(updated).restarts, 1);
 });
@@ -171,9 +183,10 @@ test('diagnostics use exactly the qualification limits, including strict boundar
   };
   assert.equal(qualifies('balance', balance), true);
   const checks = trialChecks('balance', { ...balance, pathDistance: 0.35 });
-  assert.deepEqual(checks.filter((check) => !check.passed).map((check) => check.label), [
-    'Path distance',
-  ]);
+  assert.deepEqual(
+    checks.filter((check) => !check.passed).map((check) => check.label),
+    ['Path distance'],
+  );
   assert.equal(qualifies('balance', { ...balance, pathDistance: 0.35 }), false);
   assert.equal(qualifies('balance', { ...balance, settledTicks: 389 }), false);
 });
@@ -182,7 +195,11 @@ test('an older plateau checkpoint resumes with exploration and preserves its cha
   const start = emptyCheckpoint();
   const wave = propose(start, initial);
   const evaluation = assess('balance', wave.candidates[0].policy);
-  const trained = completeWave(start, wave, wave.candidates.map(() => evaluation));
+  const trained = completeWave(
+    start,
+    wave,
+    wave.candidates.map(() => evaluation),
+  );
   const legacy = { ...trained, iteration: STAGNATION * 2 };
   delete legacy.search;
   delete legacy.autoAdvance;

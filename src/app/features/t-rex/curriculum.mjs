@@ -117,14 +117,16 @@ export function selectSkill(checkpoint, stage) {
 }
 
 export function skillProgress(checkpoint) {
-  return checkpoint.search?.[checkpoint.stage] ?? {
-    attempts: 0,
-    sinceImprovement: 0,
-    restarts: 0,
-    population: checkpoint.history
-      .filter((entry) => entry.stage === checkpoint.stage)
-      .slice(0, POPULATION_LIMIT),
-  };
+  return (
+    checkpoint.search?.[checkpoint.stage] ?? {
+      attempts: 0,
+      sinceImprovement: 0,
+      restarts: 0,
+      population: checkpoint.history
+        .filter((entry) => entry.stage === checkpoint.stage)
+        .slice(0, POPULATION_LIMIT),
+    }
+  );
 }
 
 export function seedFromEntry(checkpoint, entry) {
@@ -255,7 +257,8 @@ function mutate(state, policy, strength, probability) {
       k < sensorDimension - 1 &&
       (state.stage === 'balance' || state.stage === 'recover') &&
       (feature === 7 || feature === 8)
-    ) continue;
+    )
+      continue;
     if (random(state) < probability) {
       policy[k] = Math.max(-24, Math.min(24, policy[k] + (random(state) - 0.5) * strength));
     }
@@ -274,15 +277,14 @@ export function propose(checkpoint, initial, gaitSeed = initial) {
     !checkpoint.search?.[state.stage] && best && state.iteration - best.iteration >= STAGNATION;
   const stagnating = Boolean(resumedPlateau) || progress.sinceImprovement >= STAGNATION;
   const restart =
-    Boolean(resumedPlateau) ||
-    (stagnating && progress.sinceImprovement % STAGNATION < WAVE_SIZE);
+    Boolean(resumedPlateau) || (stagnating && progress.sinceImprovement % STAGNATION < WAVE_SIZE);
   const transfer = transferPolicy(state, initial, gaitSeed);
   const candidates = [];
   for (let i = 0; i < WAVE_SIZE; i++) {
     const explorer = i >= (stagnating ? 5 : 7);
     const alternative = pool.length ? pool[Math.floor(random(state) * pool.length)] : best;
     const parent = progress.focus && i < 3 ? progress.focus : i < 3 ? best : alternative;
-    let policy = (explorer ? transfer : parent?.policy ?? transfer).slice();
+    let policy = (explorer ? transfer : (parent?.policy ?? transfer)).slice();
     const first = !best && i === 0 && !progress.focus;
     const focused = progress.focus && i === 0;
     if (!first && !focused) {
@@ -290,9 +292,12 @@ export function propose(checkpoint, initial, gaitSeed = initial) {
         policy = policy.map((w, k) => (random(state) < 0.25 ? best.policy[k] : w));
       }
       const strength = explorer
-        ? restart ? 3.2 : stagnating ? 1.8 : 0.8
-        : [0.06, 0.18, 0.55, 0.24, 0.5, 0.9, 1.4, 1.8][i] *
-          (stagnating ? 1.6 : 1);
+        ? restart
+          ? 3.2
+          : stagnating
+            ? 1.8
+            : 0.8
+        : [0.06, 0.18, 0.55, 0.24, 0.5, 0.9, 1.4, 1.8][i] * (stagnating ? 1.6 : 1);
       const probability = explorer ? (stagnating ? 0.35 : 0.18) : i < 2 ? 0.06 : 0.13;
       policy = mutate(state, policy, strength, probability);
     }
@@ -305,7 +310,8 @@ function compare(a, b) {
   const passes = b.evaluation.passes - a.evaluation.passes;
   if (passes) return passes;
   if (a.evaluation.passes !== 3) {
-    const deficit = evaluationDeficit(a.stage, a.evaluation) - evaluationDeficit(b.stage, b.evaluation);
+    const deficit =
+      evaluationDeficit(a.stage, a.evaluation) - evaluationDeficit(b.stage, b.evaluation);
     if (Math.abs(deficit) > 1e-9) return deficit;
   }
   return b.evaluation.score - a.evaluation.score;
@@ -322,17 +328,19 @@ function population(entries, champion) {
   for (let index = 0; index < 3; index++) {
     add(
       [...unique]
-        .sort((a, b) =>
-          trialDeficit(a.stage, a.evaluation.trials[index]) -
-          trialDeficit(b.stage, b.evaluation.trials[index]) || compare(a, b),
+        .sort(
+          (a, b) =>
+            trialDeficit(a.stage, a.evaluation.trials[index]) -
+              trialDeficit(b.stage, b.evaluation.trials[index]) || compare(a, b),
         )
         .slice(0, 2),
     );
   }
-  const diversity = (entry) => entry.policy.reduce(
-    (sum, weight, index) => sum + (weight - (champion?.policy[index] ?? 0)) ** 2,
-    0,
-  );
+  const diversity = (entry) =>
+    entry.policy.reduce(
+      (sum, weight, index) => sum + (weight - (champion?.policy[index] ?? 0)) ** 2,
+      0,
+    );
   add([...unique].sort((a, b) => diversity(b) - diversity(a)).slice(0, 2));
   return [...selected.values()].slice(0, POPULATION_LIMIT);
 }
@@ -521,7 +529,8 @@ export function parseCheckpoint(source) {
             Array.isArray(p.population) &&
             p.population.length <= POPULATION_LIMIT &&
             p.population.every((e) => e?.stage === stage && validEntry(e, s.iteration)) &&
-            (p.focus === undefined || (p.focus?.stage === stage && validEntry(p.focus, s.iteration))),
+            (p.focus === undefined ||
+              (p.focus?.stage === stage && validEntry(p.focus, s.iteration))),
         ) ||
         Object.values(s.search).reduce((sum, p) => sum + p.attempts, 0) > s.iteration)) ||
     new Set(s.history.map((entry) => entry.iteration)).size !== s.history.length
