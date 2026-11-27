@@ -30,22 +30,15 @@ test('a learned replay uses the overhead rig and keeps shins and feet behind thi
   await page.getByRole('button', { name: 'Watch learned demo' }).click();
   const view = page.getByRole('img', { name: /Tyrannosaurus rex walking/ });
   await expect(view).toBeVisible();
-  await expect(view.locator('.rex-lower-leg')).toHaveCount(2);
-  await expect(view.locator('.rex-upper-leg')).toHaveCount(2);
-  expect(
-    await view.locator('g').evaluateAll((nodes) => nodes.map((node) => node.getAttribute('class'))),
-  ).toEqual(['rex-lower-leg', 'rex-lower-leg', 'rex-upper-leg', 'rex-upper-leg']);
-  const firstFoot = view.locator('.toe').first();
-  const initialFoot = await firstFoot.getAttribute('transform');
-  await expect(firstFoot).not.toHaveAttribute('transform', initialFoot);
-  const tail = view.locator('.rex-tail');
-  const initialTail = await tail.getAttribute('transform');
-  await expect(tail).not.toHaveAttribute('transform', initialTail);
-  const side = page.getByRole('img', { name: 'Side-view physics rig showing tail counterbalance' });
-  await expect(side).toBeVisible();
-  await expect(side.locator('.rig-tail')).not.toHaveAttribute('points', '');
-  await page.getByRole('button', { name: 'Stop replay' }).click();
-  await expect(page.getByRole('button', { name: 'Stop replay' })).toHaveCount(0);
+  const tail = view.locator('[data-bone^="tail-"]');
+  await expect(tail).toHaveCount(6);
+  const tip = tail.last();
+  const initial = await tip.getAttribute('d');
+  await expect(tip).not.toHaveAttribute('d', initial);
+  const order = await view.locator('path').evaluateAll((nodes) => nodes.map((n) => n.dataset.bone));
+  expect(order.indexOf('toes1')).toBeLessThan(order.indexOf('thigh1'));
+  const side = page.getByRole('img', { name: 'Side view of the physical skeleton' });
+  await expect(side.locator('[data-bone^="tail-"]')).toHaveCount(6);
 });
 
 test('the T. rex worker trains independently and enables a local replay', async ({ page }) => {

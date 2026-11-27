@@ -29,6 +29,7 @@
     "@angular/platform-server": "22.3.0",
     "@angular/router": "22.3.0",
     "@angular/ssr": "22.3.0",
+    "cannon-es": "^0.20.0",
     "planck": "1.5.1",
     "rxjs": "7.8.2",
     "tslib": "2.9.1"
