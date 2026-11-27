@@ -4,9 +4,23 @@ import { StableSelect } from '../../core/ui/stable-select';
 import { trial } from './servo-learning.mjs';
 import { neutralPolicy } from './servo-rig.mjs';
 import {
-  completeWave, emptyCheckpoint, LABELS, LEGACY_KEY, optionsFor, parseCheckpoint, propose,
-  seedFromEntry, selectSkill, skillState, STAGES, STORAGE_KEY, trialChecks,
-  type Checkpoint, type Entry, type Evaluation, type Stage,
+  completeWave,
+  emptyCheckpoint,
+  LABELS,
+  LEGACY_KEY,
+  optionsFor,
+  parseCheckpoint,
+  propose,
+  seedFromEntry,
+  selectSkill,
+  skillState,
+  STAGES,
+  STORAGE_KEY,
+  trialChecks,
+  type Checkpoint,
+  type Entry,
+  type Evaluation,
+  type Stage,
 } from './servo-search.mjs';
 import { project } from './rex-render';
 import type { EvaluationRequest, EvaluationResponse } from './t-rex.worker';
@@ -59,36 +73,59 @@ export class TRexPage {
   readonly headline = computed(() => {
     const stage = this.state().stage;
     const m = this.currentBest()?.evaluation.metrics;
-    const item = (label: string, value: number, unit = '', digits = '1.0-0') => ({ label, value, unit, digits });
+    const item = (label: string, value: number, unit = '', digits = '1.0-0') => ({
+      label,
+      value,
+      unit,
+      digits,
+    });
     const upright = item('Upright', (m?.stableTicks ?? 0) / 120, 's', '1.1-1');
     if (stage === 'balance' || stage === 'recover') {
-      return [upright, item('Settled', (m?.settledTicks ?? 0) / 120, 's', '1.1-1'),
-        item('Drift', m?.pathDistance ?? 0, 'm', '1.2-2')];
+      return [
+        upright,
+        item('Settled', (m?.settledTicks ?? 0) / 120, 's', '1.1-1'),
+        item('Drift', m?.pathDistance ?? 0, 'm', '1.2-2'),
+      ];
     }
     if (stage === 'shift') {
-      return [item('Weight transfer', (m?.shiftTicks ?? 0) / 120, 's', '1.1-1'),
-        item('Foot lifts', m?.lifts ?? 0), upright];
+      return [
+        item('Weight transfer', (m?.shiftTicks ?? 0) / 120, 's', '1.1-1'),
+        item('Foot lifts', m?.lifts ?? 0),
+        upright,
+      ];
     }
     if (stage === 'run') {
-      return [item('Speed', m?.averageSpeed ?? 0, 'm/s', '1.2-2'),
-        item('Steps', m?.steps ?? 0), upright];
+      return [
+        item('Speed', m?.averageSpeed ?? 0, 'm/s', '1.2-2'),
+        item('Steps', m?.steps ?? 0),
+        upright,
+      ];
     }
-    return [item('Steps', m?.steps ?? 0), item('Distance', m?.distance ?? 0, 'm', '1.2-2'), upright];
+    return [
+      item('Steps', m?.steps ?? 0),
+      item('Distance', m?.distance ?? 0, 'm', '1.2-2'),
+      upright,
+    ];
   });
   readonly graph = computed(() => {
     const history = [...this.history()].reverse();
     const values = history.map((entry) => entry.evaluation.metrics.score);
     if (!values.length) return null;
-    const low = Math.min(...values), high = Math.max(...values);
+    const low = Math.min(...values),
+      high = Math.max(...values);
     const span = Math.max(0.001, high - low);
     const first = history[0].skillAttempt;
     const last = Math.max(first + 1, this.progress().attempts);
-    const x = (iteration: number) => 4 + 312 * (iteration - first) / (last - first);
-    const y = (score: number) => 74 - 64 * (score - low) / span;
-    const path = history.map((entry, i) =>
-      i === 0 ? 'M ' + x(entry.skillAttempt) + ' ' + y(values[i]) :
-        'H ' + x(entry.skillAttempt) + ' V ' + y(values[i]),
-    ).join(' ') + ' H 316';
+    const x = (iteration: number) => 4 + (312 * (iteration - first)) / (last - first);
+    const y = (score: number) => 74 - (64 * (score - low)) / span;
+    const path =
+      history
+        .map((entry, i) =>
+          i === 0
+            ? 'M ' + x(entry.skillAttempt) + ' ' + y(values[i])
+            : 'H ' + x(entry.skillAttempt) + ' V ' + y(values[i]),
+        )
+        .join(' ') + ' H 316';
     return { path, low, high, latest: values[values.length - 1], first };
   });
   readonly trainingMessage = computed(() => {
@@ -96,7 +133,8 @@ export class TRexPage {
     const best = this.currentBest();
     if (!best) return this.training() ? 'Evaluating first candidates' : 'Ready to train';
     if (best.evaluation.passed) return 'Normal-ground goal reached';
-    if (this.training()) return this.progress().sinceImprovement >= 240 ? 'No recent improvement' : 'Learning';
+    if (this.training())
+      return this.progress().sinceImprovement >= 240 ? 'No recent improvement' : 'Learning';
     return 'Paused · goal not reached';
   });
   readonly replayLabel = signal('Initial pose');
@@ -242,7 +280,10 @@ export class TRexPage {
         const advanced = requested ? selectSkill(result, requested) : result;
         if (advanced.stage !== before.stage) {
           this.clearSkillView();
-        } else if (!skillState(before).best?.evaluation.passed && skillState(result).best?.evaluation.passed) {
+        } else if (
+          !skillState(before).best?.evaluation.passed &&
+          skillState(result).best?.evaluation.passed
+        ) {
           this.training.set(false);
         }
         this.state.set(advanced);
@@ -267,7 +308,8 @@ export class TRexPage {
           this.rateCount = 0;
           this.rateSteps = 0;
         }
-        if (requested || !this.training() || performance.now() - this.lastSave >= 2000) this.flush();
+        if (requested || !this.training() || performance.now() - this.lastSave >= 2000)
+          this.flush();
         this.busy.set(false);
         if (this.training()) this.timer = setTimeout(() => this.runWave(), 0);
       });
@@ -278,7 +320,10 @@ export class TRexPage {
 
   exportTraining() {
     this.flush();
-    this.download(JSON.stringify(this.state(), null, 2), 'trex-training-' + this.state().iteration + '.json');
+    this.download(
+      JSON.stringify(this.state(), null, 2),
+      'trex-training-' + this.state().iteration + '.json',
+    );
   }
 
   async importTraining(event: Event) {
@@ -404,9 +449,13 @@ export class TRexPage {
       const m = run.metrics();
       this.distance.set(m.distance);
       this.status.set(
-        m.steps + ' steps · ' + m.distance.toFixed(2) + ' m · ' +
-        (m.ticks / 120).toFixed(1) + ' s' +
-        (m.fell ? ' · Fell' : run.done ? ' · Complete' : ''),
+        m.steps +
+          ' steps · ' +
+          m.distance.toFixed(2) +
+          ' m · ' +
+          (m.ticks / 120).toFixed(1) +
+          ' s' +
+          (m.fell ? ' · Fell' : run.done ? ' · Complete' : ''),
       );
     };
     draw();

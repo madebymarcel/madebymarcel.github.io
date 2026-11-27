@@ -115,12 +115,16 @@ test('normal-ground learning, diagnostics and skill switching', async ({ page })
   await expect(page.getByTestId('rex-progress-path')).toBeVisible();
   await details.click();
   await expect(page.getByRole('heading', { name: 'Walking goal · normal ground' })).toBeVisible();
-  await expect(page.getByRole('table', { name: 'Actual values and required thresholds' })).toBeVisible();
+  await expect(
+    page.getByRole('table', { name: 'Actual values and required thresholds' }),
+  ).toBeVisible();
   await expect(page.getByRole('button', { name: /Slipperier|Grippier/ })).toHaveCount(0);
   await best.click();
   await expect(page.getByText(/Candidate #/)).toBeVisible();
   await skill.selectOption('balance');
-  await expect(page.getByRole('heading', { name: 'Balance goal · normal ground' })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('heading', { name: 'Balance goal · normal ground' })).toBeVisible({
+    timeout: 30_000,
+  });
   if (await pause.isVisible()) await pause.click();
   await expect(start).toBeEnabled({ timeout: 30_000 });
   await skill.selectOption('walk');

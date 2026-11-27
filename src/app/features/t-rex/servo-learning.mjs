@@ -4,16 +4,40 @@ const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 
 export function command(stage, time) {
   if (stage === 'maneuver') return { speed: time < 6 ? 0.55 : 0, heading: time < 2 ? 0 : 0.6 };
-  return { speed: stage === 'run' ? 1.4 : stage === 'walk' ? 0.65 : stage === 'step' ? 0.3 : 0, heading: 0 };
+  return {
+    speed: stage === 'run' ? 1.4 : stage === 'walk' ? 0.65 : stage === 'step' ? 0.3 : 0,
+    heading: 0,
+  };
 }
 
 // Strict pass conditions are separate from this dense learning reward. In particular,
 // an incomplete physical step can be useful, and a fall is not a 100-point penalty.
 export function rewardDelta(stage, sample) {
-  const { dt, dx, dz, slip, air, upright, settled, lift, step, flight, shift, fell, work, heading, stopped } = sample;
+  const {
+    dt,
+    dx,
+    dz,
+    slip,
+    air,
+    upright,
+    settled,
+    lift,
+    step,
+    flight,
+    shift,
+    fell,
+    work,
+    heading,
+    stopped,
+  } = sample;
   const cost = 0.8 * slip + 0.00025 * work + 1.2 * air;
   if (stage === 'balance' || stage === 'recover') {
-    return dt * (0.4 * upright + 0.8 * Number(settled)) - 1.5 * Math.hypot(dx, dz) - cost - (fell ? 0.8 : 0);
+    return (
+      dt * (0.4 * upright + 0.8 * Number(settled)) -
+      1.5 * Math.hypot(dx, dz) -
+      cost -
+      (fell ? 0.8 : 0)
+    );
   }
   if (stage === 'shift') {
     return 0.4 * upright * dt + 0.7 * shift + 0.08 * lift - cost - Math.abs(dx) - (fell ? 0.8 : 0);
@@ -40,7 +64,9 @@ export function trial(policy, options = {}) {
   const limit = Math.round(duration / dt);
   const trunk = rig.trunk.body;
   const feet = rig.bones.filter((bone) => bone.name.startsWith('toes')).map((bone) => bone.body);
-  const forbidden = new Set(rig.bones.filter((b) => /^(skull|neck|trunk|tail)/.test(b.name)).map((b) => b.body));
+  const forbidden = new Set(
+    rig.bones.filter((b) => /^(skull|neck|trunk|tail)/.test(b.name)).map((b) => b.body),
+  );
   const mass = rig.bones.reduce((sum, b) => sum + b.body.mass, 0);
   const origin = trunk.position.x;
   let x = origin;
@@ -80,7 +106,8 @@ export function trial(policy, options = {}) {
   function advance() {
     if (fell || ticks >= limit) return;
     const target = command(stage, ticks * dt);
-    if (ticks % CONTROL_STEPS === 0) targets = targetsFor(rig, policy, contacts, target.speed, target.heading, loads);
+    if (ticks % CONTROL_STEPS === 0)
+      targets = targetsFor(rig, policy, contacts, target.speed, target.heading, loads);
     const beforeSupport = Number(contacts[0]) + Number(contacts[1]);
     const beforeFoot = contacts[0] ? 0 : contacts[1] ? 1 : -1;
     rig.drive(targets);
@@ -106,7 +133,8 @@ export function trial(policy, options = {}) {
     let gainedSlip = 0;
     for (const [i, foot] of feet.entries()) {
       const other = 1 - i;
-      if (contacts[i] && next[i]) gainedSlip += Math.hypot(foot.position.x - footX[i], foot.position.z - footZ[i]);
+      if (contacts[i] && next[i])
+        gainedSlip += Math.hypot(foot.position.x - footX[i], foot.position.z - footZ[i]);
       foot.updateAABB();
       const clearance = Math.max(0, foot.aabb.lowerBound.y);
       if (!fell && established[i] && !next[i] && next[other]) {
@@ -153,7 +181,13 @@ export function trial(policy, options = {}) {
     contacts[0] = next[0];
     contacts[1] = next[1];
     const stable = !fell && vertical.y > 0.9 && trunk.position.y > 0.8;
-    const settled = stable && support === 2 && vertical.y > 0.94 && trunk.position.y > 0.85 && trunk.velocity.length() < 0.18 && trunk.angularVelocity.length() < 0.8;
+    const settled =
+      stable &&
+      support === 2 &&
+      vertical.y > 0.94 &&
+      trunk.position.y > 0.85 &&
+      trunk.velocity.length() < 0.18 &&
+      trunk.angularVelocity.length() < 0.8;
     if (stable) stableTicks++;
     if (settled) settledTicks++;
     const shifted = !fell && support === 1;
@@ -162,7 +196,9 @@ export function trial(policy, options = {}) {
       2 * (trunk.quaternion.x * trunk.quaternion.z - trunk.quaternion.w * trunk.quaternion.y),
       1 - 2 * (trunk.quaternion.y ** 2 + trunk.quaternion.z ** 2),
     );
-    const error = Math.abs(Math.atan2(Math.sin(target.heading - yaw), Math.cos(target.heading - yaw)));
+    const error = Math.abs(
+      Math.atan2(Math.sin(target.heading - yaw), Math.cos(target.heading - yaw)),
+    );
     const stopped = ticks * dt >= 6 && settled;
     stoppingTicks = stopped ? stoppingTicks + 1 : 0;
     headingError += error;
@@ -179,25 +215,60 @@ export function trial(policy, options = {}) {
     let work = 0;
     for (const { joint, items } of rig.motors) {
       const relative = joint.a.angularVelocity.vsub(joint.b.angularVelocity);
-      for (const { motor } of items) work += Math.abs(motor.multiplier * relative.dot(motor.axisA)) * dt;
+      for (const { motor } of items)
+        work += Math.abs(motor.multiplier * relative.dot(motor.axisA)) * dt;
     }
     score += rewardDelta(stage, {
-      dt, dx, dz, slip: gainedSlip, air: !support && !fell ? dt : 0,
-      upright: fell ? 0 : Math.max(0, vertical.y), settled, lift: gainedLift,
-      step: gainedStep, flight: gainedFlight, shift: shifted ? dt : 0, fell, work,
-      heading: error, stopped: stopped ? dt : 0,
+      dt,
+      dx,
+      dz,
+      slip: gainedSlip,
+      air: !support && !fell ? dt : 0,
+      upright: fell ? 0 : Math.max(0, vertical.y),
+      settled,
+      lift: gainedLift,
+      step: gainedStep,
+      flight: gainedFlight,
+      shift: shifted ? dt : 0,
+      fell,
+      work,
+      heading: error,
+      stopped: stopped ? dt : 0,
     });
   }
 
   function metrics() {
     return {
-      ticks, fell, distance: x - origin, steps, lifts, maxClearance, maxDistance,
-      pathDistance, stableTicks, settledTicks, supportedTicks, bothFeetTicks, shiftTicks,
-      flights, flightTicks, slip, headingError, stoppingTicks,
-      averageSpeed: ticks ? (x - origin) / (ticks * dt) : 0, score,
+      ticks,
+      fell,
+      distance: x - origin,
+      steps,
+      lifts,
+      maxClearance,
+      maxDistance,
+      pathDistance,
+      stableTicks,
+      settledTicks,
+      supportedTicks,
+      bothFeetTicks,
+      shiftTicks,
+      flights,
+      flightTicks,
+      slip,
+      headingError,
+      stoppingTicks,
+      averageSpeed: ticks ? (x - origin) / (ticks * dt) : 0,
+      score,
     };
   }
-  return { rig, advance, metrics, get done() { return fell || ticks >= limit; } };
+  return {
+    rig,
+    advance,
+    metrics,
+    get done() {
+      return fell || ticks >= limit;
+    },
+  };
 }
 
 export function evaluate(policy, options) {

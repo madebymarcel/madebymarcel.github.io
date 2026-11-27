@@ -20,7 +20,7 @@ export const assess = (stage, policy) => {
 export function emptyCheckpoint(seed = 3) {
   return {
     format: FORMAT,
-    rng: (seed >>> 0) || 1,
+    rng: seed >>> 0 || 1,
     iteration: 0,
     physicsSteps: 0,
     stage: 'walk',
@@ -29,14 +29,16 @@ export function emptyCheckpoint(seed = 3) {
 }
 
 export function skillState(state, stage = state.stage) {
-  return state.skills[stage] ?? {
-    weights: neutralPolicy(),
-    attempts: 0,
-    generations: 0,
-    sinceImprovement: 0,
-    best: null,
-    history: [],
-  };
+  return (
+    state.skills[stage] ?? {
+      weights: neutralPolicy(),
+      attempts: 0,
+      generations: 0,
+      sinceImprovement: 0,
+      best: null,
+      history: [],
+    }
+  );
 }
 
 export function selectSkill(state, stage) {
@@ -94,7 +96,12 @@ export function completeWave(state, wave, evaluations) {
   };
   let physicsSteps = state.physicsSteps;
   for (const [i, candidate] of wave.candidates.entries()) {
-    const entry = { ...candidate, stage: state.stage, skillAttempt: previous.attempts + i + 1, evaluation: evaluations[i] };
+    const entry = {
+      ...candidate,
+      stage: state.stage,
+      skillAttempt: previous.attempts + i + 1,
+      evaluation: evaluations[i],
+    };
     skill.sinceImprovement++;
     physicsSteps += entry.evaluation.metrics.ticks;
     if (better(entry, skill.best)) {
@@ -117,10 +124,7 @@ export function completeWave(state, wave, evaluations) {
   const sd = Math.sqrt(scores.reduce((sum, x) => sum + (x - mean) ** 2, 0) / scores.length);
   if (sd > 1e-8) {
     skill.weights = previous.weights.map((w, i) => {
-      const update = ranked.reduce(
-        (sum, p) => sum + (p.positive - p.negative) * p.direction[i],
-        0,
-      );
+      const update = ranked.reduce((sum, p) => sum + (p.positive - p.negative) * p.direction[i], 0);
       return clamp(w + (0.035 * update) / (ELITES * sd), -8, 8);
     });
   }
@@ -150,25 +154,63 @@ const finite = (x) => typeof x === 'number' && Number.isFinite(x);
 const validPolicy = (p) =>
   Array.isArray(p) && p.length === POLICY_SIZE && p.every((x) => finite(x) && Math.abs(x) <= 8);
 const metricsKeys = [
-  'ticks', 'distance', 'steps', 'lifts', 'maxClearance', 'maxDistance', 'pathDistance',
-  'stableTicks', 'settledTicks', 'supportedTicks', 'bothFeetTicks', 'shiftTicks', 'flights',
-  'flightTicks', 'slip', 'headingError', 'stoppingTicks', 'averageSpeed', 'score',
+  'ticks',
+  'distance',
+  'steps',
+  'lifts',
+  'maxClearance',
+  'maxDistance',
+  'pathDistance',
+  'stableTicks',
+  'settledTicks',
+  'supportedTicks',
+  'bothFeetTicks',
+  'shiftTicks',
+  'flights',
+  'flightTicks',
+  'slip',
+  'headingError',
+  'stoppingTicks',
+  'averageSpeed',
+  'score',
 ];
 function validEntry(entry, stage, max) {
   if (
-    !object(entry) || entry.stage !== stage || !count(entry.iteration) ||
-    entry.iteration === 0 || entry.iteration > max || !count(entry.skillAttempt) ||
-    entry.skillAttempt === 0 || entry.skillAttempt > entry.iteration || !validPolicy(entry.policy) ||
-    !object(entry.evaluation) || typeof entry.evaluation.passed !== 'boolean' ||
+    !object(entry) ||
+    entry.stage !== stage ||
+    !count(entry.iteration) ||
+    entry.iteration === 0 ||
+    entry.iteration > max ||
+    !count(entry.skillAttempt) ||
+    entry.skillAttempt === 0 ||
+    entry.skillAttempt > entry.iteration ||
+    !validPolicy(entry.policy) ||
+    !object(entry.evaluation) ||
+    typeof entry.evaluation.passed !== 'boolean' ||
     !object(entry.evaluation.metrics)
-  ) return false;
+  )
+    return false;
   const m = entry.evaluation.metrics;
   return (
-    typeof m.fell === 'boolean' && metricsKeys.every((key) => finite(m[key])) &&
-    count(m.ticks) && m.ticks <= SECONDS[stage] * 120 &&
-    ['steps', 'lifts', 'stableTicks', 'settledTicks', 'supportedTicks', 'bothFeetTicks',
-      'shiftTicks', 'flights', 'flightTicks', 'stoppingTicks'].every((key) => count(m[key]) && m[key] <= m.ticks) &&
-    ['maxClearance', 'maxDistance', 'pathDistance', 'slip', 'headingError'].every((key) => m[key] >= 0) &&
+    typeof m.fell === 'boolean' &&
+    metricsKeys.every((key) => finite(m[key])) &&
+    count(m.ticks) &&
+    m.ticks <= SECONDS[stage] * 120 &&
+    [
+      'steps',
+      'lifts',
+      'stableTicks',
+      'settledTicks',
+      'supportedTicks',
+      'bothFeetTicks',
+      'shiftTicks',
+      'flights',
+      'flightTicks',
+      'stoppingTicks',
+    ].every((key) => count(m[key]) && m[key] <= m.ticks) &&
+    ['maxClearance', 'maxDistance', 'pathDistance', 'slip', 'headingError'].every(
+      (key) => m[key] >= 0,
+    ) &&
     entry.evaluation.passed === qualifies(stage, m)
   );
 }
@@ -177,23 +219,37 @@ export function parseCheckpoint(source) {
   if (source.length > 4_000_000) throw new Error('Checkpoint exceeds 4 MB.');
   const s = JSON.parse(source);
   if (s?.format !== FORMAT) {
-    throw new Error('This checkpoint uses a different controller. Legacy training cannot be replayed as servo training.');
+    throw new Error(
+      'This checkpoint uses a different controller. Legacy training cannot be replayed as servo training.',
+    );
   }
   if (
-    !count(s.rng) || s.rng < 1 || s.rng > 0xffffffff ||
-    !count(s.iteration) || s.iteration % WAVE_SIZE !== 0 ||
-    !count(s.physicsSteps) || !STAGES.includes(s.stage) || !object(s.skills) ||
-    !Object.entries(s.skills).every(([stage, skill]) =>
-      STAGES.includes(stage) && object(skill) && validPolicy(skill.weights) &&
-      count(skill.attempts) && count(skill.generations) && count(skill.sinceImprovement) &&
-      skill.sinceImprovement <= skill.attempts &&
-      skill.attempts === skill.generations * WAVE_SIZE &&
-      (skill.best === null || validEntry(skill.best, stage, s.iteration)) &&
-      Array.isArray(skill.history) && skill.history.length <= HISTORY_LIMIT &&
-      skill.history.every((e) => validEntry(e, stage, s.iteration)) &&
-      (skill.attempts === 0 ? skill.best === null : skill.best !== null)
+    !count(s.rng) ||
+    s.rng < 1 ||
+    s.rng > 0xffffffff ||
+    !count(s.iteration) ||
+    s.iteration % WAVE_SIZE !== 0 ||
+    !count(s.physicsSteps) ||
+    !STAGES.includes(s.stage) ||
+    !object(s.skills) ||
+    !Object.entries(s.skills).every(
+      ([stage, skill]) =>
+        STAGES.includes(stage) &&
+        object(skill) &&
+        validPolicy(skill.weights) &&
+        count(skill.attempts) &&
+        count(skill.generations) &&
+        count(skill.sinceImprovement) &&
+        skill.sinceImprovement <= skill.attempts &&
+        skill.attempts === skill.generations * WAVE_SIZE &&
+        (skill.best === null || validEntry(skill.best, stage, s.iteration)) &&
+        Array.isArray(skill.history) &&
+        skill.history.length <= HISTORY_LIMIT &&
+        skill.history.every((e) => validEntry(e, stage, s.iteration)) &&
+        (skill.attempts === 0 ? skill.best === null : skill.best !== null),
     ) ||
     Object.values(s.skills).reduce((sum, skill) => sum + skill.attempts, 0) !== s.iteration
-  ) throw new Error('Invalid servo checkpoint.');
+  )
+    throw new Error('Invalid servo checkpoint.');
   return s;
 }
