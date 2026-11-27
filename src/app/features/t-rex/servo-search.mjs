@@ -1,6 +1,7 @@
 import seed from './seed-policy.json' with { type: 'json' };
 import {
   boundPolicy,
+  distanceScore,
   evaluate,
   GAIT_DEFAULTS,
   PARAMETER_SCALE,
@@ -8,8 +9,8 @@ import {
   TRIAL_SECONDS,
 } from './servo-learning.mjs';
 
-export const FORMAT = 'trex-population-v5';
-// Keep the storage key so existing browsers discover and migrate their v4 checkpoint.
+export const FORMAT = 'trex-population-v6';
+// Keep the storage key so existing browsers discover and migrate their checkpoints.
 export const STORAGE_KEY = 'made-by-marcel-trex-continuous-v4';
 export const WAVE_SIZE = 16;
 export const POPULATION_SIZE = 8;
@@ -134,7 +135,7 @@ function rates(entry, measure) {
   );
 }
 
-const progress = (m) => m.forwardUpright;
+const progress = (m) => Math.min(m.distance, m.forwardUpright);
 const mean = (values) => values.reduce((sum, value) => sum + value, 0) / values.length;
 
 // Quality-diversity archive: preserve leaders for complementary physical abilities,
@@ -153,14 +154,10 @@ export function selectPopulation(entries, champion) {
   const objectives = [
     (e) => e.fitness,
     (e) => Math.min(...rates(e, progress)),
-    (e) => e.metrics.forwardUpright,
-    (e) => mean(rates(e, (m) => m.forwardUpright - 1.5 * m.slip)),
-    (e) => mean(rates(e, (m) => m.stableTicks / 120 + m.forwardUpright)),
-    (e) => mean(rates(e, (m) => m.supportTotal / 120 + m.forwardUpright)),
-    (e) =>
-      e.metrics.steps > 0
-        ? (e.metrics.forwardUpright / e.metrics.steps) * (e.metrics.stableTicks / 1440)
-        : -1,
+    (e) => e.metrics.score,
+    (e) => mean(rates(e, (m) => m.score)),
+    (e) => mean(rates(e, progress)),
+    (e) => Math.min(...rates(e, (m) => m.score)),
   ];
   for (const objective of objectives) add(bestBy(pool, objective));
   // Fill spare niches with useful explorers rather than maximizing diversity among failures.
@@ -230,16 +227,14 @@ export function propose(checkpoint) {
   return { rng: state.rng, candidates };
 }
 
-// Replay selection protects the existing demonstrated motion. Robustness is a
-// tie-breaker, not a reason to display a stationary or much shorter trial.
+// Replay selection prioritizes forward motion. Falling is a small cost, not a veto.
 export function better(candidate, incumbent) {
   const a = candidate.metrics;
   const b = incumbent.metrics;
   const walkA = achievements(a, candidate.trials).includes('walk');
   const walkB = achievements(b, incumbent.trials).includes('walk');
   if (walkA !== walkB) return walkA;
-  if (!b.fell && a.fell) return false;
-  if (a.distance < b.distance - 0.05 || a.stableTicks < b.stableTicks - 120) return false;
+  if (progress(a) < progress(b) - 0.005) return false;
   return a.score + 0.1 * candidate.fitness > b.score + 0.1 * incumbent.fitness;
 }
 
@@ -261,7 +256,7 @@ export function completeWave(state, wave, evaluations) {
     return entry;
   });
   const successRate = attempts ? successes / attempts : 0;
-  const mutationScale = clamp(state.mutationScale * (successRate > 0.2 ? 1.12 : 0.86), 0.005, 0.6);
+  const mutationScale = clamp(state.mutationScale * (successRate > 0.2 ? 1.12 : 0.86), 0.025, 0.6);
   return {
     ...state,
     rng: wave.rng,
@@ -350,15 +345,59 @@ export function migrateCheckpoint(state) {
   };
 }
 
+function migratePopulation(state) {
+  if (!validBase(state) || !Array.isArray(state.population)) {
+    throw new Error('Invalid population checkpoint.');
+  }
+  const old = [state.best, ...state.population, ...Object.values(state.records)];
+  if (
+    !old.every(
+      (entry) =>
+        object(entry) &&
+        count(entry.iteration) &&
+        entry.iteration <= state.iteration &&
+        validPolicy(entry.policy, POLICY_SIZE) &&
+        validMetrics(entry.metrics, TRIAL_SECONDS) &&
+        Array.isArray(entry.trials) &&
+        entry.trials.length === VARIATIONS.length &&
+        entry.trials.every((m, i) => validMetrics(m, VARIATIONS[i].seconds)),
+    )
+  ) {
+    throw new Error('Invalid population policy.');
+  }
+  const rescore = (m) => ({ ...m, score: distanceScore(m) });
+  const entries = old.map((entry) => {
+    const metrics = rescore(entry.metrics);
+    const trials = entry.trials.map(rescore);
+    return {
+      iteration: entry.iteration,
+      policy: entry.policy,
+      metrics,
+      trials,
+      fitness: robustFitness(metrics, trials),
+    };
+  });
+  const all = [...entries, seedEntry()];
+  const best = all.reduce((champion, entry) => (better(entry, champion) ? entry : champion));
+  return {
+    ...emptyCheckpoint(state.rng),
+    iteration: state.iteration,
+    best,
+    population: selectPopulation(all, best),
+    records: collectRecords(all),
+  };
+}
+
 export function parseCheckpoint(source) {
   const state = JSON.parse(source);
   if (state?.format === 'trex-continuous-v4') return migrateCheckpoint(state);
+  if (state?.format === 'trex-population-v5') return migratePopulation(state);
   if (
     !validBase(state) ||
     state.format !== FORMAT ||
     !validEntry(state.best, state.iteration) ||
     !Number.isFinite(state.mutationScale) ||
-    state.mutationScale < 0.005 ||
+    state.mutationScale < 0.025 ||
     state.mutationScale > 0.6 ||
     !Number.isFinite(state.successRate) ||
     state.successRate < 0 ||

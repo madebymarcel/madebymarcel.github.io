@@ -9,6 +9,13 @@ export const PARAMETER_SCALE = [
   0.16, 0.3, 0.3, 0.2, 0.08, 0.2, 0.2, 0.08, 0.2, 0.15, 0.06, 0.12, 0.25,
 ];
 
+// Standing time is not locomotion. Reward net upright forward travel.
+export function distanceScore({ distance, forwardUpright, steps, slip, lateralDistance, fell }) {
+  const progress = Math.min(distance, forwardUpright);
+  const credited = progress > 0 && steps === 0 ? 0.1 * progress : progress;
+  return 10 * credited - 1.5 * slip - 0.8 * lateralDistance - (fell ? 0.25 : 0);
+}
+
 // Controller parameters describe feedback gains and joint target offsets, not poses or timings.
 // The support/lift/swing/plant transitions are triggered by measured contacts and foot placement.
 export function boundPolicy(policy) {
@@ -193,16 +200,7 @@ export function trial(policy, options = {}) {
   }
 
   function metrics() {
-    // Distance is the objective; the bounded step bonus only assists first exploration.
-    const score =
-      4 * forwardUpright +
-      (0.5 * stableTicks) / 120 +
-      (0.5 * supportTotal) / 120 +
-      0.15 * Math.min(steps, 2) -
-      1.5 * slip -
-      0.8 * lateralDistance -
-      0.0004 * work -
-      (fell ? 1.5 : 0);
+    const score = distanceScore({ distance, forwardUpright, steps, slip, lateralDistance, fell });
     return {
       ticks,
       fell,

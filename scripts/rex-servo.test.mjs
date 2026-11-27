@@ -2,7 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import seed from '../src/app/features/t-rex/seed-policy.json' with { type: 'json' };
 import { createServoRig } from '../src/app/features/t-rex/servo-rig.mjs';
-import { evaluate, GAIT_DEFAULTS, trial } from '../src/app/features/t-rex/servo-learning.mjs';
+import {
+  distanceScore,
+  evaluate,
+  GAIT_DEFAULTS,
+  trial,
+} from '../src/app/features/t-rex/servo-learning.mjs';
 import {
   achievements,
   assess,
@@ -101,8 +106,21 @@ test('axial motors can actively bend the massive tail in either direction', () =
 test('population search retains its champion, explores alternatives, and adapts its scale', () => {
   const state = emptyCheckpoint();
   const wave = propose(state);
-  const bad = { ...state.best.metrics, steps: 0, score: -10, distance: 0, stableTicks: 0 };
-  const trials = state.best.trials.map((m) => ({ ...m, score: -10 }));
+  const bad = {
+    ...state.best.metrics,
+    steps: 0,
+    score: -10,
+    distance: 0,
+    forwardUpright: 0,
+    stableTicks: 0,
+  };
+  const trials = state.best.trials.map((m) => ({
+    ...m,
+    score: -10,
+    distance: 0,
+    forwardUpright: 0,
+    steps: 0,
+  }));
   const evaluation = { metrics: bad, trials, fitness: robustFitness(bad, trials) };
   const next = completeWave(state, wave, Array(WAVE_SIZE).fill(evaluation));
   assert.deepEqual(next.best, state.best);
@@ -184,4 +202,56 @@ test('milestones require sustained walking under all evaluation conditions', () 
   assert.ok(achievements(walking, [varied, varied]).includes('walk'));
   assert.equal(achievements(walking).includes('walk'), false);
   assert.equal(achievements(walking, [varied, { ...varied, fell: true }]).includes('walk'), false);
+});
+
+test('distance first: a longer walk beats standing even if it ends in a fall', () => {
+  const old = emptyCheckpoint().best;
+  const standing = {
+    ...old.metrics,
+    distance: 0,
+    forwardUpright: 0,
+    steps: 0,
+    stableTicks: 1440,
+    fell: false,
+    slip: 0,
+    lateralDistance: 0,
+  };
+  const walking = {
+    ...standing,
+    distance: 2,
+    forwardUpright: 2,
+    steps: 6,
+    stableTicks: 600,
+    fell: true,
+    slip: 0.2,
+  };
+  const entry = (m) => ({ ...old, metrics: { ...m, score: distanceScore(m) } });
+  assert.equal(distanceScore(standing), 0);
+  assert.ok(better(entry(walking), entry(standing)));
+  assert.equal(better(entry(standing), entry(walking)), false);
+  assert.ok(distanceScore(walking) > distanceScore({ ...walking, steps: 0, slip: 2 }));
+});
+
+test('v5 checkpoints retain policies but discard stale scores and mutation scale', () => {
+  const state = emptyCheckpoint();
+  const entry = {
+    ...state.best,
+    metrics: { ...state.best.metrics, score: 999 },
+    trials: state.best.trials.map((m) => ({ ...m, score: 999 })),
+    fitness: 999,
+  };
+  const old = {
+    ...state,
+    format: 'trex-population-v5',
+    mutationScale: 0.005,
+    best: entry,
+    population: [entry],
+    records: {},
+  };
+  const restored = parseCheckpoint(JSON.stringify(old));
+  assert.equal(restored.format, 'trex-population-v6');
+  assert.deepEqual(restored.best.policy, entry.policy);
+  assert.equal(restored.best.metrics.score, distanceScore(entry.metrics));
+  assert.equal(restored.mutationScale, 0.12);
+  assert.deepEqual(parseCheckpoint(JSON.stringify(restored)), restored);
 });
