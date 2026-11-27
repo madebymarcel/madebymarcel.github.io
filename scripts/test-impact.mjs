@@ -200,7 +200,13 @@ function main() {
   if (process.env.GITHUB_OUTPUT) {
     appendFileSync(
       process.env.GITHUB_OUTPUT,
-      'mode=' + plan.mode + '\nfiles=' + plan.files.join(' ') + '\nlighthouse=' + plan.lighthouse + '\n',
+      'mode=' +
+        plan.mode +
+        '\nfiles=' +
+        plan.files.join(' ') +
+        '\nlighthouse=' +
+        plan.lighthouse +
+        '\n',
     );
   }
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);

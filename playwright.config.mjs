@@ -46,7 +46,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: process.env.PLAYWRIGHT_PREBUILT === '1' ? 'npm run serve' : 'npm run build && npm run serve',
+    command:
+      process.env.PLAYWRIGHT_PREBUILT === '1' ? 'npm run serve' : 'npm run build && npm run serve',
     url: 'http://127.0.0.1:4173',
     reuseExistingServer: !process.env.CI,
     timeout: 90_000,

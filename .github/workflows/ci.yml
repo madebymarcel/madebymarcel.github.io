@@ -41,6 +41,12 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run format:check
+        id: format
+      - name: Show formatting differences
+        if: failure() && steps.format.outcome == 'failure'
+        run: |
+          npm run format
+          git diff --exit-code
       - run: npm run test:unit
       - run: npm run build
       - name: Use Playwright Chromium for Lighthouse

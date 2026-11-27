@@ -4,7 +4,13 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { changedPaths, comparisonBase, isolationProblem, selectImpact } from './test-impact.mjs';
+import {
+  changedPaths,
+  comparisonBase,
+  isolationProblem,
+  planFromCheckout,
+  selectImpact,
+} from './test-impact.mjs';
 
 const specs = [
   'accessibility',
@@ -44,7 +50,10 @@ test('canoe polo runs all five of its own suites, not dinosaur or biped suites',
 });
 
 test('multi-feature changes combine scopes without duplicate suites', () => {
-  const plan = select('src/app/features/t-rex/t-rex-page.ts', 'src/app/features/home/water-shader.ts');
+  const plan = select(
+    'src/app/features/t-rex/t-rex-page.ts',
+    'src/app/features/home/water-shader.ts',
+  );
   assert.equal(plan.mode, 'affected');
   assert.equal(plan.lighthouse, true);
   assert.ok(plan.files.includes('tests/home-water.spec.js'));
@@ -128,4 +137,31 @@ test('a shared import of a feature invalidates isolation, while the route manife
   assert.equal(isolationProblem(root, [route, policy]), undefined);
   writeFileSync(join(root, shared), source);
   assert.match(isolationProblem(root, [route, policy, shared]), /Cross-feature dependency/);
+});
+
+test('checkout planning selects only affected suites, including a real push diff', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'impact-plan-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' });
+  git('init', '-q');
+  git('config', 'user.email', 'test@example.invalid');
+  git('config', 'user.name', 'Test');
+  mkdirSync(join(root, 'tests'));
+  for (const spec of specs) writeFileSync(join(root, spec), '');
+  mkdirSync(join(root, 'src/app/features/t-rex'), { recursive: true });
+  writeFileSync(join(root, 'tsconfig.json'), JSON.stringify({ include: ['src/**/*.ts'] }));
+  const policy = join(root, 'src/app/features/t-rex/policy.ts');
+  writeFileSync(policy, 'export const policy = 1;\n');
+  git('add', '.');
+  git('commit', '-qm', 'base');
+  const base = git('rev-parse', 'HEAD').trim();
+  writeFileSync(policy, 'export const policy = 2;\n');
+  git('commit', '-qam', 'isolated change');
+  const expected = select('src/app/features/t-rex/policy.ts');
+  assert.deepEqual(planFromCheckout(root, 'push', { before: base }), expected);
+  assert.deepEqual(
+    planFromCheckout(root, 'pull_request', { pull_request: { base: { sha: base } } }),
+    expected,
+  );
+  assert.equal(planFromCheckout(root, 'schedule', {}).mode, 'full');
 });
