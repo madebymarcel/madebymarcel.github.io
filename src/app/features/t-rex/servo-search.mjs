@@ -60,8 +60,7 @@ export function milestoneLabel(key) {
 // reference duration; early falls remain penalized rather than averaging only survivors.
 export function robustFitness(metrics, trials) {
   const scores = trials.map((m, i) => (m.score * TRIAL_SECONDS) / VARIATIONS[i].seconds);
-  return 0.45 * metrics.score + 0.25 * scores[0] + 0.25 * scores[1] +
-    0.05 * Math.min(...scores);
+  return 0.45 * metrics.score + 0.25 * scores[0] + 0.25 * scores[1] + 0.05 * Math.min(...scores);
 }
 
 export function assess(policy) {
@@ -130,7 +129,8 @@ function scenarios(entry) {
 
 function rates(entry, measure) {
   return scenarios(entry).map(
-    (m, i) => (measure(m) * 120) / (i === 0 ? TRIAL_SECONDS * 120 : VARIATIONS[i - 1].seconds * 120),
+    (m, i) =>
+      (measure(m) * 120) / (i === 0 ? TRIAL_SECONDS * 120 : VARIATIONS[i - 1].seconds * 120),
   );
 }
 
@@ -157,17 +157,26 @@ export function selectPopulation(entries, champion) {
     (e) => mean(rates(e, (m) => m.forwardUpright - 1.5 * m.slip)),
     (e) => mean(rates(e, (m) => m.stableTicks / 120 + m.forwardUpright)),
     (e) => mean(rates(e, (m) => m.supportTotal / 120 + m.forwardUpright)),
-    (e) => e.metrics.steps > 0
-      ? (e.metrics.forwardUpright / e.metrics.steps) * (e.metrics.stableTicks / 1440)
-      : -1,
+    (e) =>
+      e.metrics.steps > 0
+        ? (e.metrics.forwardUpright / e.metrics.steps) * (e.metrics.stableTicks / 1440)
+        : -1,
   ];
   for (const objective of objectives) add(bestBy(pool, objective));
-  const ranked = pool.slice().sort((a, b) => b.fitness - a.fitness).slice(0, 24);
+  // Fill spare niches with useful explorers rather than maximizing diversity among failures.
+  const ranked = pool
+    .filter((entry) => entry.fitness >= 0 && entry.metrics.distance >= 0)
+    .sort((a, b) => b.fitness - a.fitness)
+    .slice(0, 24);
   while (selected.length < POPULATION_SIZE) {
-    const remaining = ranked.filter((entry) => !selected.includes(entry) &&
-      selected.every((other) => separation(entry, other) >= 1e-9));
+    const remaining = ranked.filter(
+      (entry) =>
+        !selected.includes(entry) && selected.every((other) => separation(entry, other) >= 1e-9),
+    );
     if (!remaining.length) break;
-    add(bestBy(remaining, (entry) => Math.min(...selected.map((other) => separation(entry, other)))));
+    add(
+      bestBy(remaining, (entry) => Math.min(...selected.map((other) => separation(entry, other)))),
+    );
   }
   return selected.slice(0, POPULATION_SIZE);
 }
@@ -182,9 +191,10 @@ export function propose(checkpoint) {
   const candidates = [];
   const parents = state.population;
   for (let pair = 0; pair < WAVE_SIZE / 2; pair++) {
-    const parent = pair < 2
-      ? state.best
-      : parents[(Math.floor(state.iteration / WAVE_SIZE) + pair - 2) % parents.length];
+    const parent =
+      pair < 2
+        ? state.best
+        : parents[(Math.floor(state.iteration / WAVE_SIZE) + pair - 2) % parents.length];
     const direction = Array(POLICY_SIZE).fill(0);
     const count = 1 + Math.floor(random(state) * (pair >= 6 ? 6 : 3));
     for (let i = 0; i < count; i++) {
@@ -192,9 +202,16 @@ export function propose(checkpoint) {
       direction[j] += (random(state) - 0.5) * PARAMETER_SCALE[j];
     }
     const local = pair < 6;
-    const noise = pair === 0 ? state.mutationScale * 0.1 :
-      pair === 1 ? state.mutationScale * 0.5 :
-      local ? state.mutationScale : pair === 6 ? 0.3 : 0.8;
+    const noise =
+      pair === 0
+        ? state.mutationScale * 0.1
+        : pair === 1
+          ? state.mutationScale * 0.5
+          : local
+            ? state.mutationScale
+            : pair === 6
+              ? 0.3
+              : 0.8;
     let centre = parent.policy;
     if (pair === 7 && parents.length > 1) {
       const other = parents[Math.floor(random(state) * parents.length)];
@@ -262,34 +279,57 @@ const count = (x) => Number.isSafeInteger(x) && x >= 0;
 const object = (x) => x !== null && typeof x === 'object' && !Array.isArray(x);
 const metricKeys = Object.keys(seed.metrics).filter((key) => key !== 'fell');
 const validPolicy = (policy, length) =>
-  Array.isArray(policy) && policy.length === length && policy.every(Number.isFinite) &&
+  Array.isArray(policy) &&
+  policy.length === length &&
+  policy.every(Number.isFinite) &&
   boundPolicy(policy).every((value, i) => value === policy[i]);
 
 const validMetrics = (m, seconds) =>
-  object(m) && typeof m.fell === 'boolean' &&
+  object(m) &&
+  typeof m.fell === 'boolean' &&
   metricKeys.every((key) => Number.isFinite(m[key])) &&
-  count(m.steps) && count(m.ticks) && m.ticks <= seconds * 120 && m.steps <= m.ticks;
+  count(m.steps) &&
+  count(m.ticks) &&
+  m.ticks <= seconds * 120 &&
+  m.steps <= m.ticks;
 
 const validEntry = (entry, max) =>
-  object(entry) && count(entry.iteration) && entry.iteration <= max &&
-  validPolicy(entry.policy, POLICY_SIZE) && validMetrics(entry.metrics, TRIAL_SECONDS) &&
-  Array.isArray(entry.trials) && entry.trials.length === VARIATIONS.length &&
+  object(entry) &&
+  count(entry.iteration) &&
+  entry.iteration <= max &&
+  validPolicy(entry.policy, POLICY_SIZE) &&
+  validMetrics(entry.metrics, TRIAL_SECONDS) &&
+  Array.isArray(entry.trials) &&
+  entry.trials.length === VARIATIONS.length &&
   entry.trials.every((m, i) => validMetrics(m, VARIATIONS[i].seconds)) &&
   Number.isFinite(entry.fitness) &&
   Math.abs(entry.fitness - robustFitness(entry.metrics, entry.trials)) < 1e-8;
 
 const validBase = (state) =>
-  object(state) && count(state.iteration) && state.iteration % WAVE_SIZE === 0 &&
-  count(state.rng) && state.rng > 0 && state.rng <= 0xffffffff &&
-  count(state.stale) && state.stale <= state.iteration / WAVE_SIZE && object(state.records);
+  object(state) &&
+  count(state.iteration) &&
+  state.iteration % WAVE_SIZE === 0 &&
+  count(state.rng) &&
+  state.rng > 0 &&
+  state.rng <= 0xffffffff &&
+  count(state.stale) &&
+  state.stale <= state.iteration / WAVE_SIZE &&
+  object(state.records);
 
 export function migrateCheckpoint(state) {
   if (!validBase(state) || state.format !== 'trex-continuous-v4') {
     throw new Error('Invalid legacy checkpoint.');
   }
   const oldEntries = [state.best, ...Object.values(state.records)];
-  if (!oldEntries.every((entry) => object(entry) && count(entry.iteration) &&
-    entry.iteration <= state.iteration && validPolicy(entry.policy, 28))) {
+  if (
+    !oldEntries.every(
+      (entry) =>
+        object(entry) &&
+        count(entry.iteration) &&
+        entry.iteration <= state.iteration &&
+        validPolicy(entry.policy, 28),
+    )
+  ) {
     throw new Error('Invalid legacy policy.');
   }
   const evaluated = new Map();
@@ -314,19 +354,28 @@ export function parseCheckpoint(source) {
   const state = JSON.parse(source);
   if (state?.format === 'trex-continuous-v4') return migrateCheckpoint(state);
   if (
-    !validBase(state) || state.format !== FORMAT ||
+    !validBase(state) ||
+    state.format !== FORMAT ||
     !validEntry(state.best, state.iteration) ||
-    !Number.isFinite(state.mutationScale) || state.mutationScale < 0.005 ||
-    state.mutationScale > 0.6 || !Number.isFinite(state.successRate) ||
-    state.successRate < 0 || state.successRate > 1 ||
-    !Array.isArray(state.population) || !state.population.length ||
+    !Number.isFinite(state.mutationScale) ||
+    state.mutationScale < 0.005 ||
+    state.mutationScale > 0.6 ||
+    !Number.isFinite(state.successRate) ||
+    state.successRate < 0 ||
+    state.successRate > 1 ||
+    !Array.isArray(state.population) ||
+    !state.population.length ||
     state.population.length > POPULATION_SIZE ||
     !state.population.every((entry) => validEntry(entry, state.iteration)) ||
-    !state.population.some((entry) => entry.iteration === state.best.iteration &&
-      separation(entry, state.best) < 1e-9) ||
-    !Object.entries(state.records).every(([key, entry]) =>
-      Object.hasOwn(MILESTONES, key) && validEntry(entry, state.iteration) &&
-      achievements(entry.metrics, entry.trials).includes(key))
+    !state.population.some(
+      (entry) => entry.iteration === state.best.iteration && separation(entry, state.best) < 1e-9,
+    ) ||
+    !Object.entries(state.records).every(
+      ([key, entry]) =>
+        Object.hasOwn(MILESTONES, key) &&
+        validEntry(entry, state.iteration) &&
+        achievements(entry.metrics, entry.trials).includes(key),
+    )
   ) {
     throw new Error('Invalid or incompatible locomotion checkpoint.');
   }

@@ -28,5 +28,12 @@ for (let i = 0; i < generations; i++) {
     wave,
     wave.candidates.map(({ policy }) => assess(policy)),
   );
-  console.log(JSON.stringify({ generation: i + 1, candidates: state.iteration, best: state.best, populationFitness: Math.max(...state.population.map((e) => e.fitness)) }));
+  console.log(
+    JSON.stringify({
+      generation: i + 1,
+      candidates: state.iteration,
+      best: state.best,
+      populationFitness: Math.max(...state.population.map((e) => e.fitness)),
+    }),
+  );
 }

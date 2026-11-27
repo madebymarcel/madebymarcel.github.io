@@ -81,11 +81,24 @@ test('population search retains its champion, explores alternatives, and adapts 
   assert.equal(next.stale, 1);
   assert.equal(next.iteration, WAVE_SIZE);
   assert.ok(next.mutationScale < state.mutationScale);
-  assert.ok(next.population.length > 1);
+  assert.equal(next.population.length, 1);
   assert.ok(next.population.some((entry) => entry.iteration === state.best.iteration));
-  const following = propose(next);
+  const viable = {
+    ...state.best.metrics,
+    score: state.best.metrics.score - 0.01,
+    distance: state.best.metrics.distance - 0.1,
+    forwardUpright: state.best.metrics.forwardUpright - 0.1,
+  };
+  const alternatives = {
+    metrics: viable,
+    trials: state.best.trials,
+    fitness: robustFitness(viable, state.best.trials),
+  };
+  const explored = completeWave(next, propose(next), Array(WAVE_SIZE).fill(alternatives));
+  assert.ok(explored.population.length > 1);
+  const following = propose(explored);
   assert.ok(new Set(following.candidates.map((candidate) => candidate.parent)).size > 1);
-  const restored = parseCheckpoint(JSON.stringify(next));
+  const restored = parseCheckpoint(JSON.stringify(explored));
   assert.deepEqual(propose(restored), following);
   assert.throws(() => parseCheckpoint(JSON.stringify({ ...next, format: 'trex-servo-v3' })));
 });
