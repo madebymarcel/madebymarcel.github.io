@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
-test('T. rex keeps the physical artwork and exposes start/pause, export and the iteration count', async ({ page }) => {
+test('T. rex displays replay, start/pause, export and iterations', async ({ page }) => {
   await page.goto('/projects/');
   const project = page.locator('main article').nth(2);
   await expect(project.getByRole('heading')).toHaveText('T. rex');
