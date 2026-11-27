@@ -1,5 +1,11 @@
 import seed from './seed-policy.json' with { type: 'json' };
-import { boundPolicy, evaluate, PARAMETER_SCALE, POLICY_SIZE, TRIAL_SECONDS } from './servo-learning.mjs';
+import {
+  boundPolicy,
+  evaluate,
+  PARAMETER_SCALE,
+  POLICY_SIZE,
+  TRIAL_SECONDS,
+} from './servo-learning.mjs';
 
 export const FORMAT = 'trex-continuous-v4';
 export const STORAGE_KEY = 'made-by-marcel-trex-continuous-v4';
@@ -18,8 +24,12 @@ export function achievements(m) {
     ...(m.supportTicks >= 120 ? ['support'] : []),
     ...(m.steps >= 1 ? ['step'] : []),
     ...(m.steps >= 4 ? ['alternate'] : []),
-    ...(!m.fell && m.ticks >= TRIAL_SECONDS * 120 && m.steps >= 8 &&
-    m.distance >= 2.4 && m.flightTicks <= m.ticks * 0.15 && m.slip <= m.distance * 0.3
+    ...(!m.fell &&
+    m.ticks >= TRIAL_SECONDS * 120 &&
+    m.steps >= 8 &&
+    m.distance >= 2.4 &&
+    m.flightTicks <= m.ticks * 0.15 &&
+    m.slip <= m.distance * 0.3
       ? ['walk']
       : []),
   ];
@@ -150,8 +160,10 @@ export function parseCheckpoint(source) {
     !validEntry(state.best, state.iteration) ||
     !object(state.records) ||
     !Object.entries(state.records).every(
-      ([key, entry]) => Object.hasOwn(MILESTONES, key) &&
-        validEntry(entry, state.iteration) && achievements(entry.metrics).includes(key),
+      ([key, entry]) =>
+        Object.hasOwn(MILESTONES, key) &&
+        validEntry(entry, state.iteration) &&
+        achievements(entry.metrics).includes(key),
     )
   ) {
     throw new Error('Invalid or incompatible locomotion checkpoint.');

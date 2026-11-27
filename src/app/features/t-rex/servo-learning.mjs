@@ -4,8 +4,8 @@ const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 export const POLICY_SIZE = 28;
 export const TRIAL_SECONDS = 8;
 export const PARAMETER_SCALE = [
-  0.18, 0.2, 0.2, 0.15, 0.25, 0.16, 1, 0.4, 0.5, 0.4, 0.6, 0.3, 0.3, 0.3, 0.25,
-  0.3, 0.3, 0.3, 0.25, 0.16, 0.3, 0.3, 0.2, 0.08, 0.2, 0.2, 0.08, 0.2,
+  0.18, 0.2, 0.2, 0.15, 0.25, 0.16, 1, 0.4, 0.5, 0.4, 0.6, 0.3, 0.3, 0.3, 0.25, 0.3, 0.3, 0.3, 0.25,
+  0.16, 0.3, 0.3, 0.2, 0.08, 0.2, 0.2, 0.08, 0.2,
 ];
 
 // Controller parameters describe feedback gains and joint target offsets, not poses or timings.

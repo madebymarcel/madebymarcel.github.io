@@ -87,7 +87,15 @@ test('milestones distinguish real forward steps from sustained walking', () => {
   assert.ok(achievements(m).includes('step'));
   assert.ok(achievements(m).includes('alternate'));
   assert.equal(achievements(m).includes('walk'), false);
-  const walking = { ...m, ticks: 960, steps: 8, distance: 3, slip: 0.2, flightTicks: 0, fell: false };
+  const walking = {
+    ...m,
+    ticks: 960,
+    steps: 8,
+    distance: 3,
+    slip: 0.2,
+    flightTicks: 0,
+    fell: false,
+  };
   assert.ok(achievements(walking).includes('walk'));
   assert.equal(achievements({ ...walking, fell: true }).includes('walk'), false);
 });
