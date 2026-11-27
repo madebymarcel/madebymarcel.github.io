@@ -14,7 +14,7 @@
     "design:generate": "node scripts/generate-design-scales.mjs",
     "typecheck": "tsc --noEmit --project tsconfig.app.json",
     "format": "prettier --write .",
-    "format:check": "prettier --check . || (prettier --write src/app/features/t-rex tests/t-rex.spec.js scripts/rex-spatial.test.mjs scripts/rex-locomotion.mjs docs/t-rex-spatial.md && git diff && exit 1)",
+    "format:check": "prettier --check . || (prettier src/app/features/lab/layout-preview.html && exit 1)",
     "test:unit": "node --test scripts/rex-spatial.test.mjs && ng test --watch=false",
     "test:e2e": "playwright test",
     "lighthouse": "lhci autorun",

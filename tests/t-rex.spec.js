@@ -46,7 +46,9 @@ test('training persists across reloads and restores an exported checkpoint', asy
   await page.getByRole('button', { name: 'Start training' }).click();
   await expect(best).toBeEnabled({ timeout: 30_000 });
   await page.getByRole('button', { name: 'Pause training' }).click();
-  await expect(page.getByRole('button', { name: 'Start training' })).toBeEnabled({ timeout: 30_000 });
+  await expect(page.getByRole('button', { name: 'Start training' })).toBeEnabled({
+    timeout: 30_000,
+  });
   const iterations = await count.textContent();
   const raw = await page.evaluate(() => localStorage.getItem('made-by-marcel-trex-locomotion-v2'));
   expect(raw).toBeTruthy();
@@ -70,5 +72,7 @@ test('training persists across reloads and restores an exported checkpoint', asy
   await page.getByRole('button', { name: 'Start training' }).click();
   await expect(count).not.toHaveText(iterations, { timeout: 30_000 });
   await page.getByRole('button', { name: 'Pause training' }).click();
-  await expect(page.getByRole('button', { name: 'Start training' })).toBeEnabled({ timeout: 30_000 });
+  await expect(page.getByRole('button', { name: 'Start training' })).toBeEnabled({
+    timeout: 30_000,
+  });
 });

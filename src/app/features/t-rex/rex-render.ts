@@ -9,7 +9,9 @@ function rounded(points: Point[]) {
   return (
     'M ' +
     pair(first) +
-    points.map((p, i) => ' Q ' + pair(p) + ' ' + pair(midpoint(p, points[(i + 1) % points.length]))).join('') +
+    points
+      .map((p, i) => ' Q ' + pair(p) + ' ' + pair(midpoint(p, points[(i + 1) % points.length])))
+      .join('') +
     ' Z'
   );
 }
@@ -32,7 +34,9 @@ export function project(bones: Segment[], side: boolean) {
         name: b.name,
         eyes: b.eyes.map(position),
         outline: 'M ' + points.map(pair).join(' L ') + ' Z',
-        skin: b.name.startsWith('toes') ? 'M ' + points.map(pair).join(' L ') + ' Z' : rounded(points),
+        skin: b.name.startsWith('toes')
+          ? 'M ' + points.map(pair).join(' L ') + ' Z'
+          : rounded(points),
         d: 'M ' + pair(start) + ' L ' + pair(end),
         width: side ? b.depth * 90 : b.width * 145,
         fill: ['#526b46', '#77965c', '#76965e'][layer(b.name)],
@@ -48,7 +52,7 @@ export function project(bones: Segment[], side: boolean) {
       const dy = after[1] - before[1];
       const length = Math.hypot(dx, dy) || 1;
       const width = i === centers.length - 1 ? 1.6 : tail[i].width * 72.5;
-      return [center[0] - sign * dy * width / length, center[1] + sign * dx * width / length];
+      return [center[0] - (sign * dy * width) / length, center[1] + (sign * dx * width) / length];
     });
   return {
     segments,

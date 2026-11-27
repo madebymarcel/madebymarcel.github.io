@@ -57,7 +57,13 @@ export class TRexPage {
   readonly currentBest = computed(() => this.state().best[this.state().stage]);
   readonly bestEntry = computed(() => {
     const state = this.state();
-    return this.currentBest() ?? [...STAGES].reverse().map((stage) => state.best[stage]).find(Boolean);
+    return (
+      this.currentBest() ??
+      [...STAGES]
+        .reverse()
+        .map((stage) => state.best[stage])
+        .find(Boolean)
+    );
   });
   readonly best = computed(() => this.bestEntry()?.policy ?? null);
   readonly history = computed(() => this.state().history);
@@ -133,7 +139,8 @@ export class TRexPage {
           this.pending.get(data.id)?.(data);
           this.pending.delete(data.id);
         };
-        worker.onerror = () => this.fail('Training worker failed. Your last completed wave is safe.');
+        worker.onerror = () =>
+          this.fail('Training worker failed. Your last completed wave is safe.');
         this.workers.push(worker);
       }
       this.cores.set(this.workers.length);
@@ -250,7 +257,8 @@ export class TRexPage {
   }
 
   resetTraining() {
-    if (this.training() || this.busy() || !window.confirm('Delete local dinosaur training?')) return;
+    if (this.training() || this.busy() || !window.confirm('Delete local dinosaur training?'))
+      return;
     this.state.set(emptyCheckpoint());
     this.dirty = true;
     this.selected.set(0);
@@ -273,7 +281,11 @@ export class TRexPage {
   resumeFrom(entry: Entry) {
     if (this.training() || this.busy()) return;
     const best = { ...this.state().best };
-    if (STAGES.slice(0, STAGES.indexOf(entry.stage)).some((stage) => best[stage]?.evaluation.passes !== 3)) {
+    if (
+      STAGES.slice(0, STAGES.indexOf(entry.stage)).some(
+        (stage) => best[stage]?.evaluation.passes !== 3,
+      )
+    ) {
       this.error.set('Complete the preceding skills before resuming this policy.');
       return;
     }

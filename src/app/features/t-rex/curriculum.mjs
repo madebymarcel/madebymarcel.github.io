@@ -47,9 +47,7 @@ export function qualifies(stage, m) {
       m.averageSpeed >= 0.75
     );
   }
-  return (
-    m.steps >= 4 && m.distance > 1 && m.headingError / total < 0.3 && m.stoppingTicks >= 120
-  );
+  return m.steps >= 4 && m.distance > 1 && m.headingError / total < 0.3 && m.stoppingTicks >= 120;
 }
 
 function fitness(stage, m) {
@@ -63,13 +61,13 @@ function fitness(stage, m) {
   if (stage === 'balance' || stage === 'recover') {
     task = 3 * settled - 2 * m.pathDistance;
   } else if (stage === 'shift') {
-    task = 4 * m.shiftTicks / total - m.pathDistance;
+    task = (4 * m.shiftTicks) / total - m.pathDistance;
   } else {
     const progress = Math.max(-1, Math.min(m.distance, 0.3 * m.steps));
     task = 0.4 * Math.min(m.steps, 16) + progress;
     if (stage === 'run') task += 0.6 * Math.min(m.flights, 12) + m.averageSpeed;
-    if (stage === 'walk') task -= 2 * m.flightTicks / total;
-    if (stage === 'maneuver') task += 3 * m.stoppingTicks / total - m.headingError / total;
+    if (stage === 'walk') task -= (2 * m.flightTicks) / total;
+    if (stage === 'maneuver') task += (3 * m.stoppingTicks) / total - m.headingError / total;
     task *= time * time;
   }
   return 8 * time + 4 * stable + task - penalty + (qualifies(stage, m) ? 8 : 0);
@@ -79,7 +77,8 @@ export function assess(stage, policy) {
   const trials = scenarios(stage).map((options) => evaluate(policy, options));
   const scores = trials.map((m) => fitness(stage, m));
   return {
-    score: Math.min(...scores) * 0.6 + scores.reduce((sum, x) => sum + x, 0) / scores.length * 0.4,
+    score:
+      Math.min(...scores) * 0.6 + (scores.reduce((sum, x) => sum + x, 0) / scores.length) * 0.4,
     passes: trials.filter((m) => qualifies(stage, m)).length,
     trials,
   };
@@ -138,7 +137,8 @@ export function propose(checkpoint, initial) {
           k < sensorDimension - 1 &&
           (state.stage === 'balance' || state.stage === 'recover') &&
           (feature === 7 || feature === 8)
-        ) continue;
+        )
+          continue;
         policy[k] = Math.max(-24, Math.min(24, policy[k] + (random(state) - 0.5) * scale));
       }
     }
@@ -148,8 +148,11 @@ export function propose(checkpoint, initial) {
 }
 
 function better(a, b) {
-  return !b || a.evaluation.passes > b.evaluation.passes ||
-    (a.evaluation.passes === b.evaluation.passes && a.evaluation.score > b.evaluation.score);
+  return (
+    !b ||
+    a.evaluation.passes > b.evaluation.passes ||
+    (a.evaluation.passes === b.evaluation.passes && a.evaluation.score > b.evaluation.score)
+  );
 }
 
 export function completeWave(checkpoint, wave, evaluations) {
@@ -204,47 +207,102 @@ const count = (x) => Number.isSafeInteger(x) && x >= 0;
 const finite = (x) => typeof x === 'number' && Number.isFinite(x);
 const object = (x) => x !== null && typeof x === 'object' && !Array.isArray(x);
 const metricKeys = [
-  'ticks', 'distance', 'steps', 'maxDistance', 'pathDistance', 'stableTicks', 'settledTicks',
-  'supportedTicks', 'bothFeetTicks', 'shiftTicks', 'flights', 'flightTicks', 'slip',
-  'headingError', 'stoppingTicks', 'averageSpeed', 'score',
+  'ticks',
+  'distance',
+  'steps',
+  'maxDistance',
+  'pathDistance',
+  'stableTicks',
+  'settledTicks',
+  'supportedTicks',
+  'bothFeetTicks',
+  'shiftTicks',
+  'flights',
+  'flightTicks',
+  'slip',
+  'headingError',
+  'stoppingTicks',
+  'averageSpeed',
+  'score',
 ];
 function validEntry(entry, iteration) {
-  return object(entry) && count(entry.iteration) && entry.iteration > 0 &&
-    entry.iteration <= iteration && STAGES.includes(entry.stage) &&
-    Array.isArray(entry.policy) && entry.policy.length === sensorDimension &&
+  return (
+    object(entry) &&
+    count(entry.iteration) &&
+    entry.iteration > 0 &&
+    entry.iteration <= iteration &&
+    STAGES.includes(entry.stage) &&
+    Array.isArray(entry.policy) &&
+    entry.policy.length === sensorDimension &&
     entry.policy.every((x) => finite(x) && Math.abs(x) <= 24) &&
-    object(entry.evaluation) && finite(entry.evaluation.score) &&
-    count(entry.evaluation.passes) && entry.evaluation.passes <= 3 &&
-    Array.isArray(entry.evaluation.trials) && entry.evaluation.trials.length === 3 &&
-    entry.evaluation.trials.every((m) => object(m) && typeof m.fell === 'boolean' &&
-      metricKeys.every((key) => finite(m[key])) &&
-      count(m.ticks) && m.ticks <= SECONDS[entry.stage] * 120 &&
-      ['steps', 'stableTicks', 'settledTicks', 'supportedTicks', 'bothFeetTicks',
-        'shiftTicks', 'flights', 'flightTicks', 'stoppingTicks'].every(
-        (key) => count(m[key]) && m[key] <= m.ticks,
-      ) && ['maxDistance', 'pathDistance', 'slip', 'headingError'].every((key) => m[key] >= 0)) &&
-    entry.evaluation.trials.filter((m) => qualifies(entry.stage, m)).length === entry.evaluation.passes;
+    object(entry.evaluation) &&
+    finite(entry.evaluation.score) &&
+    count(entry.evaluation.passes) &&
+    entry.evaluation.passes <= 3 &&
+    Array.isArray(entry.evaluation.trials) &&
+    entry.evaluation.trials.length === 3 &&
+    entry.evaluation.trials.every(
+      (m) =>
+        object(m) &&
+        typeof m.fell === 'boolean' &&
+        metricKeys.every((key) => finite(m[key])) &&
+        count(m.ticks) &&
+        m.ticks <= SECONDS[entry.stage] * 120 &&
+        [
+          'steps',
+          'stableTicks',
+          'settledTicks',
+          'supportedTicks',
+          'bothFeetTicks',
+          'shiftTicks',
+          'flights',
+          'flightTicks',
+          'stoppingTicks',
+        ].every((key) => count(m[key]) && m[key] <= m.ticks) &&
+        ['maxDistance', 'pathDistance', 'slip', 'headingError'].every((key) => m[key] >= 0),
+    ) &&
+    entry.evaluation.trials.filter((m) => qualifies(entry.stage, m)).length ===
+      entry.evaluation.passes
+  );
 }
 
 export function parseCheckpoint(source) {
   if (source.length > 4_000_000) throw new Error('Checkpoint exceeds 4 MB.');
   const s = JSON.parse(source);
-  if (!object(s) || s.format !== FORMAT || !count(s.rng) || s.rng > 0xffffffff ||
-      !count(s.iteration) || s.iteration > MAX_ITERATION || s.iteration % WAVE_SIZE !== 0 ||
-      !count(s.physicsSteps) || !STAGES.includes(s.stage) ||
-      !object(s.best) || !object(s.records) ||
-      !Array.isArray(s.history) || s.history.length > HISTORY_LIMIT ||
-      !Object.entries(s.best).every(([key, entry]) =>
-        key === entry?.stage && validEntry(entry, s.iteration)) ||
-      !s.history.every((entry) => validEntry(entry, s.iteration)) ||
-      !Object.entries(s.records).every(([key, record]) =>
+  if (
+    !object(s) ||
+    s.format !== FORMAT ||
+    !count(s.rng) ||
+    s.rng > 0xffffffff ||
+    !count(s.iteration) ||
+    s.iteration > MAX_ITERATION ||
+    s.iteration % WAVE_SIZE !== 0 ||
+    !count(s.physicsSteps) ||
+    !STAGES.includes(s.stage) ||
+    !object(s.best) ||
+    !object(s.records) ||
+    !Array.isArray(s.history) ||
+    s.history.length > HISTORY_LIMIT ||
+    !Object.entries(s.best).every(
+      ([key, entry]) => key === entry?.stage && validEntry(entry, s.iteration),
+    ) ||
+    !s.history.every((entry) => validEntry(entry, s.iteration)) ||
+    !Object.entries(s.records).every(
+      ([key, record]) =>
         ['distance', 'path', 'upright', 'steps', 'speed', 'flights'].includes(key) &&
-        object(record) && finite(record.value) && record.value >= 0 &&
-        validEntry(record.entry, s.iteration) && count(record.trialIndex) &&
+        object(record) &&
+        finite(record.value) &&
+        record.value >= 0 &&
+        validEntry(record.entry, s.iteration) &&
+        count(record.trialIndex) &&
         record.trialIndex < 3 &&
-        record.value === recordValues(record.entry.evaluation.trials[record.trialIndex])[key]) ||
-      STAGES.slice(0, STAGES.indexOf(s.stage)).some((stage) => s.best[stage]?.evaluation.passes !== 3) ||
-      new Set(s.history.map((entry) => entry.iteration)).size !== s.history.length) {
+        record.value === recordValues(record.entry.evaluation.trials[record.trialIndex])[key],
+    ) ||
+    STAGES.slice(0, STAGES.indexOf(s.stage)).some(
+      (stage) => s.best[stage]?.evaluation.passes !== 3,
+    ) ||
+    new Set(s.history.map((entry) => entry.iteration)).size !== s.history.length
+  ) {
     throw new Error('Invalid or incompatible T. rex checkpoint.');
   }
   return s;

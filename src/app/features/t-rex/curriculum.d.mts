@@ -26,6 +26,10 @@ export function qualifies(stage: Stage, metrics: Metrics): boolean;
 export function assess(stage: Stage, policy: number[]): Evaluation;
 export function emptyCheckpoint(seed?: number): Checkpoint;
 export function propose(checkpoint: Checkpoint, initial: number[]): Wave;
-export function completeWave(checkpoint: Checkpoint, wave: Wave, evaluations: Evaluation[]): Checkpoint;
+export function completeWave(
+  checkpoint: Checkpoint,
+  wave: Wave,
+  evaluations: Evaluation[],
+): Checkpoint;
 export function nextStage(checkpoint: Checkpoint): Checkpoint;
 export function parseCheckpoint(source: string): Checkpoint;

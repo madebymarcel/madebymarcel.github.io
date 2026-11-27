@@ -83,7 +83,9 @@
       </li>
       }
     </ol>
-    <p class="ds-hint">Each candidate runs three trials. All must pass before the next skill unlocks.</p>
+    <p class="ds-hint">
+      Each candidate runs three trials. All must pass before the next skill unlocks.
+    </p>
     <h3>Personal records</h3>
     <dl class="rex-metrics">
       @for (record of records; track record.key) { @let saved = state().records[record.key];
@@ -112,8 +114,8 @@
         <option value="0">Select checkpoint</option>
         @for (entry of history(); track entry.iteration) {
         <option [value]="entry.iteration">
-          #{{ entry.iteration }} · {{ labels[entry.stage] }} · {{ entry.evaluation.passes }}/3 passed
-          · {{ entry.evaluation.score | number: '1.2-2' }}
+          #{{ entry.iteration }} · {{ labels[entry.stage] }} · {{ entry.evaluation.passes }}/3
+          passed · {{ entry.evaluation.score | number: '1.2-2' }}
         </option>
         }
       </select>
@@ -133,8 +135,10 @@
       </button>
     </div>
     }
-    <p class="ds-hint">The latest 40 fitness improvements and all personal records are saved locally.
-      Export a checkpoint for backup or training on another device.</p>
+    <p class="ds-hint">
+      The latest 40 fitness improvements and all personal records are saved locally. Export a
+      checkpoint for backup or training on another device.
+    </p>
   </div>
   <div class="ds-card ds-stack">
     <h2>Physical replay</h2>
@@ -169,9 +173,20 @@
       <button class="ds-button" type="button" (click)="stopReplay()">Stop replay</button>
       }
     </div>
-    <svg class="artwork" viewBox="0 0 420 650" role="img" aria-label="Tyrannosaurus rex seen from above">
+    <svg
+      class="artwork"
+      viewBox="0 0 420 650"
+      role="img"
+      aria-label="Tyrannosaurus rex seen from above"
+    >
       <defs>
-        <pattern id="rex-track" patternUnits="userSpaceOnUse" width="420" height="72.5" [attr.y]="distance()*145">
+        <pattern
+          id="rex-track"
+          patternUnits="userSpaceOnUse"
+          width="420"
+          height="72.5"
+          [attr.y]="distance()*145"
+        >
           <path d="M12 36h12 M396 36h12" stroke="currentColor" opacity=".4" />
         </pattern>
         <linearGradient id="rex-skin" x1="0" y1="0" x2="1" y2="0">
@@ -182,10 +197,15 @@
       </defs>
       <rect width="420" height="650" fill="url(#rex-track)" />
       @if (!debug()) {
-      <path data-testid="rex-tail-skin" [attr.d]="overhead().tail" fill="url(#rex-skin)" stroke="#344e35" stroke-width="2" />
-      }
-      @for (b of overhead().segments; track b.name) {
-      @if (debug() || !b.name.startsWith('tail-')) {
+      <path
+        data-testid="rex-tail-skin"
+        [attr.d]="overhead().tail"
+        fill="url(#rex-skin)"
+        stroke="#344e35"
+        stroke-width="2"
+      />
+      } @for (b of overhead().segments; track b.name) { @if (debug() || !b.name.startsWith('tail-'))
+      {
       <path
         [attr.data-bone]="b.name"
         [attr.d]="debug() ? b.outline : b.skin"
@@ -199,7 +219,12 @@
       <circle [attr.cx]="eye[0]" [attr.cy]="eye[1]" r="1.7" fill="#e0bf70" />
       } } }
     </svg>
-    <svg class="artwork side-rig" viewBox="0 0 420 210" role="img" aria-label="Side view of the physical skeleton">
+    <svg
+      class="artwork side-rig"
+      viewBox="0 0 420 210"
+      role="img"
+      aria-label="Side view of the physical skeleton"
+    >
       <path d="M 0 195 H 420" stroke="currentColor" />
       @for (b of side().segments; track b.name) {
       <path
