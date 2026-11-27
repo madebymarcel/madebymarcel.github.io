@@ -15,7 +15,7 @@
     "typecheck": "tsc --noEmit --project tsconfig.app.json",
     "format": "prettier --write .",
     "format:check": "prettier --check . || (prettier src/app/features/lab/layout-preview.html && exit 1)",
-    "test:unit": "ng test --watch=false",
+    "test:unit": "node --test scripts/rex-spatial.test.mjs && ng test --watch=false",
     "test:e2e": "playwright test",
     "lighthouse": "lhci autorun",
     "experiment:canoe-polo": "node --experimental-transform-types scripts/canoe-polo-experiment.mjs",
@@ -29,6 +29,7 @@
     "@angular/platform-server": "22.3.0",
     "@angular/router": "22.3.0",
     "@angular/ssr": "22.3.0",
+    "cannon-es": "^0.20.0",
     "planck": "1.5.1",
     "rxjs": "7.8.2",
     "tslib": "2.9.1"

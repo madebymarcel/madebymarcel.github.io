@@ -1,158 +1,91 @@
 import { Component, DestroyRef, inject, signal } from '@angular/core';
-import { evaluate, type Checkpoint, type Practice } from '../biped/training';
-import { CONTROL_DT, type Frame } from '../biped/walker';
-import { REX_DEMO } from './t-rex-demo';
-import { rexReplay, rexWalker } from './t-rex-walker';
-import { type RexTrainingUpdate } from './t-rex.worker';
+import { trial, type Segment } from './spatial-learning.mjs';
+import checkpoint from './spatial-checkpoint.json';
+import standing from './spatial-standing.json';
 
-function overhead(frame: Frame) {
-  return frame.legs.map(({ hip, knee, ankle, toe }, side) => {
-    const flip = side === 0 ? -1 : 1;
-    const x = (offset: number) => 210 + offset * flip;
-    const y = (point: { x: number }) => 305 - (point.x - frame.torso.x) * 162;
-    const points = {
-      hip: [x(42), y(hip)],
-      knee: [x(68), y(knee)],
-      ankle: [x(72), y(ankle)],
-      toe: [x(73), y(toe)],
-    };
-    return {
-      shin: `M ${points.knee.join(' ')} L ${points.ankle.join(' ')}`,
-      thigh: `M ${points.hip.join(' ')} Q ${x(67)} ${points.hip[1]} ${points.knee.join(' ')}`,
-      foot: `translate(${points.toe.join(' ')}) scale(${-flip} 1)`,
-    };
-  });
+function project(bones: Segment[], side: boolean) {
+  const origin = bones[0].start;
+  const position = (p: Segment['start']) =>
+    side
+      ? [220 + (p.x - origin.x) * 90, 195 - p.y * 90]
+      : [210 + (p.z - origin.z) * 145, 285 - (p.x - origin.x) * 145];
+  const layer = (name: string) =>
+    name.startsWith('thigh') ? 1 : /shin|metatarsus|toes/.test(name) ? 0 : 2;
+  return [...bones]
+    .sort((a, b) => layer(a.name) - layer(b.name))
+    .map((b) => ({
+      name: b.name,
+      eyes: b.eyes.map(position),
+      outline: 'M ' + b.outline.map((p) => position(p).join(' ')).join(' L ') + ' Z',
+      d: 'M ' + position(b.start).join(' ') + ' L ' + position(b.end).join(' '),
+      width: side ? b.depth * 90 : b.width * 145,
+      fill: ['#596d54', '#839a68', '#617e53'][layer(b.name)],
+    }));
 }
 
-function sideView(frame: Frame) {
-  const x = (point: { x: number }) => 210 + (point.x - frame.torso.x) * 150;
-  const y = (point: { y: number }) => 176 - point.y * 150;
-  const point = (value: { x: number; y: number }) => x(value) + ',' + y(value);
-  const { torso, tail } = frame;
-  const nose = {
-    x: torso.x + 0.66 * Math.cos(torso.angle) - 0.13 * Math.sin(torso.angle),
-    y: torso.y + 0.66 * Math.sin(torso.angle) + 0.13 * Math.cos(torso.angle),
-  };
-  return {
-    torso: point(torso) + ' ' + point(nose),
-    tail: tail ? point(tail.root) + ' ' + point(tail.tip) : '',
-    legs: frame.legs.map(({ hip, knee, ankle, toe }) =>
-      [hip, knee, ankle, toe].map(point).join(' '),
-    ),
-  };
-}
-
-@Component({
-  templateUrl: './t-rex-page.html',
-  styleUrl: './t-rex-page.scss',
-})
+@Component({ templateUrl: './t-rex-page.html', styleUrl: './t-rex-page.scss' })
 export class TRexPage {
+  readonly best = signal<number[] | null>(null);
+  readonly standingPolicy = standing.policy;
+  readonly iteration = signal(0);
   readonly training = signal(false);
   readonly playing = signal(false);
-  readonly iteration = signal(0);
-  readonly best = signal<Checkpoint | undefined>(undefined);
-  readonly limbs = signal<ReturnType<typeof overhead> | null>(null);
-  readonly side = signal<ReturnType<typeof sideView> | null>(null);
-  readonly tailTransform = signal('');
-  readonly tailAngle = signal(0);
+  readonly status = signal('');
   readonly distance = signal(0);
-  readonly steps = signal(0);
-  readonly replayResult = signal('');
-  readonly trainingError = signal('');
+  readonly overhead = signal<ReturnType<typeof project>>([]);
+  readonly side = signal<ReturnType<typeof project>>([]);
   private worker?: Worker;
-  private replay?: Practice;
   private timer?: ReturnType<typeof setInterval>;
-
   constructor() {
     inject(DestroyRef).onDestroy(() => {
-      this.worker?.terminate();
       this.stopReplay();
+      this.worker?.terminate();
     });
   }
-
   toggleTraining() {
-    if (this.training()) {
-      this.worker?.postMessage('pause');
-      this.training.set(false);
-      return;
-    }
-    try {
-      this.worker ??= new Worker(new URL('./t-rex.worker', import.meta.url), { type: 'module' });
-      this.worker.onmessage = ({ data }: MessageEvent<RexTrainingUpdate>) => {
+    if (!this.worker) {
+      this.worker = new Worker(new URL('./t-rex.worker', import.meta.url), { type: 'module' });
+      this.worker.onmessage = ({ data }) => {
+        this.best.set(data.policy);
         this.iteration.set(data.iteration);
-        this.best.set(data.best);
       };
       this.worker.onerror = () => {
         this.training.set(false);
-        this.trainingError.set('Training could not continue in this browser.');
-        this.worker?.terminate();
-        this.worker = undefined;
+        this.status.set('Training worker stopped.');
       };
-      this.trainingError.set('');
-      this.worker.postMessage('start');
-      this.training.set(true);
-    } catch {
-      this.trainingError.set('Background training is unavailable in this browser.');
     }
+    this.training.update((v) => !v);
+    this.worker.postMessage(this.training() ? 'start' : 'pause');
   }
-
-  playDemo() {
-    // The weights were learned on the old rigid-tail rig; rank trials on today's physics.
-    this.play({ ...REX_DEMO, evaluation: evaluate(REX_DEMO.policy, 'walk', rexWalker) });
-  }
-
-  playBest() {
-    const best = this.best();
-    if (best) this.play(best);
-  }
-
-  private play(best: Checkpoint) {
-    const { results } = best.evaluation;
-    const index = results.reduce((selected, trial, i) => {
-      const current = results[selected];
-      return Number(trial.passed) > Number(current.passed) ||
-        (trial.passed === current.passed && trial.distance > current.distance)
-        ? i
-        : selected;
-    }, 0);
+  play(policy = checkpoint.policy) {
     this.stopReplay();
-    this.replay = rexReplay(best.policy, index);
-    this.replayResult.set('');
-    this.publishPose(this.replay);
+    const run = trial(policy);
+    const draw = () => {
+      const frame = run.rig.frame();
+      this.overhead.set(project(frame, false));
+      this.side.set(project(frame, true));
+      const m = run.metrics();
+      this.distance.set(m.distance);
+      this.status.set(
+        m.distance.toFixed(2) +
+          ' m · ' +
+          m.steps +
+          ' alternating steps · ' +
+          (m.ticks / 120).toFixed(2) +
+          ' s' +
+          (m.fell ? ' · Fell' : ''),
+      );
+    };
+    draw();
     this.playing.set(true);
     this.timer = setInterval(() => {
-      if (!this.replay) return;
-      this.replay.step();
-      this.publishPose(this.replay);
-      if (this.replay.done) {
-        this.replayResult.set(
-          this.replay.sim.fell
-            ? 'Fell'
-            : this.replay.passed
-              ? 'Walk test passed'
-              : 'Trial finished',
-        );
-        this.stopReplay();
-      }
-    }, CONTROL_DT * 1000);
+      for (let i = 0; i < 4 && !run.done; i++) run.advance();
+      draw();
+      if (run.done) this.stopReplay();
+    }, 1000 / 30);
   }
-
   stopReplay() {
     clearInterval(this.timer);
-    this.timer = undefined;
     this.playing.set(false);
-  }
-
-  private publishPose(replay: Practice) {
-    const frame = replay.sim.frame();
-    this.limbs.set(overhead(frame));
-    this.side.set(sideView(frame));
-    if (frame.tail) {
-      const projection = Math.max(0.05, Math.cos(frame.tail.angle));
-      this.tailTransform.set('translate(0 357) scale(1 ' + projection + ') translate(0 -357)');
-      this.tailAngle.set((frame.tail.jointAngle * 180) / Math.PI);
-    }
-    this.distance.set(replay.sim.distance);
-    this.steps.set(replay.sim.steps);
   }
 }

@@ -5,77 +5,7 @@
   margin-inline: auto;
 }
 
-.track-mark {
-  stroke: var(--border-strong);
-  stroke-width: 2;
-}
-
-.shin,
-.shin-outline,
-.thigh,
-.thigh-outline {
-  fill: none;
-  stroke-linecap: round;
-}
-
-.shin,
-.thigh {
-  stroke: var(--rex-shin);
-  stroke-width: 16;
-}
-
-.shin-outline,
-.thigh-outline {
-  stroke: var(--rex-outline);
-  stroke-width: 20;
-}
-
-.thigh {
-  stroke: var(--rex-thigh);
-  stroke-width: 34;
-}
-
-.thigh-outline {
-  stroke-width: 38;
-}
-
-.toe {
-  fill: var(--rex-shin);
-  stroke: var(--rex-outline);
-  stroke-width: 2.5;
-  stroke-linejoin: round;
-}
-
 .side-rig {
   border: var(--border-width) solid var(--border);
   border-radius: var(--radius-medium);
-}
-
-.rig-ground,
-.rig-leg,
-.rig-tail,
-.rig-torso {
-  fill: none;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.rig-ground {
-  stroke: var(--border-strong);
-  stroke-width: 2;
-}
-
-.rig-leg {
-  stroke: var(--muted);
-  stroke-width: 5;
-}
-
-.rig-tail {
-  stroke: var(--accent);
-  stroke-width: 9;
-}
-
-.rig-torso {
-  stroke: var(--text);
-  stroke-width: 16;
 }

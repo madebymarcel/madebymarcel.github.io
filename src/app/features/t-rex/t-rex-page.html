@@ -1,39 +1,25 @@
 <section class="content-page ds-stack">
   <h1>T. rex</h1>
-  <p>Top-down SVG study and a walking simulation.</p>
+  <p>A spatial balance and walking experiment. Both views follow the same physical skeleton.</p>
   <div class="ds-card ds-stack">
     <div class="ds-cluster">
-      <button type="button" class="ds-button" (click)="toggleTraining()">
-        {{ training() ? 'Pause training' : 'Start training' }}
+      <button class="ds-button" (click)="toggleTraining()">
+        {{training()?'Pause training':'Start training'}}
       </button>
-      <button type="button" class="ds-button ds-button--secondary" (click)="playDemo()">
-        Watch learned demo
+      <button class="ds-button ds-button--secondary" (click)="play()">Watch learned demo</button>
+      <button class="ds-button ds-button--secondary" (click)="play(standingPolicy)">
+        Watch balance test
       </button>
-      <button
-        type="button"
-        class="ds-button ds-button--secondary"
-        [disabled]="!best()"
-        (click)="playBest()"
-      >
+      <button class="ds-button ds-button--secondary" [disabled]="!best()" (click)="play(best()!)">
         Watch your best
       </button>
-      @if (playing()) {
-      <button type="button" class="ds-button ds-button--secondary" (click)="stopReplay()">
-        Stop replay
-      </button>
-      }
+      @if(playing()){<button class="ds-button" (click)="stopReplay()">Stop replay</button>}
     </div>
-    <p>
-      Your training: {{ iteration() }} iterations · {{ best()?.evaluation?.passes ?? 0 }}/5 walk
-      tests passed
-    </p>
-    @if (trainingError()) {
-    <p role="status">{{ trainingError() }}</p>
-    } @if (limbs(); as legs) {
+    <p>Your training · {{iteration()}} candidates evaluated</p>
+    @if(overhead().length){
     <svg
       class="artwork"
-      style="--rex-outline: #344e35; --rex-shin: #739161; --rex-thigh: #62835a"
-      viewBox="0 0 420 660"
+      viewBox="0 0 420 650"
       role="img"
       aria-label="Tyrannosaurus rex walking, seen from above"
     >
@@ -42,60 +28,52 @@
           id="rex-track"
           patternUnits="userSpaceOnUse"
           width="420"
-          height="72"
-          [attr.y]="distance() * 162"
+          height="72.5"
+          [attr.y]="distance()*145"
         >
-          <path class="track-mark" d="M 15,36 h 8 M 397,36 h 8" />
+          <path d="M12 36h12 M396 36h12" stroke="currentColor" opacity=".4" />
         </pattern>
       </defs>
-      <rect width="420" height="660" fill="url(#rex-track)" />
-      @for (leg of legs; track $index) {
-      <g class="rex-lower-leg">
-        <path class="shin-outline" [attr.d]="leg.shin" />
-        <path class="shin" [attr.d]="leg.shin" />
-        <path
-          class="toe"
-          d="M -10,31 Q -16,20 -12,9 L -19,0 Q -21,-5 -16,-6 L -6,4 L -5,-10 Q -3,-16 2,-11 L 4,4 L 13,-5 Q 18,-8 19,-3 L 12,10 Q 16,21 10,30 Q 1,36 -10,31 Z"
-          [attr.transform]="leg.foot"
-        />
-      </g>
-      } @for (leg of legs; track $index) {
-      <g class="rex-upper-leg">
-        <path class="thigh-outline" [attr.d]="leg.thigh" />
-        <path class="thigh" [attr.d]="leg.thigh" />
-      </g>
-      }
-      <use class="rex-tail" href="trex.svg#trex-tail" [attr.transform]="tailTransform()" />
-      <use href="trex.svg#trex-top" />
+      <rect width="420" height="650" fill="url(#rex-track)" />
+      @for(b of overhead();track b.name){
+      <path
+        [attr.data-bone]="b.name"
+        [attr.d]="b.outline"
+        [attr.fill]="b.fill"
+        stroke="#3b5038"
+        stroke-width="1"
+        stroke-linejoin="round"
+      />
+      @for(eye of b.eyes;track $index){
+      <circle [attr.cx]="eye[0]" [attr.cy]="eye[1]" r="2.5" fill="#263524" />
+      } }
     </svg>
-    @if (side(); as rig) {
     <svg
       class="artwork side-rig"
-      viewBox="0 0 420 190"
+      viewBox="0 0 420 210"
       role="img"
-      aria-label="Side-view physics rig showing tail counterbalance"
+      aria-label="Side view of the physical skeleton"
     >
-      <path class="rig-ground" d="M 8 176 H 412" />
-      @for (leg of rig.legs; track $index) {
-      <polyline class="rig-leg" [attr.points]="leg" />
+      <path d="M 0 195 H 420" stroke="currentColor" />
+      @for(b of side();track b.name){
+      <path
+        [attr.data-bone]="b.name"
+        [attr.d]="b.d"
+        [attr.stroke]="b.fill"
+        [attr.stroke-width]="b.width"
+        stroke-linecap="round"
+      />
       }
-      <polyline class="rig-tail" [attr.points]="rig.tail" />
-      <polyline class="rig-torso" [attr.points]="rig.torso" />
     </svg>
-    <p class="ds-hint">Tail joint: {{ tailAngle().toFixed(1) }}° · pitch counterbalance</p>
-    }
-    <p>
-      Distance: {{ distance().toFixed(2) }} m · Alternating steps: {{ steps() }} @if
-      (replayResult()) { · {{ replayResult() }} }
-    </p>
     } @else {
     <img
       class="artwork"
       src="trex.svg"
-      alt="Tyrannosaurus rex seen from above, with a broad skull, tiny arms, powerful legs and a long curved tail."
+      alt="Tyrannosaurus rex seen from above"
       width="420"
       height="660"
     />
     }
+    <p>{{status()}}</p>
   </div>
 </section>
