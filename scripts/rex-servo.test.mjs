@@ -2,13 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import seed from '../src/app/features/t-rex/seed-policy.json' with { type: 'json' };
 import { createServoRig } from '../src/app/features/t-rex/servo-rig.mjs';
-import { evaluate, trial } from '../src/app/features/t-rex/servo-learning.mjs';
+import { evaluate, GAIT_DEFAULTS, trial } from '../src/app/features/t-rex/servo-learning.mjs';
 import {
   achievements,
+  assess,
+  better,
   completeWave,
   emptyCheckpoint,
   parseCheckpoint,
   propose,
+  robustFitness,
   WAVE_SIZE,
 } from '../src/app/features/t-rex/servo-search.mjs';
 
@@ -66,36 +69,77 @@ test('axial motors can actively bend the massive tail in either direction', () =
   }
 });
 
-test('one cumulative search preserves the physical checkpoint and deterministic random stream', () => {
+test('population search retains its champion, explores alternatives, and adapts its scale', () => {
   const state = emptyCheckpoint();
   const wave = propose(state);
-  // Pure state-management test: deliberately inferior scores must not replace the real seed.
   const bad = { ...state.best.metrics, steps: 0, score: -10, distance: 0, stableTicks: 0 };
-  const next = completeWave(state, wave, Array(WAVE_SIZE).fill(bad));
+  const trials = state.best.trials.map((m) => ({ ...m, score: -10 }));
+  const evaluation = { metrics: bad, trials, fitness: robustFitness(bad, trials) };
+  const next = completeWave(state, wave, Array(WAVE_SIZE).fill(evaluation));
   assert.deepEqual(next.best, state.best);
   assert.deepEqual(next.records, state.records);
   assert.equal(next.stale, 1);
   assert.equal(next.iteration, WAVE_SIZE);
-  assert.notDeepEqual(propose(next), wave);
+  assert.ok(next.mutationScale < state.mutationScale);
+  assert.ok(next.population.length > 1);
+  assert.ok(next.population.some((entry) => entry.iteration === state.best.iteration));
+  const following = propose(next);
+  assert.ok(new Set(following.candidates.map((candidate) => candidate.parent)).size > 1);
   const restored = parseCheckpoint(JSON.stringify(next));
-  assert.deepEqual(propose(restored), propose(next));
+  assert.deepEqual(propose(restored), following);
   assert.throws(() => parseCheckpoint(JSON.stringify({ ...next, format: 'trex-servo-v3' })));
 });
 
-test('milestones distinguish real forward steps from sustained walking', () => {
+test('legacy checkpoint migration preserves weights, count and behavior, and rescores trials', () => {
+  const old = {
+    format: 'trex-continuous-v4',
+    rng: 1105691708,
+    iteration: 38144,
+    stale: 31,
+    best: { iteration: 37637, policy: seed.policy.slice(0, 28), metrics: { score: 97 } },
+    records: {},
+  };
+  const state = parseCheckpoint(JSON.stringify(old));
+  assert.equal(state.iteration, old.iteration);
+  assert.equal(state.rng, old.rng);
+  assert.equal(state.best.iteration, old.best.iteration);
+  assert.deepEqual(state.best.policy, [...old.best.policy, ...GAIT_DEFAULTS]);
+  assert.deepEqual(state.best.metrics, seed.metrics);
+  assert.deepEqual(state.best.trials, seed.trials);
+  assert.equal(state.best.fitness, robustFitness(seed.metrics, seed.trials));
+  assert.deepEqual(parseCheckpoint(JSON.stringify(state)), state);
+});
+
+test('the seed has reproducible nominal and disturbed evaluations', () => {
+  const result = assess(seed.policy);
+  assert.deepEqual(result.metrics, seed.metrics);
+  assert.deepEqual(result.trials, seed.trials);
+});
+
+test('extra steps alone cannot replace effective forward motion', () => {
+  const state = emptyCheckpoint();
+  const old = state.best;
+  const metrics = { ...old.metrics, steps: 100, distance: old.metrics.distance - 0.3, score: 100 };
+  assert.equal(better({ ...old, metrics }, old), false);
+});
+
+test('milestones require sustained walking under all evaluation conditions', () => {
   const m = evaluate(seed.policy);
   assert.ok(achievements(m).includes('step'));
   assert.ok(achievements(m).includes('alternate'));
   assert.equal(achievements(m).includes('walk'), false);
   const walking = {
     ...m,
-    ticks: 960,
-    steps: 8,
-    distance: 3,
+    ticks: 1440,
+    stableTicks: 1440,
+    steps: 12,
+    distance: 4,
     slip: 0.2,
     flightTicks: 0,
     fell: false,
   };
-  assert.ok(achievements(walking).includes('walk'));
-  assert.equal(achievements({ ...walking, fell: true }).includes('walk'), false);
+  const varied = { ...walking, ticks: 720, stableTicks: 720, steps: 6, distance: 2 };
+  assert.ok(achievements(walking, [varied, varied]).includes('walk'));
+  assert.equal(achievements(walking).includes('walk'), false);
+  assert.equal(achievements(walking, [varied, { ...varied, fell: true }]).includes('walk'), false);
 });

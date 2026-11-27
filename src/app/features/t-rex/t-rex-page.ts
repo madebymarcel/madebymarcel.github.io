@@ -1,13 +1,15 @@
 import { Component, DestroyRef, afterNextRender, computed, inject, signal } from '@angular/core';
-import { trial, type Metrics } from './servo-learning.mjs';
+import { trial } from './servo-learning.mjs';
 import {
   completeWave,
   emptyCheckpoint,
+  FORMAT,
   milestoneLabel,
   parseCheckpoint,
   propose,
   STORAGE_KEY,
   type Milestone,
+  type Evaluation,
 } from './servo-search.mjs';
 import { project } from './rex-render';
 import type { EvaluationRequest, EvaluationResponse } from './t-rex.worker';
@@ -16,6 +18,11 @@ type BatchSummary = {
   iteration: number;
   bestIteration: number;
   bestScore: number;
+  bestFitness: number;
+  populationFitness: number;
+  mutationScale: number;
+  successRate: number;
+  variationSurvivors: number;
   maxSteps: number;
   maxDistance: number;
   maxTicks: number;
@@ -53,7 +60,14 @@ export class TRexPage {
     afterNextRender(() => {
       try {
         const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) this.state.set(parseCheckpoint(saved));
+        if (saved) {
+          const restored = parseCheckpoint(saved);
+          this.state.set(restored);
+          if (JSON.parse(saved).format !== FORMAT) {
+            localStorage.setItem(STORAGE_KEY + '-legacy-backup', saved);
+            this.flush();
+          }
+        }
       } catch {
         this.error.set('Saved learning could not be restored.');
       }
@@ -132,7 +146,7 @@ export class TRexPage {
     if (!this.training() || this.disposed) return;
     const before = this.state();
     const wave = propose(before);
-    const evaluations: Metrics[] = [];
+    const evaluations: Evaluation[] = [];
     const size = Math.ceil(wave.candidates.length / this.workers.length);
     const chunks = [];
     for (let offset = 0; offset < wave.candidates.length; offset += size) {
@@ -143,8 +157,8 @@ export class TRexPage {
       const id = ++this.requestId;
       this.pending.set(id, (response) => {
         if (this.disposed || !this.training()) return;
-        response.evaluations.forEach((metrics, i) => {
-          evaluations[offset + i] = metrics;
+        response.evaluations.forEach((evaluation, i) => {
+          evaluations[offset + i] = evaluation;
         });
         if (--remaining) return;
         try {
@@ -154,10 +168,15 @@ export class TRexPage {
             iteration: next.iteration,
             bestIteration: next.best.iteration,
             bestScore: next.best.metrics.score,
-            maxSteps: Math.max(...evaluations.map((m) => m.steps)),
-            maxDistance: Math.max(...evaluations.map((m) => m.distance)),
-            maxTicks: Math.max(...evaluations.map((m) => m.ticks)),
-            falls: evaluations.filter((m) => m.fell).length,
+            bestFitness: next.best.fitness,
+            populationFitness: Math.max(...next.population.map((entry) => entry.fitness)),
+            mutationScale: next.mutationScale,
+            successRate: next.successRate,
+            variationSurvivors: evaluations.filter((e) => e.trials.every((m) => !m.fell)).length,
+            maxSteps: Math.max(...evaluations.map((e) => e.metrics.steps)),
+            maxDistance: Math.max(...evaluations.map((e) => e.metrics.distance)),
+            maxTicks: Math.max(...evaluations.map((e) => e.metrics.ticks)),
+            falls: evaluations.filter((e) => e.metrics.fell).length,
           });
           if (this.recentBatches.length > 12) this.recentBatches.shift();
           this.flush();
