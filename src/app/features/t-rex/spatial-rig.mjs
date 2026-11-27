@@ -16,7 +16,12 @@ const up = vec(0, 1, 0);
 const dt = 1 / 120;
 
 // Forward X, height Y, animal's right Z. Each shape's long axis is local X.
-export function createRig({ locked = false, lateralVelocity = 0, friction = 0.85 } = {}) {
+export function createRig({
+  locked = false,
+  lateralVelocity = 0,
+  friction = 0.85,
+  selfCollision = false,
+} = {}) {
   const world = new World({ gravity: vec(0, -9.81, 0) });
   world.solver = new GSSolver();
   world.solver.iterations = 22;
@@ -30,11 +35,15 @@ export function createRig({ locked = false, lateralVelocity = 0, friction = 0.85
   function bone(name, start, end, width, depth, mass) {
     const direction = end.vsub(start);
     const length = direction.normalize();
+    const leg = /^(thigh|shin|metatarsus|toes)/.test(name);
+    const group = leg ? (name.endsWith('-1') ? 4 : 8) : /^tail-[2-5]$/.test(name) ? 16 : 1;
+    // Only separated collision groups interact. Adjacent anatomy shares overlapping boxes.
+    const mask = group === 4 ? 8 | 16 : group === 8 ? 4 | 16 : group === 16 ? 4 | 8 : 0;
     const body = new Body({
       mass,
       shape: new Box(vec(length / 2, depth / 2, width / 2)),
-      collisionFilterGroup: 1,
-      collisionFilterMask: 2,
+      collisionFilterGroup: group,
+      collisionFilterMask: 2 | (selfCollision ? mask : 0),
     });
     body.position.copy(start.vadd(end).scale(0.5));
     body.quaternion.setFromVectors(forward, direction);
@@ -125,14 +134,17 @@ export function createRig({ locked = false, lateralVelocity = 0, friction = 0.85
     join(met, toes, ball, 0.65, 9);
   }
 
-  function step(actions = []) {
+  const requested = vec(0, 0, 0);
+  const couple = vec(0, 0, 0);
+  function step(actions = [], respectHinges = false) {
     for (const [i, joint] of joints.entries()) {
       if (joint.immobile) continue;
-      const lateral = actions[2 * i] || 0;
+      const hinge = /^(shin|metatarsus|toes)/.test(joint.name);
+      const lateral = respectHinges && hinge ? 0 : actions[2 * i] || 0;
       const hip = joint.name.startsWith('thigh');
-      const requested = vec(hip ? lateral : 0, hip ? 0 : lateral, actions[2 * i + 1] || 0);
+      requested.set(hip ? lateral : 0, hip ? 0 : lateral, actions[2 * i + 1] || 0);
       requested.scale(joint.torque / Math.max(1, requested.length()), requested);
-      const couple = joint.a.vectorToWorldFrame(requested);
+      joint.a.vectorToWorldFrame(requested, couple);
       joint.b.torque.vadd(couple, joint.b.torque);
       joint.a.torque.vsub(couple, joint.a.torque);
     }

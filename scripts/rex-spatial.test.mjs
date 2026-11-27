@@ -37,3 +37,85 @@ test('training repeats from the same seed and retains its best evaluation', () =
   assert.deepEqual(first, b());
   assert.ok(a().score >= first.score);
 });
+
+import { readFileSync } from 'node:fs';
+import { expandPolicy, sensorDimension } from '../src/app/features/t-rex/spatial-learning.mjs';
+import {
+  assess,
+  completeWave,
+  emptyCheckpoint,
+  nextStage,
+  parseCheckpoint,
+  propose,
+  qualifies,
+  WAVE_SIZE,
+} from '../src/app/features/t-rex/curriculum.mjs';
+
+const initial = JSON.parse(
+  readFileSync(new URL('../src/app/features/t-rex/spatial-standing.json', import.meta.url)),
+).policy;
+
+test('expanded controller produces reproducible finite metrics in all three trials', () => {
+  const policy = expandPolicy(initial);
+  assert.equal(policy.length, sensorDimension);
+  const a = assess('balance', policy);
+  assert.deepEqual(a, assess('balance', policy));
+  assert.equal(a.trials.length, 3);
+  for (const m of a.trials) {
+    assert.ok(Object.values(m).every((v) => typeof v === 'boolean' || Number.isFinite(v)));
+    assert.ok(m.pathDistance >= m.maxDistance - 1e-9);
+  }
+});
+
+test('checkpoint round trip preserves the random stream and all records', () => {
+  const start = emptyCheckpoint();
+  const wave = propose(start, initial);
+  const evaluations = wave.candidates.map(({ policy }) => assess(start.stage, policy));
+  const state = completeWave(start, wave, evaluations);
+  assert.equal(state.iteration, WAVE_SIZE);
+  assert.ok(state.physicsSteps > 0);
+  const restored = parseCheckpoint(JSON.stringify(state));
+  assert.deepEqual(restored, state);
+  assert.deepEqual(propose(restored, initial), propose(state, initial));
+  assert.equal(
+    state.records.distance.value,
+    Math.max(...evaluations.flatMap((e) => e.trials.map((m) => m.maxDistance))),
+  );
+  const record = state.records.distance;
+  assert.equal(record.value, record.entry.evaluation.trials[record.trialIndex].maxDistance);
+  assert.throws(() => parseCheckpoint(JSON.stringify({ ...state, format: 'wrong' })));
+  assert.throws(() => parseCheckpoint(JSON.stringify({ ...state, rng: -1 })));
+  const corrupted = JSON.parse(JSON.stringify(state));
+  corrupted.history[0].policy[0] = null;
+  assert.throws(() => parseCheckpoint(JSON.stringify(corrupted)));
+});
+
+test('falling, sliding and hopping cannot qualify as a stable walk or run', () => {
+  const base = {
+    fell: false,
+    ticks: 960,
+    stableTicks: 960,
+    distance: 7,
+    steps: 12,
+    slip: 0.1,
+    flightTicks: 180,
+    flights: 5,
+    averageSpeed: 0.875,
+  };
+  assert.equal(qualifies('run', base), true);
+  assert.equal(qualifies('run', { ...base, fell: true }), false);
+  assert.equal(qualifies('run', { ...base, flights: 0 }), false);
+  assert.equal(qualifies('run', { ...base, slip: 4 }), false);
+  assert.equal(qualifies('walk', base), false);
+  assert.equal(qualifies('walk', { ...base, flightTicks: 0 }), true);
+  assert.equal(qualifies('walk', { ...base, ticks: 500, flightTicks: 0 }), false);
+});
+
+test('curriculum advances only after every balance trial passes', () => {
+  const state = emptyCheckpoint();
+  assert.equal(nextStage(state).stage, 'balance');
+  state.best.balance = { evaluation: { passes: 2 } };
+  assert.equal(nextStage(state).stage, 'balance');
+  state.best.balance.evaluation.passes = 3;
+  assert.equal(nextStage(state).stage, 'recover');
+});

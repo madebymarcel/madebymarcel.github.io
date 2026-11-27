@@ -1,11 +1,35 @@
 import { createRig } from './spatial-rig.mjs';
 const weightsPerAxis = 9;
 export const dimension = 12 * 2 * weightsPerAxis + 1;
+export const sensorCount = 22;
+export const sensorDimension = 12 * 2 * sensorCount + 1;
+
+export function expandPolicy(policy) {
+  if (policy.length === sensorDimension) return [...policy];
+  if (policy.length !== dimension) throw new Error('Unknown T. rex policy size.');
+  const expanded = Array(sensorDimension).fill(0);
+  for (let axis = 0; axis < 24; axis++) {
+    for (let i = 0; i < weightsPerAxis; i++) {
+      expanded[axis * sensorCount + i] = policy[axis * weightsPerAxis + i];
+    }
+  }
+  expanded[sensorDimension - 1] = policy[dimension - 1];
+  return expanded;
+}
 export function generator(seed) {
   return () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296;
 }
 export function trial(policy, options = {}) {
-  const rig = createRig(options);
+  const enhanced = policy.length === sensorDimension;
+  const stage = options.stage ?? 'walk';
+  const rig = createRig({ ...options, selfCollision: enhanced && options.selfCollision !== false });
+  const width = enhanced ? sensorCount : weightsPerAxis;
+  const duration = options.seconds ?? 5;
+  const limit = Math.round(duration / rig.dt);
+  const totalMass = rig.bones.reduce((sum, bone) => sum + bone.body.mass, 0);
+  const forbidden = new Set(
+    rig.bones.filter((b) => /^(skull|neck|trunk|tail)/.test(b.name)).map((b) => b.body),
+  );
   const rests = rig.joints.map(({ a, b }) => a.quaternion.inverse().mult(b.quaternion));
   const feet = rig.bones.filter((b) => b.name.startsWith('toes')).map((b) => b.body);
   const airborne = [0, 0],
@@ -17,25 +41,78 @@ export function trial(policy, options = {}) {
     fell = false;
   const start = rig.trunk.body.position.x;
   let upright = 0;
+  let maxDistance = 0;
+  let pathDistance = 0;
+  let lastX = start;
+  let lastZ = rig.trunk.body.position.z;
+  let stableTicks = 0;
+  let settledTicks = 0;
+  let supportedTicks = 0;
+  let bothFeetTicks = 0;
+  let shiftTicks = 0;
+  let flights = 0;
+  let flightTicks = 0;
+  let air = 0;
+  let takeoff = -1;
+  let lastFlight = -1;
+  let slip = 0;
+  let headingError = 0;
+  let stoppingTicks = 0;
+  const loads = [0, 0];
+  const nextContact = [false, false];
+  const footX = feet.map((foot) => foot.position.x);
+  const footZ = feet.map((foot) => foot.position.z);
+  const actions = Array(rig.joints.length * 2).fill(0);
+  const features = Array(width).fill(0);
+  function command(time) {
+    if (!enhanced) return { speed: 1, heading: 0, cyclic: true };
+    if (stage === 'balance' || stage === 'recover') {
+      return { speed: 0, heading: 0, cyclic: false };
+    }
+    if (stage === 'maneuver') {
+      return { speed: time < 6 ? 0.55 : 0, heading: time < 2 ? 0 : 0.6, cyclic: time < 6 };
+    }
+    const speed = stage === 'run' ? 1.4 : stage === 'walk' ? 0.65 : stage === 'step' ? 0.3 : 0;
+    return { speed, heading: 0, cyclic: true };
+  }
   function advance() {
     const trunk = rig.trunk.body,
       vertical = trunk.vectorToWorldFrame(rig.up);
-    const phase = ticks * rig.dt * (5 + 3 * Math.tanh(policy[dimension - 1]));
-    const features = [
-      1,
-      vertical.x,
-      vertical.z,
-      trunk.angularVelocity.x * 0.2,
-      trunk.angularVelocity.z * 0.2,
-      Number(contact[0]),
-      Number(contact[1]),
-      0,
-      0,
-    ];
-    const actions = [];
+    const time = ticks * rig.dt;
+    const targetCommand = command(time);
+    const frequency = enhanced && stage === 'run' ? 11 : 5;
+    const phase = time * (frequency + 3 * Math.tanh(policy[policy.length - 1]));
+    const supportTarget = Math.sin(phase);
+    const phaseCos = Math.cos(phase);
+    const heading = Math.atan2(
+      2 * (trunk.quaternion.x * trunk.quaternion.z - trunk.quaternion.w * trunk.quaternion.y),
+      1 - 2 * (trunk.quaternion.y ** 2 + trunk.quaternion.z ** 2),
+    );
+    let comX = 0;
+    let comZ = 0;
+    if (enhanced) {
+      for (const { body } of rig.bones) {
+        comX += body.position.x * body.mass;
+        comZ += body.position.z * body.mass;
+      }
+      comX /= totalMass;
+      comZ /= totalMass;
+    }
+    const supportCount = Number(contact[0]) + Number(contact[1]);
+    const supportX = supportCount
+      ? (feet[0].position.x * Number(contact[0]) + feet[1].position.x * Number(contact[1])) /
+        supportCount
+      : (feet[0].position.x + feet[1].position.x) / 2;
+    const supportZ = supportCount
+      ? (feet[0].position.z * Number(contact[0]) + feet[1].position.z * Number(contact[1])) /
+        supportCount
+      : (feet[0].position.z + feet[1].position.z) / 2;
+    features[0] = 1;
+    features[1] = vertical.x;
+    features[4] = trunk.angularVelocity.z * 0.2;
     for (const [i, { a, b }] of rig.joints.entries()) {
-      features[7] = i >= 8 ? Math.sin(phase) : 0;
-      features[8] = i >= 8 ? Math.cos(phase) : 0;
+      features[7] = i >= 8 && targetCommand.cyclic ? supportTarget : 0;
+      features[8] = i >= 8 && targetCommand.cyclic ? phaseCos : 0;
       const target = a.quaternion.mult(rests[i]);
       const displacement = a.quaternion
         .inverse()
@@ -52,24 +129,58 @@ export function trial(policy, options = {}) {
       features[8] *= mirror;
       const hip = i === 8 || i === 12;
       for (const axis of [hip ? 'x' : 'y', 'z']) {
-        const offset = ((right ? i - 4 : i) * 2 + Number(axis === 'z')) * weightsPerAxis;
+        const offset = ((right ? i - 4 : i) * 2 + Number(axis === 'z')) * width;
         const cyclic = features[7] * policy[offset + 7] + features[8] * policy[offset + 8];
-        const active = features
-          .slice(0, 7)
-          .reduce((sum, value, j) => sum + value * policy[offset + j], 0);
-        actions.push(
+        let active = 0;
+        for (let j = 0; j < 7; j++) active += features[j] * policy[offset + j];
+        if (enhanced) {
+          const foot = feet[right ? 1 : 0];
+          const axisMirror = axis === 'z' ? 1 : mirror;
+          features[9] = displacement[axis] * Math.sign(displacement.w) * axisMirror;
+          features[10] = rate[axis] * 0.2 * axisMirror;
+          features[11] = (comX - supportX) * 2;
+          features[12] = (comZ - supportZ) * 2 * mirror;
+          features[13] = trunk.velocity.x * 0.5;
+          features[14] = trunk.velocity.z * 0.5 * mirror;
+          features[15] = foot.position.x - trunk.position.x;
+          features[16] = foot.position.y;
+          features[17] = loads[right ? 1 : 0];
+          features[18] = targetCommand.speed;
+          features[19] = Math.sin(targetCommand.heading - heading) * mirror;
+          features[20] = stage === 'shift' ? supportTarget * mirror : 0;
+          features[21] = trunk.position.y - 1;
+          for (let j = 9; j < width; j++) active += features[j] * policy[offset + j];
+        }
+        actions[2 * i + Number(axis === 'z')] =
           (Math.tanh(active) + 3 * Math.tanh(cyclic)) * (axis === 'z' ? 1 : mirror) -
-            (i >= 2 && i < 8 ? 36 : 10) * displacement[axis] * Math.sign(displacement.w) -
-            (i < 8 ? 0.018 : 0.08) * rate[axis],
-        );
+          (i >= 2 && i < 8 ? 36 : 10) * displacement[axis] * Math.sign(displacement.w) -
+          (i < 8 ? 0.018 : 0.08) * rate[axis];
       }
     }
-    rig.step(actions);
+    rig.step(actions, enhanced);
     ticks++;
+    const previousSupport = Number(contact[0]) + Number(contact[1]);
+    const previousFoot = contact[0] ? 0 : contact[1] ? 1 : -1;
+    nextContact.fill(false);
+    loads.fill(0);
+    let bodyContact = false;
+    for (const c of rig.world.contacts) {
+      const body = c.bi === rig.ground ? c.bj : c.bj === rig.ground ? c.bi : null;
+      if (!body) continue;
+      const index = feet.indexOf(body);
+      if (index >= 0) {
+        nextContact[index] = true;
+        loads[index] += Math.max(0, c.multiplier || 0) / (totalMass * 9.81);
+      }
+      if (forbidden.has(body) && (enhanced || body !== rig.bones[1].body)) bodyContact = true;
+    }
     for (const [i, foot] of feet.entries()) {
-      contact[i] = rig.world.contacts.some(
-        (c) => (c.bi === foot && c.bj === rig.ground) || (c.bj === foot && c.bi === rig.ground),
-      );
+      if (contact[i] && nextContact[i]) {
+        slip += Math.hypot(foot.position.x - footX[i], foot.position.z - footZ[i]);
+      }
+      footX[i] = foot.position.x;
+      footZ[i] = foot.position.z;
+      contact[i] = nextContact[i];
       if (contact[i]) {
         if (airborne[i] >= 6 && i !== last && foot.position.x > landing + 0.05) {
           if (last >= 0) steps++;
@@ -80,16 +191,45 @@ export function trial(policy, options = {}) {
       } else airborne[i]++;
     }
     upright += Math.max(0, vertical.y);
-    fell ||=
-      trunk.position.y < 0.6 ||
-      vertical.y < 0.55 ||
-      rig.world.contacts.some(
-        (c) =>
-          [c.bi, c.bj].includes(rig.ground) &&
-          rig.bones.some(
-            (b) => /^(skull|trunk|tail)/.test(b.name) && [c.bi, c.bj].includes(b.body),
-          ),
-      );
+    fell ||= trunk.position.y < 0.6 || vertical.y < 0.55 || bodyContact;
+    if (fell) return;
+    const support = Number(contact[0]) + Number(contact[1]);
+    if (support) {
+      supportedTicks++;
+      if (support === 2) bothFeetTicks++;
+      if (air >= 3 && takeoff >= 0 && support === 1) {
+        const land = contact[0] ? 0 : 1;
+        if (land !== takeoff && land !== lastFlight) {
+          flights++;
+          lastFlight = land;
+        }
+      }
+      air = 0;
+      if (support === 1 && contact[supportTarget >= 0 ? 0 : 1]) shiftTicks++;
+    } else {
+      if (previousSupport) takeoff = previousSupport === 1 ? previousFoot : -1;
+      air++;
+      flightTicks++;
+    }
+    if (vertical.y > 0.9 && trunk.position.y > 0.8) stableTicks++;
+    if (
+      support === 2 &&
+      vertical.y > 0.94 &&
+      trunk.position.y > 0.85 &&
+      trunk.velocity.length() < 0.18 &&
+      trunk.angularVelocity.length() < 0.8
+    ) {
+      settledTicks++;
+    }
+    if (time >= 6 && trunk.velocity.length() < 0.2 && support === 2 && vertical.y > 0.94) {
+      stoppingTicks++;
+    } else stoppingTicks = 0;
+    maxDistance = Math.max(maxDistance, trunk.position.x - start);
+    pathDistance += Math.hypot(trunk.position.x - lastX, trunk.position.z - lastZ);
+    lastX = trunk.position.x;
+    lastZ = trunk.position.z;
+    const angle = targetCommand.heading - heading;
+    headingError += Math.abs(Math.atan2(Math.sin(angle), Math.cos(angle)));
   }
   function metrics() {
     const distance = rig.trunk.body.position.x - start;
@@ -98,6 +238,19 @@ export function trial(policy, options = {}) {
       fell,
       distance,
       steps,
+      maxDistance,
+      pathDistance,
+      stableTicks,
+      settledTicks,
+      supportedTicks,
+      bothFeetTicks,
+      shiftTicks,
+      flights,
+      flightTicks,
+      slip,
+      headingError,
+      stoppingTicks,
+      averageSpeed: ticks ? (lastX - start) / (ticks * rig.dt) : 0,
       score: (ticks + upright) / 400 + 4 * Math.min(steps, 8) + 2 * distance,
     };
   }
@@ -106,7 +259,7 @@ export function trial(policy, options = {}) {
     advance,
     metrics,
     get done() {
-      return fell || ticks >= 600;
+      return fell || ticks >= limit;
     },
   };
 }

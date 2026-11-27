@@ -1,0 +1,35 @@
+import type { Metrics, Stage, TrialOptions } from './spatial-learning.mjs';
+export type { Stage };
+export type Evaluation = { score: number; passes: number; trials: Metrics[] };
+export type Candidate = { iteration: number; policy: number[] };
+export type Entry = Candidate & { stage: Stage; evaluation: Evaluation };
+export type RecordKey = 'distance' | 'path' | 'upright' | 'steps' | 'speed' | 'flights';
+export type Checkpoint = {
+  format: string;
+  rng: number;
+  iteration: number;
+  physicsSteps: number;
+  stage: Stage;
+  best: Partial<Record<Stage, Entry>>;
+  records: Partial<Record<RecordKey, { value: number; entry: Entry; trialIndex: number }>>;
+  history: Entry[];
+};
+export type Wave = { rng: number; candidates: Candidate[] };
+export const STAGES: readonly Stage[];
+export const LABELS: Record<Stage, string>;
+export const SECONDS: Record<Stage, number>;
+export const FORMAT: string;
+export const STORAGE_KEY: string;
+export const WAVE_SIZE: number;
+export function scenarios(stage: Stage): TrialOptions[];
+export function qualifies(stage: Stage, metrics: Metrics): boolean;
+export function assess(stage: Stage, policy: number[]): Evaluation;
+export function emptyCheckpoint(seed?: number): Checkpoint;
+export function propose(checkpoint: Checkpoint, initial: number[]): Wave;
+export function completeWave(
+  checkpoint: Checkpoint,
+  wave: Wave,
+  evaluations: Evaluation[],
+): Checkpoint;
+export function nextStage(checkpoint: Checkpoint): Checkpoint;
+export function parseCheckpoint(source: string): Checkpoint;
