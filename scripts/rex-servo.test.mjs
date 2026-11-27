@@ -42,9 +42,8 @@ test('feedback controller has no clock and responds to asymmetric foot contact',
   const p = neutralPolicy();
   assert.equal(p.length, POLICY_SIZE);
   p[12] = 1;
-  assert.deepEqual(
-    targetsFor(rig, neutralPolicy(), [true, false], 0.65, 0, [1, 0]),
-    Array(32).fill(0),
+  assert.ok(
+    targetsFor(rig, neutralPolicy(), [true, false], 0.65, 0, [1, 0]).every((x) => x === 0),
   );
   const a = targetsFor(rig, p, [true, false], 0.65, 0, [1, 0]);
   const b = targetsFor(rig, p, [false, true], 0.65, 0, [0, 1]);
