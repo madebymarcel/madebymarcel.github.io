@@ -6,12 +6,15 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  schedule:
+    # Full regression every night at 02:23 UTC; never publishes the site.
+    - cron: '23 2 * * *'
 
 permissions:
   contents: read
 
 concurrency:
-  group: site-${{ github.workflow }}-${{ github.ref }}
+  group: site-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'schedule' && 'nightly' || 'regular' }}
   cancel-in-progress: true
 
 jobs:
@@ -24,18 +27,30 @@ jobs:
       options: --user 1001 --ipc=host
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
           package-manager-cache: false
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
+      - name: Determine test impact
+        id: impact
+        run: node scripts/test-impact.mjs
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run format:check
+        id: format
+      - name: Show formatting differences
+        if: failure() && steps.format.outcome == 'failure'
+        run: |
+          npm run format
+          git diff --exit-code
       - run: npm run test:unit
       - run: npm run build
       - name: Use Playwright Chromium for Lighthouse
+        if: steps.impact.outputs.lighthouse == 'true'
         shell: bash
         run: |
           chrome="$(node -p "require('@playwright/test').chromium.executablePath()")"
@@ -44,14 +59,32 @@ jobs:
             exit 1
           fi
           echo "CHROME_PATH=$chrome" >> "$GITHUB_ENV"
-      - run: npm run test:e2e
+      - name: Run affected browser tests
+        shell: bash
+        env:
+          TEST_MODE: ${{ steps.impact.outputs.mode }}
+          TEST_FILES: ${{ steps.impact.outputs.files }}
+          PLAYWRIGHT_PREBUILT: '1'
+        run: |
+          if [[ "$TEST_MODE" == "affected" || "$TEST_MODE" == "smoke" ]]; then
+            read -r -a files <<< "$TEST_FILES"
+            if (( ${#files[@]} == 0 )); then
+              echo "::error::Impact selector returned no browser tests."
+              exit 1
+            fi
+            npm run test:e2e -- "${files[@]}"
+          else
+            npm run test:e2e
+          fi
       - run: npm run lighthouse
+        if: steps.impact.outputs.lighthouse == 'true'
       - run: npx lhci autorun --config=./lighthouserc.mobile.cjs
+        if: steps.impact.outputs.lighthouse == 'true'
       - name: Upload test and Lighthouse reports
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: quality-reports
+          name: quality-reports-${{ github.run_attempt }}
           path: |
             playwright-report/
             test-results/
@@ -60,7 +93,7 @@ jobs:
 
   deploy:
     name: Deploy GitHub Pages
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     needs: validate
     runs-on: ubuntu-latest
     environment:
