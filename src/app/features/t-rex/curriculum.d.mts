@@ -11,7 +11,7 @@ export type Checkpoint = {
   physicsSteps: number;
   stage: Stage;
   best: Partial<Record<Stage, Entry>>;
-  records: Partial<Record<RecordKey, { value: number; entry: Entry }>>;
+  records: Partial<Record<RecordKey, { value: number; entry: Entry; trialIndex: number }>>;
   history: Entry[];
 };
 export type Wave = { rng: number; candidates: Candidate[] };

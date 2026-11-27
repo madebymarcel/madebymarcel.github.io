@@ -59,6 +59,7 @@ export function trial(policy, options = {}) {
   let headingError = 0;
   let stoppingTicks = 0;
   const loads = [0, 0];
+  const nextContact = [false, false];
   const footX = feet.map((foot) => foot.position.x);
   const footZ = feet.map((foot) => foot.position.z);
   const actions = Array(rig.joints.length * 2).fill(0);
@@ -82,6 +83,7 @@ export function trial(policy, options = {}) {
     const frequency = enhanced && stage === 'run' ? 11 : 5;
     const phase = time * (frequency + 3 * Math.tanh(policy[policy.length - 1]));
     const supportTarget = Math.sin(phase);
+    const phaseCos = Math.cos(phase);
     const heading = Math.atan2(
       2 * (trunk.quaternion.x * trunk.quaternion.z - trunk.quaternion.w * trunk.quaternion.y),
       1 - 2 * (trunk.quaternion.y ** 2 + trunk.quaternion.z ** 2),
@@ -109,8 +111,8 @@ export function trial(policy, options = {}) {
     features[1] = vertical.x;
     features[4] = trunk.angularVelocity.z * 0.2;
     for (const [i, { a, b }] of rig.joints.entries()) {
-      features[7] = i >= 8 && targetCommand.cyclic ? Math.sin(phase) : 0;
-      features[8] = i >= 8 && targetCommand.cyclic ? Math.cos(phase) : 0;
+      features[7] = i >= 8 && targetCommand.cyclic ? supportTarget : 0;
+      features[8] = i >= 8 && targetCommand.cyclic ? phaseCos : 0;
       const target = a.quaternion.mult(rests[i]);
       const displacement = a.quaternion
         .inverse()
@@ -159,7 +161,7 @@ export function trial(policy, options = {}) {
     ticks++;
     const previousSupport = Number(contact[0]) + Number(contact[1]);
     const previousFoot = contact[0] ? 0 : contact[1] ? 1 : -1;
-    const nextContact = [false, false];
+    nextContact.fill(false);
     loads.fill(0);
     let bodyContact = false;
     for (const c of rig.world.contacts) {
@@ -219,12 +221,15 @@ export function trial(policy, options = {}) {
     ) {
       settledTicks++;
     }
-    if (time >= 6 && trunk.velocity.length() < 0.2 && support === 2) stoppingTicks++;
+    if (time >= 6 && trunk.velocity.length() < 0.2 && support === 2 && vertical.y > 0.94) {
+      stoppingTicks++;
+    } else stoppingTicks = 0;
     maxDistance = Math.max(maxDistance, trunk.position.x - start);
     pathDistance += Math.hypot(trunk.position.x - lastX, trunk.position.z - lastZ);
     lastX = trunk.position.x;
     lastZ = trunk.position.z;
-    headingError += Math.abs(Math.sin(targetCommand.heading - heading));
+    const angle = targetCommand.heading - heading;
+    headingError += Math.abs(Math.atan2(Math.sin(angle), Math.cos(angle)));
   }
   function metrics() {
     const distance = rig.trunk.body.position.x - start;

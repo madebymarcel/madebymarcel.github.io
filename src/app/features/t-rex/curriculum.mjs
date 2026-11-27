@@ -15,7 +15,7 @@ export const FORMAT = 'trex-locomotion-v2';
 export const STORAGE_KEY = 'made-by-marcel-trex-locomotion-v2';
 export const WAVE_SIZE = 8;
 const HISTORY_LIMIT = 40;
-const MAX_ITERATION = Number.MAX_SAFE_INTEGER - WAVE_SIZE;
+const MAX_ITERATION = Math.floor(Number.MAX_SAFE_INTEGER / WAVE_SIZE) * WAVE_SIZE;
 
 export function scenarios(stage) {
   const disturbance = stage === 'balance' ? 0.015 : stage === 'recover' ? 0.12 : 0.05;
@@ -47,8 +47,9 @@ export function qualifies(stage, m) {
       m.averageSpeed >= 0.75
     );
   }
-  return m.steps >= 4 && m.distance > 1 && m.headingError / total < 0.3 &&
-    m.stoppingTicks > 120;
+  return (
+    m.steps >= 4 && m.distance > 1 && m.headingError / total < 0.3 && m.stoppingTicks >= 120
+  );
 }
 
 function fitness(stage, m) {
@@ -117,7 +118,10 @@ export function propose(checkpoint, initial) {
   const parents = state.history.filter((item) => item.stage === state.stage);
   const candidates = [];
   for (let i = 0; i < WAVE_SIZE; i++) {
-    const archive = parents.length && random(state) < 0.15 ? parents[parents.length - 1] : null;
+    const archive =
+      parents.length && random(state) < 0.15
+        ? parents[Math.floor(random(state) * parents.length)]
+        : null;
     const parent = archive ?? best;
     const policy = parent ? parent.policy.slice() : seedPolicy(state, initial);
     if (i > 0 || best) {
@@ -166,22 +170,26 @@ export function completeWave(checkpoint, wave, evaluations) {
       state.history.unshift(entry);
       state.history.length = Math.min(state.history.length, HISTORY_LIMIT);
     }
-    const nominal = evaluation.trials[0];
-    const metrics = {
-      distance: nominal.maxDistance,
-      path: nominal.pathDistance,
-      upright: (nominal.ticks - Number(nominal.fell)) / 120,
-      steps: nominal.steps,
-      speed: nominal.fell ? 0 : Math.max(0, nominal.averageSpeed),
-      flights: nominal.flights,
-    };
-    for (const [key, value] of Object.entries(metrics)) {
-      if (!state.records[key] || value > state.records[key].value) {
-        state.records[key] = { value, entry };
+    for (const [trialIndex, metrics] of evaluation.trials.entries()) {
+      for (const [key, value] of Object.entries(recordValues(metrics))) {
+        if (!state.records[key] || value > state.records[key].value) {
+          state.records[key] = { value, entry, trialIndex };
+        }
       }
     }
   }
   return state;
+}
+
+function recordValues(m) {
+  return {
+    distance: m.maxDistance,
+    path: m.pathDistance,
+    upright: (m.ticks - Number(m.fell)) / 120,
+    steps: m.steps,
+    speed: m.fell ? 0 : Math.max(0, m.averageSpeed),
+    flights: m.flights,
+  };
 }
 
 export function nextStage(checkpoint) {
@@ -232,7 +240,11 @@ export function parseCheckpoint(source) {
       !Object.entries(s.records).every(([key, record]) =>
         ['distance', 'path', 'upright', 'steps', 'speed', 'flights'].includes(key) &&
         object(record) && finite(record.value) && record.value >= 0 &&
-        validEntry(record.entry, s.iteration))) {
+        validEntry(record.entry, s.iteration) && count(record.trialIndex) &&
+        record.trialIndex < 3 &&
+        record.value === recordValues(record.entry.evaluation.trials[record.trialIndex])[key]) ||
+      STAGES.slice(0, STAGES.indexOf(s.stage)).some((stage) => s.best[stage]?.evaluation.passes !== 3) ||
+      new Set(s.history.map((entry) => entry.iteration)).size !== s.history.length) {
     throw new Error('Invalid or incompatible T. rex checkpoint.');
   }
   return s;

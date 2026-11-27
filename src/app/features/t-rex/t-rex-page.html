@@ -1,61 +1,207 @@
 <section class="content-page ds-stack">
   <h1>T. rex</h1>
-  <p>A spatial balance and walking experiment. Both views follow the same physical skeleton.</p>
+  <p>Learn to balance, walk and run with a physical skeleton and a persistent locomotion policy.</p>
   <div class="ds-card ds-stack">
+    <h2>Training</h2>
     <div class="ds-cluster">
-      <button class="ds-button" (click)="toggleTraining()">
-        {{training()?'Pause training':'Start training'}}
+      <button
+        class="ds-button"
+        type="button"
+        (click)="toggleTraining()"
+        [disabled]="!ready() || (busy() && !training())"
+      >
+        {{ training() ? 'Pause training' : busy() ? 'Finishing batch' : 'Start training' }}
       </button>
-      <button class="ds-button ds-button--secondary" (click)="play()">Watch learned demo</button>
-      <button class="ds-button ds-button--secondary" (click)="play(standingPolicy)">
+      <button
+        class="ds-button ds-button--secondary"
+        type="button"
+        (click)="exportTraining()"
+        [disabled]="!ready()"
+      >
+        Export checkpoint
+      </button>
+      <label class="checkpoint-file">
+        Import checkpoint
+        <input
+          type="file"
+          accept=".json,application/json"
+          (change)="importTraining($event)"
+          [disabled]="!ready() || training() || busy()"
+        />
+      </label>
+      <button
+        class="ds-button ds-button--secondary"
+        type="button"
+        (click)="resetTraining()"
+        [disabled]="!ready() || training() || busy()"
+      >
+        Reset training
+      </button>
+    </div>
+    <p role="status">{{ storageStatus() }}</p>
+    @if (error()) {
+    <p role="alert">{{ error() }}</p>
+    }
+    <p>Current skill: <strong>{{ labels[state().stage] }}</strong></p>
+    <dl class="rex-metrics">
+      <div>
+        <dt>Candidates evaluated</dt>
+        <dd data-testid="rex-iterations">{{ state().iteration }}</dd>
+      </div>
+      <div>
+        <dt>Candidates/s (last measurement)</dt>
+        <dd>{{ candidatesPerSecond() | number: '1.1-1' }}</dd>
+      </div>
+      <div>
+        <dt>Physics steps/s (last measurement)</dt>
+        <dd>{{ stepsPerSecond() | number: '1.0-0' }}</dd>
+      </div>
+      <div>
+        <dt>Physics steps</dt>
+        <dd>{{ state().physicsSteps | number: '1.0-0' }}</dd>
+      </div>
+      <div>
+        <dt>Workers</dt>
+        <dd>{{ cores() }}</dd>
+      </div>
+      <div>
+        <dt>Best current fitness</dt>
+        <dd>{{ currentBest() ? (currentBest()?.evaluation?.score | number: '1.2-2') : '—' }}</dd>
+      </div>
+    </dl>
+    <h3>Curriculum</h3>
+    <ol class="skill-grid">
+      @for (stage of stages; track stage) { @let entry = state().best[stage];
+      <li [attr.aria-current]="state().stage === stage ? 'step' : null">
+        <strong>{{ labels[stage] }}</strong>
+        <span>{{ entry?.evaluation?.passes ?? 0 }}/3 trials passed</span>
+        @if (entry) {
+        <button class="ds-button ds-button--secondary" type="button" (click)="replayEntry(entry)">
+          Replay {{ labels[stage] }}
+        </button>
+        }
+      </li>
+      }
+    </ol>
+    <p class="ds-hint">Each candidate runs three trials. All must pass before the next skill unlocks.</p>
+    <h3>Personal records</h3>
+    <dl class="rex-metrics">
+      @for (record of records; track record.key) { @let saved = state().records[record.key];
+      <div>
+        <dt>{{ record.name }}</dt>
+        <dd>
+          @if (saved) {
+          <span>{{ saved.value | number: '1.0-2' }} {{ record.unit }}</span>
+          <button
+            class="ds-button ds-button--secondary"
+            type="button"
+            (click)="watchRecord(record.key)"
+            [attr.aria-label]="'Replay ' + record.name"
+          >
+            Replay
+          </button>
+          } @else { — }
+        </dd>
+      </div>
+      }
+    </dl>
+    <h3>Checkpoint history</h3>
+    <label>
+      Choose a previous improvement
+      <select [value]="selected()" (change)="selectHistory($event)">
+        <option value="0">Select checkpoint</option>
+        @for (entry of history(); track entry.iteration) {
+        <option [value]="entry.iteration">
+          #{{ entry.iteration }} · {{ labels[entry.stage] }} · {{ entry.evaluation.passes }}/3 passed
+          · {{ entry.evaluation.score | number: '1.2-2' }}
+        </option>
+        }
+      </select>
+    </label>
+    @if (selectedEntry(); as entry) {
+    <div class="ds-cluster">
+      <button class="ds-button ds-button--secondary" type="button" (click)="replayEntry(entry)">
+        Watch checkpoint
+      </button>
+      <button
+        class="ds-button ds-button--secondary"
+        type="button"
+        (click)="resumeFrom(entry)"
+        [disabled]="training() || busy()"
+      >
+        Resume from checkpoint
+      </button>
+    </div>
+    }
+    <p class="ds-hint">The latest 40 fitness improvements and all personal records are saved locally.
+      Export a checkpoint for backup or training on another device.</p>
+  </div>
+  <div class="ds-card ds-stack">
+    <h2>Physical replay</h2>
+    <div class="ds-cluster">
+      <button class="ds-button ds-button--secondary" type="button" (click)="play()">
+        Watch learned demo
+      </button>
+      <button
+        class="ds-button ds-button--secondary"
+        type="button"
+        (click)="play(standingPolicy, 'balance')"
+      >
         Watch balance test
       </button>
-      <button class="ds-button ds-button--secondary" [disabled]="!best()" (click)="play(best()!)">
+      <button
+        class="ds-button ds-button--secondary"
+        type="button"
+        [disabled]="!best()"
+        (click)="replayBest()"
+      >
         Watch your best
       </button>
-      @if(playing()){<button class="ds-button" (click)="stopReplay()">Stop replay</button>}
+      <button
+        class="ds-button ds-button--secondary"
+        type="button"
+        [attr.aria-pressed]="debug()"
+        (click)="debug.set(!debug())"
+      >
+        Show physics skeleton
+      </button>
+      @if (playing()) {
+      <button class="ds-button" type="button" (click)="stopReplay()">Stop replay</button>
+      }
     </div>
-    <p>Your training · {{iteration()}} candidates evaluated</p>
-    @if(overhead().length){
-    <svg
-      class="artwork"
-      viewBox="0 0 420 650"
-      role="img"
-      aria-label="Tyrannosaurus rex walking, seen from above"
-    >
+    <svg class="artwork" viewBox="0 0 420 650" role="img" aria-label="Tyrannosaurus rex seen from above">
       <defs>
-        <pattern
-          id="rex-track"
-          patternUnits="userSpaceOnUse"
-          width="420"
-          height="72.5"
-          [attr.y]="distance()*145"
-        >
+        <pattern id="rex-track" patternUnits="userSpaceOnUse" width="420" height="72.5" [attr.y]="distance()*145">
           <path d="M12 36h12 M396 36h12" stroke="currentColor" opacity=".4" />
         </pattern>
+        <linearGradient id="rex-skin" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stop-color="#54734e" />
+          <stop offset=".48" stop-color="#91aa75" />
+          <stop offset="1" stop-color="#54734e" />
+        </linearGradient>
       </defs>
       <rect width="420" height="650" fill="url(#rex-track)" />
-      @for(b of overhead();track b.name){
+      @if (!debug()) {
+      <path data-testid="rex-tail-skin" [attr.d]="overhead().tail" fill="url(#rex-skin)" stroke="#344e35" stroke-width="2" />
+      }
+      @for (b of overhead().segments; track b.name) {
+      @if (debug() || !b.name.startsWith('tail-')) {
       <path
         [attr.data-bone]="b.name"
-        [attr.d]="b.outline"
-        [attr.fill]="b.fill"
-        stroke="#3b5038"
-        stroke-width="1"
+        [attr.d]="debug() ? b.outline : b.skin"
+        [attr.fill]="debug() ? b.fill : b.name.startsWith('thigh') || b.name === 'trunk' || b.name === 'skull' ? 'url(#rex-skin)' : b.fill"
+        stroke="#344e35"
+        [attr.stroke-width]="debug() ? 1 : .8"
         stroke-linejoin="round"
       />
-      @for(eye of b.eyes;track $index){
-      <circle [attr.cx]="eye[0]" [attr.cy]="eye[1]" r="2.5" fill="#263524" />
-      } }
+      @for (eye of b.eyes; track $index) {
+      <circle [attr.cx]="eye[0]" [attr.cy]="eye[1]" r="3.4" fill="#263524" />
+      <circle [attr.cx]="eye[0]" [attr.cy]="eye[1]" r="1.7" fill="#e0bf70" />
+      } } }
     </svg>
-    <svg
-      class="artwork side-rig"
-      viewBox="0 0 420 210"
-      role="img"
-      aria-label="Side view of the physical skeleton"
-    >
+    <svg class="artwork side-rig" viewBox="0 0 420 210" role="img" aria-label="Side view of the physical skeleton">
       <path d="M 0 195 H 420" stroke="currentColor" />
-      @for(b of side();track b.name){
+      @for (b of side().segments; track b.name) {
       <path
         [attr.data-bone]="b.name"
         [attr.d]="b.d"
@@ -65,15 +211,6 @@
       />
       }
     </svg>
-    } @else {
-    <img
-      class="artwork"
-      src="trex.svg"
-      alt="Tyrannosaurus rex seen from above"
-      width="420"
-      height="660"
-    />
-    }
-    <p>{{status()}}</p>
+    <p>{{ status() }}</p>
   </div>
 </section>

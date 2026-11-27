@@ -1,13 +1,6 @@
-import {
-  Component,
-  DestroyRef,
-  afterNextRender,
-  computed,
-  inject,
-  signal,
-} from '@angular/core';
+import { Component, DestroyRef, afterNextRender, computed, inject, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
-import { trial } from './spatial-learning.mjs';
+import { trial, type TrialOptions } from './spatial-learning.mjs';
 import {
   completeWave,
   emptyCheckpoint,
@@ -15,7 +8,8 @@ import {
   nextStage,
   parseCheckpoint,
   propose,
-  SECONDS,
+  qualifies,
+  scenarios,
   STAGES,
   STORAGE_KEY,
   type Checkpoint,
@@ -61,7 +55,11 @@ export class TRexPage {
   readonly labels = LABELS;
   readonly records = RECORDS;
   readonly currentBest = computed(() => this.state().best[this.state().stage]);
-  readonly best = computed(() => this.currentBest()?.policy ?? null);
+  readonly bestEntry = computed(() => {
+    const state = this.state();
+    return this.currentBest() ?? [...STAGES].reverse().map((stage) => state.best[stage]).find(Boolean);
+  });
+  readonly best = computed(() => this.bestEntry()?.policy ?? null);
   readonly history = computed(() => this.state().history);
   readonly selected = signal(0);
   readonly selectedEntry = computed(() =>
@@ -77,6 +75,7 @@ export class TRexPage {
   private pending = new Map<number, (data: EvaluationResponse) => void>();
   private requestId = 0;
   private disposed = false;
+  private dirty = false;
   private lastSave = 0;
   private rateStart = 0;
   private rateCount = 0;
@@ -114,11 +113,12 @@ export class TRexPage {
   };
 
   private readonly flush = () => {
-    if (!this.state().iteration) return;
+    if (!this.dirty) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state()));
       this.storageStatus.set('Saved locally');
       this.lastSave = performance.now();
+      this.dirty = false;
     } catch {
       this.storageStatus.set('Local save failed; export a checkpoint instead');
     }
@@ -198,6 +198,7 @@ export class TRexPage {
         if (--remaining) return;
         const result = completeWave(before, wave, evaluations);
         this.state.set(nextStage(result));
+        this.dirty = true;
         this.rateCount += result.iteration - before.iteration;
         this.rateSteps += result.physicsSteps - before.physicsSteps;
         const elapsed = (performance.now() - this.rateStart) / 1000;
@@ -239,6 +240,7 @@ export class TRexPage {
       const restored = parseCheckpoint(await file.text());
       if (this.disposed || this.training() || this.busy()) return;
       this.state.set(restored);
+      this.dirty = true;
       this.selected.set(0);
       this.error.set('');
       this.flush();
@@ -250,12 +252,14 @@ export class TRexPage {
   resetTraining() {
     if (this.training() || this.busy() || !window.confirm('Delete local dinosaur training?')) return;
     this.state.set(emptyCheckpoint());
+    this.dirty = true;
     this.selected.set(0);
     this.candidatesPerSecond.set(0);
     this.stepsPerSecond.set(0);
     this.error.set('');
     try {
       localStorage.removeItem(STORAGE_KEY);
+      this.dirty = false;
       this.storageStatus.set('Training reset');
     } catch {
       this.storageStatus.set('Could not delete local checkpoint');
@@ -269,32 +273,40 @@ export class TRexPage {
   resumeFrom(entry: Entry) {
     if (this.training() || this.busy()) return;
     const best = { ...this.state().best };
+    if (STAGES.slice(0, STAGES.indexOf(entry.stage)).some((stage) => best[stage]?.evaluation.passes !== 3)) {
+      this.error.set('Complete the preceding skills before resuming this policy.');
+      return;
+    }
     for (const stage of STAGES.slice(STAGES.indexOf(entry.stage) + 1)) delete best[stage];
     best[entry.stage] = entry;
     this.state.update((old) => ({ ...old, stage: entry.stage, best }));
+    this.dirty = true;
+    this.error.set('');
     this.flush();
   }
 
-  replayEntry(entry: Entry) {
-    this.play(entry.policy, entry.stage);
+  replayEntry(entry: Entry, trialIndex = 0) {
+    this.play(entry.policy, entry.stage, scenarios(entry.stage)[trialIndex], true);
   }
 
   replayBest() {
-    const state = this.state();
-    const entry =
-      state.best[state.stage] ??
-      [...STAGES].reverse().map((stage) => state.best[stage]).find((item) => item);
+    const entry = this.bestEntry();
     if (entry) this.replayEntry(entry);
   }
 
   watchRecord(key: RecordKey) {
     const record = this.state().records[key];
-    if (record) this.replayEntry(record.entry);
+    if (record) this.replayEntry(record.entry, record.trialIndex);
   }
 
-  play(policy = checkpoint.policy, stage: Stage = 'walk') {
+  play(
+    policy = checkpoint.policy,
+    stage: Stage = 'walk',
+    options: TrialOptions = { stage, seconds: 5 },
+    learned = false,
+  ) {
     this.stopReplay();
-    const run = trial(policy, { stage, seconds: SECONDS[stage] });
+    const run = trial(policy, options);
     const draw = () => {
       const frame = run.rig.frame();
       this.overhead.set(project(frame, false));
@@ -310,7 +322,13 @@ export class TRexPage {
           ' airborne strides · ' +
           (m.ticks / 120).toFixed(2) +
           ' s' +
-          (m.fell ? ' · Fell' : run.done ? ' · Trial complete' : ''),
+          (m.fell
+            ? ' · Fell'
+            : run.done
+              ? learned && qualifies(stage, m)
+                ? ' · Trial passed'
+                : ' · Trial complete'
+              : ''),
       );
     };
     draw();

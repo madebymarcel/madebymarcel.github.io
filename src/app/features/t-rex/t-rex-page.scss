@@ -9,3 +9,47 @@
   border: var(--border-width) solid var(--border);
   border-radius: var(--radius-medium);
 }
+
+.rex-metrics,
+.skill-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+  gap: 0.75rem;
+  padding: 0;
+  margin: 0;
+}
+
+.rex-metrics div,
+.skill-grid li {
+  display: grid;
+  align-content: start;
+  gap: 0.25rem;
+  padding: 0.75rem;
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius-medium);
+  min-inline-size: 0;
+}
+
+.rex-metrics dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.skill-grid li[aria-current='step'] {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.checkpoint-file,
+label {
+  display: grid;
+  gap: 0.25rem;
+  min-inline-size: 0;
+}
+
+input,
+select {
+  max-inline-size: 100%;
+}
