@@ -29,7 +29,9 @@ export function trial(policy, options = {}) {
   const { bones, world, ground, dt } = rig;
   const trunk = rig.trunk.body;
   const feet = bones.filter((b) => b.name.startsWith('toes')).map((b) => b.body);
-  const forbidden = new Set(bones.filter((b) => /^(trunk|skull|neck|tail)/.test(b.name)).map((b) => b.body));
+  const forbidden = new Set(
+    bones.filter((b) => /^(trunk|skull|neck|tail)/.test(b.name)).map((b) => b.body),
+  );
   const mass = bones.reduce((sum, b) => sum + b.body.mass, 0);
   const limit = Math.round((options.seconds ?? TRIAL_SECONDS) / dt);
   const origin = trunk.position.x;
@@ -163,7 +165,7 @@ export function trial(policy, options = {}) {
         if (loads[1 - swing] > 0.45 && up > 0.9) {
           supported++;
           supportTicks = Math.max(supportTicks, supported);
-        }
+        } else supported = 0;
       } else supported = 0;
     } else supported = 0;
     if (!contacts[0] && !contacts[1]) flightTicks++;

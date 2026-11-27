@@ -1,34 +1,7 @@
-<section class="content-page rex-workbench">
-  <div class="rex-title">
-    <h1>T. rex</h1>
-    <span class="ds-hint">{{ trainingMessage() }}</span>
-  </div>
-  <div class="training-toolbar">
-    <label class="skill-control">
-      <span class="sr-only">Training skill</span>
-      <select
-        class="ds-input"
-        [value]="chosenSkill()"
-        (change)="chooseSkill($event)"
-        [disabled]="!ready()"
-      >
-        @for (stage of stages; track stage) {
-        <option [value]="stage">{{ labels[stage] }}</option>
-        }
-      </select>
-    </label>
-    <button
-      class="ds-button"
-      type="button"
-      (click)="toggleTraining()"
-      [disabled]="!ready() || (busy() && !training())"
-    >
-      {{ training() ? 'Pause training' : busy() ? 'Finishing batch' : 'Start training' }}
-    </button>
-  </div>
-  <div class="viewer" role="group" aria-label="Physical replay">
+<section class="content-page rex-stage">
+  <h1>T. rex</h1>
+  <div class="viewer" role="group" aria-label="Physical replay" [attr.data-replay-cycle]="cycle()">
     <div class="projection">
-      <span class="projection-label">Top</span>
       <svg
         class="artwork"
         viewBox="0 0 650 260"
@@ -53,7 +26,6 @@
         </defs>
         <g transform="translate(650 -80) rotate(90)">
           <rect width="420" height="650" fill="url(#rex-track)" />
-          @if (!debug()) {
           <path
             data-testid="rex-tail-skin"
             [attr.d]="overhead().tail"
@@ -61,14 +33,13 @@
             stroke="#344e35"
             stroke-width="2"
           />
-          } @for (b of overhead().segments; track b.name) { @if (debug() ||
-          !b.name.startsWith('tail-')) {
+          @for (b of overhead().segments; track b.name) { @if (!b.name.startsWith('tail-')) {
           <path
             [attr.data-bone]="b.name"
-            [attr.d]="debug() ? b.outline : b.skin"
-            [attr.fill]="debug() ? b.fill : b.name.startsWith('thigh') || b.name === 'trunk' || b.name === 'skull' ? 'url(#rex-skin)' : b.fill"
+            [attr.d]="b.skin"
+            [attr.fill]="b.name.startsWith('thigh') || b.name === 'trunk' || b.name === 'skull' ? 'url(#rex-skin)' : b.fill"
             stroke="#344e35"
-            [attr.stroke-width]="debug() ? 1 : .8"
+            stroke-width=".8"
             stroke-linejoin="round"
           />
           @for (eye of b.eyes; track $index) {
@@ -79,7 +50,6 @@
       </svg>
     </div>
     <div class="projection">
-      <span class="projection-label">Side</span>
       <svg
         class="artwork side-rig"
         viewBox="0 0 420 210"
@@ -87,244 +57,26 @@
         aria-label="Side view of the physical skeleton"
       >
         <path d="M 0 195 H 420" stroke="currentColor" opacity=".35" />
-        @if (!debug()) {
         <path data-testid="rex-side-skin" [attr.d]="side().tail" fill="#77965c" stroke="#344e35" />
-        } @for (b of side().segments; track b.name) { @if (debug() || !b.name.startsWith('tail-')) {
+        @for (b of side().segments; track b.name) { @if (!b.name.startsWith('tail-')) {
         <path
           [attr.data-bone]="b.name"
           [attr.d]="b.d"
           [attr.stroke]="b.fill"
-          [attr.stroke-width]="debug() ? b.width * 0.45 : b.width"
+          [attr.stroke-width]="b.width"
           stroke-linecap="round"
         />
         } }
       </svg>
     </div>
   </div>
-
-  <div class="replay-caption">
-    <strong>{{ replayLabel() }}</strong>
-    <span>{{ status() }}</span>
-  </div>
-  <div class="replay-toolbar">
-    <button
-      class="ds-button ds-button--secondary"
-      type="button"
-      [disabled]="!best()"
-      (click)="replayBest()"
-    >
-      Watch your best
+  <div class="training-control">
+    <button class="ds-button" type="button" (click)="toggleTraining()" [disabled]="!ready()">
+      {{ training() ? 'Pause training' : 'Start training' }}
     </button>
-    <button
-      class="ds-button ds-button--secondary"
-      type="button"
-      [attr.aria-pressed]="debug()"
-      (click)="debug.set(!debug())"
-    >
-      Skeleton<span class="sr-only">: show physics skeleton</span>
-    </button>
-    <button
-      class="ds-button ds-button--secondary"
-      type="button"
-      [disabled]="!playing() && !followBest()"
-      (click)="stopWatching()"
-    >
-      Stop replay
-    </button>
-  </div>
-  @if (error()) {
-  <p class="ds-error" role="alert">{{ error() }}</p>
-  }
-  <dl class="headline-metrics" aria-label="Best candidate metrics">
-    @for (metric of headline(); track metric.label) {
-    <div>
-      <dt>{{ metric.label }}</dt>
-      <dd>{{ metric.value | number: metric.digits }} <span>{{ metric.unit }}</span></dd>
-    </div>
-    }
-  </dl>
-  <section class="learning-progress" aria-label="Learning progress">
-    <div class="rex-title">
-      <h2>Learning progress</h2>
-      <span class="ds-hint"
-        ><span data-testid="rex-iterations">{{ state().iteration }}</span> candidates total</span
-      >
-    </div>
-    @if (graph(); as chart) {
-    <svg
-      class="reward-chart"
-      viewBox="0 0 320 84"
-      role="img"
-      aria-label="Best checkpoint reward over recent candidates"
-    >
-      @for (y of [10, 31, 52, 74]; track y) {
-      <path [attr.d]="'M 4 ' + y + ' H 316'" stroke="currentColor" opacity=".12" />
-      }
-      <path
-        data-testid="rex-progress-path"
-        [attr.d]="chart.path"
-        fill="none"
-        stroke="var(--accent)"
-        stroke-width="2"
-        vector-effect="non-scaling-stroke"
-      />
-    </svg>
-    <div class="progress-strip">
-      <span>Candidate {{ chart.first }} · {{ progress().attempts }} for this skill</span>
-      <span>Reward {{ chart.latest | number: '1.2-2' }}</span>
-    </div>
-    <p class="ds-hint">
-      {{ progress().sinceImprovement }} candidates since improvement. {{
-      currentBest()?.evaluation?.passed ? 'Goal reached on normal ground.' : 'Goal not yet reached.'
-      }}
-    </p>
-    } @else {
-    <p class="ds-hint">Start training to measure progress on normal ground.</p>
-    }
-  </section>
-  <div class="workbench-panels">
-    <button
-      class="details-toggle ds-button ds-button--secondary"
-      type="button"
-      [attr.aria-expanded]="detailsOpen()"
-      [attr.aria-controls]="detailsOpen() ? 'rex-details' : null"
-      (click)="detailsOpen.set(!detailsOpen())"
-    >
-      Training details <span aria-hidden="true">{{ detailsOpen() ? '−' : '+' }}</span>
-    </button>
-    @if (detailsOpen()) {
-    <div class="panel-body" id="rex-details">
-      <h2>{{ labels[state().stage] }} goal · normal ground</h2>
-      @if (currentBest(); as entry) {
-      <p class="ds-hint">
-        {{ entry.evaluation.metrics.fell ? 'Fell' : 'Completed' }} · {{
-        entry.evaluation.metrics.lifts }} supported foot lifts · {{
-        entry.evaluation.metrics.maxClearance * 100 | number: '1.1-1' }} cm maximum supported
-        clearance
-      </p>
-      <table class="check-table">
-        <caption class="sr-only">
-          Actual values and required thresholds
-        </caption>
-        <thead>
-          <tr>
-            <th scope="col">Criterion</th>
-            <th scope="col">Actual</th>
-            <th scope="col">Target</th>
-            <th scope="col">Result</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (check of checks(); track check.label) {
-          <tr>
-            <th scope="row">{{ check.label }}</th>
-            <td>{{ check.value | number: '1.0-3' }} {{ check.unit }}</td>
-            <td>{{ check.operator }} {{ check.limit | number: '1.0-3' }} {{ check.unit }}</td>
-            <td [class.passed]="check.passed" [class.failed]="!check.passed">
-              {{ check.passed ? 'Pass' : 'Fail' }}
-            </td>
-          </tr>
-          }
-        </tbody>
-      </table>
-      } @else {
-      <p class="ds-hint">No evaluated policy yet.</p>
-      }
-      <label class="setting"
-        ><input type="checkbox" [checked]="followBest()" (change)="followBest.set(!followBest())" />
-        Automatically replay new best policies</label
-      >
-      <dl class="record-list">
-        <div>
-          <dt>Training generations</dt>
-          <dd>{{ progress().generations }}</dd>
-        </div>
-        <div>
-          <dt>Candidates/s</dt>
-          <dd>{{ candidatesPerSecond() | number: '1.1-1' }}</dd>
-        </div>
-        <div>
-          <dt>Physics steps/s</dt>
-          <dd>{{ stepsPerSecond() | number: '1.0-0' }}</dd>
-        </div>
-        <div>
-          <dt>Total physics steps</dt>
-          <dd>{{ state().physicsSteps | number: '1.0-0' }}</dd>
-        </div>
-        <div>
-          <dt>Workers</dt>
-          <dd>{{ cores() }}</dd>
-        </div>
-      </dl>
-      <h2>Checkpoint history</h2>
-      <app-stable-select
-        controlId="rex-history"
-        label="Checkpoint"
-        [options]="historyOptions()"
-        [value]="selected()"
-        (valueChange)="selected.set($event)"
-      />
-      @if (selectedEntry(); as entry) {
-      <div class="replay-toolbar">
-        <button
-          class="ds-button ds-button--secondary"
-          type="button"
-          (click)="followBest.set(false); replayEntry(entry)"
-        >
-          Watch checkpoint
-        </button>
-        <button
-          class="ds-button ds-button--secondary"
-          type="button"
-          (click)="resumeFrom(entry)"
-          [disabled]="training() || busy()"
-        >
-          Train from checkpoint
-        </button>
-      </div>
-      }
-      <h2>Saved training</h2>
-      <p class="ds-hint">{{ storageStatus() }}</p>
-      <div class="replay-toolbar">
-        <button class="ds-button ds-button--secondary" type="button" (click)="watchBaseline()">
-          Watch untrained baseline
-        </button>
-        <button
-          class="ds-button ds-button--secondary"
-          type="button"
-          (click)="exportTraining()"
-          [disabled]="!ready()"
-        >
-          Export checkpoint
-        </button>
-        <button
-          class="ds-button ds-button--secondary"
-          type="button"
-          (click)="resetTraining()"
-          [disabled]="!ready() || training() || busy()"
-        >
-          Reset training
-        </button>
-      </div>
-      <label class="checkpoint-file"
-        >Import checkpoint
-        <input
-          type="file"
-          accept=".json,application/json"
-          (change)="importTraining($event)"
-          [disabled]="!ready() || training() || busy()"
-        />
-      </label>
-      @if (legacyAvailable()) {
-      <p class="ds-hint">
-        Your earlier torque-controller training is kept separately. Its weights are incompatible
-        with the new position servos.
-      </p>
-      <button class="ds-button ds-button--secondary" type="button" (click)="exportLegacy()">
-        Export legacy training
-      </button>
-      }
-    </div>
+    <p class="milestone" role="status">{{ notice() }}</p>
+    @if (error()) {
+    <p class="ds-error" role="alert">{{ error() }}</p>
     }
   </div>
 </section>

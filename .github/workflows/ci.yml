@@ -21,6 +21,9 @@ jobs:
   validate:
     name: Validate website
     runs-on: ubuntu-latest
+    outputs:
+      pages_artifact_name: ${{ steps.pages-name.outputs.name }}
+      pages_artifact_id: ${{ steps.pages-artifact.outputs.artifact_id }}
     container:
       # Update this tag together with @playwright/test in package.json and package-lock.json.
       image: mcr.microsoft.com/playwright:v1.65.1-noble
@@ -80,6 +83,16 @@ jobs:
         if: steps.impact.outputs.lighthouse == 'true'
       - run: npx lhci autorun --config=./lighthouserc.mobile.cjs
         if: steps.impact.outputs.lighthouse == 'true'
+      - name: Name validated Pages artifact
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+        id: pages-name
+        run: echo "name=github-pages-${{ github.run_id }}-${{ github.run_attempt }}" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-pages-artifact@v5
+        if: steps.pages-name.outputs.name != ''
+        id: pages-artifact
+        with:
+          name: ${{ steps.pages-name.outputs.name }}
+          path: dist/portfolio/browser
       - name: Upload test and Lighthouse reports
         if: always()
         uses: actions/upload-artifact@v7
@@ -105,27 +118,14 @@ jobs:
       pages: write
       id-token: write
     env:
-      PAGES_ARTIFACT_NAME: github-pages-${{ github.run_id }}-${{ github.run_attempt }}
+      PAGES_ARTIFACT_NAME: ${{ needs.validate.outputs.pages_artifact_name }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: '24'
-          package-manager-cache: false
-      - name: Install production build dependencies
-        run: npm ci --no-audit --no-fund
-      - run: npm run build
       - uses: actions/configure-pages@v6
-      - uses: actions/upload-pages-artifact@v5
-        id: pages-artifact
-        with:
-          name: ${{ env.PAGES_ARTIFACT_NAME }}
-          path: dist/portfolio/browser
       - name: Wait for Pages artifact availability
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          PAGES_ARTIFACT_ID: ${{ steps.pages-artifact.outputs.artifact_id }}
+          PAGES_ARTIFACT_ID: ${{ needs.validate.outputs.pages_artifact_id }}
         run: |
           # Artifact upload and artifact listing can become consistent at different times.
           # Match the exact artifact ID and name; a retry must not pick up a previous attempt.
