@@ -1,0 +1,46 @@
+name: T. rex DEP physics diagnosis
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/trex-v3-dep-physics.mjs'
+      - '.github/workflows/trex-v3-dep-physics.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: trex-dep-physics-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  diagnose:
+    name: Reproduce and localize invalid DEP episodes
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - run: npm ci --no-audit --no-fund
+      - name: Bundle V3 diagnosis
+        run: |
+          ./node_modules/.bin/esbuild scripts/trex-v3-dep-physics.mjs \
+            --bundle --platform=node --format=esm \
+            --banner:js='import { createRequire } from "node:module"; const require = createRequire(import.meta.url);' \
+            --outfile=/tmp/trex-v3-dep-physics.mjs
+      - name: Reproduce recorded faults at matched control inputs
+        shell: bash
+        run: |
+          set -o pipefail
+          node /tmp/trex-v3-dep-physics.mjs | tee trex-v3-dep-physics.log
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: trex-v3-dep-physics-results
+          path: trex-v3-dep-physics.log
+          if-no-files-found: ignore

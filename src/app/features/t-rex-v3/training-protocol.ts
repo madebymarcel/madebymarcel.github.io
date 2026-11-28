@@ -1,3 +1,4 @@
+import type { PhysicsFaultKind } from './balance-environment';
 import type { CapabilityGate, CapabilityReport } from './capability-audit';
 import type { Checkpoint, TrainingFrame } from './distance-training';
 import type { DepCheckpoint } from './dep-training';
@@ -19,4 +20,6 @@ export interface BrainFrame extends TrainingFrame {
   readonly latestEvaluationSeconds?: number | null;
   readonly bestEvaluationSeconds?: number | null;
   readonly sampledTransitions?: number;
+  readonly lastPhysicsFault?: string;
+  readonly physicsFaultCounts?: Partial<Record<PhysicsFaultKind, number>>;
 }

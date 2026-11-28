@@ -1,5 +1,5 @@
-import { ACTIONS, OBSERVATIONS, BalanceEnvironment } from './balance-environment';
-import type { Transition } from './balance-environment';
+import { ACTIONS, OBSERVATIONS, BalanceEnvironment, describePhysicsFault } from './balance-environment';
+import type { PhysicsFault, PhysicsFaultKind, Transition } from './balance-environment';
 import { CapabilityAudit, assessCapabilities } from './capability-audit';
 import type { CapabilityGate, CapabilityReport } from './capability-audit';
 import { DepController } from './dep-controller';
@@ -55,6 +55,8 @@ export interface DepCheckpoint {
   readonly recentInvalid: readonly boolean[];
   readonly consecutiveInvalid: number;
   readonly history: readonly DepHistory[];
+  readonly lastPhysicsFault?: PhysicsFault;
+  readonly physicsFaultCounts?: Partial<Record<PhysicsFaultKind, number>>;
 }
 
 interface Evaluation {
@@ -164,6 +166,8 @@ export class DepTrainer {
   private bestPolicy: number[] | null = null;
   private recentInvalid: boolean[] = [];
   private consecutiveInvalid = 0;
+  private lastPhysicsFault: PhysicsFault | undefined;
+  private physicsFaultCounts: Partial<Record<PhysicsFaultKind, number>> = {};
   private message = '';
   private history: DepHistory[] = [];
 
@@ -231,6 +235,12 @@ export class DepTrainer {
     if (invalid) {
       this.stats.invalidEpisodes++;
       this.consecutiveInvalid++;
+      if (run.physicsFault) {
+        this.lastPhysicsFault = run.physicsFault;
+        for (const kind of run.physicsFault.kinds) {
+          this.physicsFaultCounts[kind] = (this.physicsFaultCounts[kind] ?? 0) + 1;
+        }
+      }
     } else {
       this.consecutiveInvalid = 0;
       this.stats.lastDistanceM = run.distanceM;
@@ -405,6 +415,8 @@ export class DepTrainer {
       snapshot: collected?.snapshot ?? run.env.snapshot(),
       horizon: this.horizon,
       message: this.playback ? '' : this.message,
+      ...(this.lastPhysicsFault ? { lastPhysicsFault: describePhysicsFault(this.lastPhysicsFault) } : {}),
+      physicsFaultCounts: { ...this.physicsFaultCounts },
       gate: { ...this.gate },
       bestCapability: { ...this.bestCapability },
       replaySize: this.buffer.size,
@@ -442,6 +454,8 @@ export class DepTrainer {
       recentInvalid: [...this.recentInvalid],
       consecutiveInvalid: this.consecutiveInvalid,
       history: this.history.slice(),
+      ...(this.lastPhysicsFault ? { lastPhysicsFault: this.lastPhysicsFault } : {}),
+      physicsFaultCounts: { ...this.physicsFaultCounts },
     };
   }
 
@@ -551,6 +565,8 @@ export class DepTrainer {
     next.recentInvalid = [...saved.recentInvalid];
     next.consecutiveInvalid = saved.consecutiveInvalid;
     next.history = [...saved.history];
+    next.lastPhysicsFault = saved.lastPhysicsFault;
+    next.physicsFaultCounts = { ...saved.physicsFaultCounts };
     if (
       next.consecutiveInvalid >= 8 ||
       (next.recentInvalid.length === 20 && next.recentInvalid.filter(Boolean).length >= 10)

@@ -1,7 +1,7 @@
 import { isFoot, massCenter } from './biomechanics';
 import { BALANCED_STANCE } from './muscle-profile';
 import { GRAVITY, MASS_KG, PassiveRig, STEP } from './passive-physics';
-import type { PhysicsSnapshot } from './passive-physics';
+import type { ConstraintLocations, PhysicsOptions, PhysicsSnapshot } from './passive-physics';
 import type { Commands } from './neuromuscular';
 import { AXES, BONES, clampAngles } from './rig';
 import type { Angles, Axis, Vec3 } from './rig';
@@ -113,6 +113,43 @@ export function measureSupport(
 
 export type EndReason = 'running' | 'fall' | 'invalid' | 'time-limit';
 
+export type PhysicsResolution = Pick<PhysicsOptions, 'timestep' | 'iterations'>;
+export type PhysicsFaultKind = 'non-finite' | 'joint-gap' | 'angle-limit' | 'ground-penetration' | 'observation';
+
+export interface PhysicsFault extends ConstraintLocations {
+  readonly kinds: readonly PhysicsFaultKind[];
+  readonly elapsed: number;
+  readonly gapM: number | null;
+  readonly excessDegrees: number | null;
+  readonly penetrationM: number | null;
+}
+
+export function physicsFaultKinds(state: PhysicsSnapshot): PhysicsFaultKind[] {
+  const kinds: PhysicsFaultKind[] = [];
+  if (!state.valid) kinds.push('non-finite');
+  if (state.jointGap > 0.03) kinds.push('joint-gap');
+  if (state.angleExcess > 3) kinds.push('angle-limit');
+  if (state.penetration > 0.03) kinds.push('ground-penetration');
+  return kinds;
+}
+
+export function describePhysicsFault(fault: PhysicsFault): string {
+  const details: string[] = [];
+  if (fault.kinds.includes('non-finite')) details.push('non-finite physical state');
+  if (fault.kinds.includes('joint-gap')) details.push(
+    'joint separation at ' + fault.gapJoint + ': ' + ((fault.gapM ?? 0) * 100).toFixed(2) + ' cm',
+  );
+  if (fault.kinds.includes('angle-limit')) details.push(
+    'angular limit at ' + fault.limitJoint + ' (' + fault.limitAxis + '): ' +
+      (fault.excessDegrees ?? 0).toFixed(2) + ' degrees beyond limit',
+  );
+  if (fault.kinds.includes('ground-penetration')) details.push(
+    'ground penetration at ' + fault.groundBody + ': ' + ((fault.penetrationM ?? 0) * 100).toFixed(2) + ' cm',
+  );
+  if (fault.kinds.includes('observation')) details.push('non-finite observation');
+  return details.join('; ') + ' at ' + fault.elapsed.toFixed(3) + ' s';
+}
+
 export interface Transition {
   readonly observation: readonly number[] | null;
   readonly elapsed: number;
@@ -124,6 +161,7 @@ export interface Transition {
   readonly supportedSeconds: number;
   readonly stableSeconds: number;
   readonly longestStableSeconds: number;
+  readonly physicsFault?: PhysicsFault;
 }
 
 export function invalidPhysics(state: PhysicsSnapshot): boolean {
@@ -133,7 +171,8 @@ export function invalidPhysics(state: PhysicsSnapshot): boolean {
 // One fixed-rate environment, with no renderer, reward, policy or hidden reflex.
 // The physics body is reset only between episodes. Time and seed are explicit.
 export class BalanceEnvironment {
-  private rig = new PassiveRig(0.002, 0, { initialPose: BALANCED_STANCE });
+  private rig: PassiveRig;
+  private readonly substeps: number;
   private reason: EndReason = 'running';
   private supportedSeconds = 0;
   private stableSeconds = 0;
@@ -142,8 +181,16 @@ export class BalanceEnvironment {
   constructor(
     readonly duration = 10,
     readonly ligaments = true,
+    private readonly resolution: PhysicsResolution = {},
   ) {
     if (Number.isNaN(duration) || duration <= 0) throw new Error('Invalid episode duration');
+    const ratio = 1 / ((resolution.timestep ?? STEP) * ACTION_HZ);
+    if (!Number.isSafeInteger(Math.round(ratio)) || ratio < 1 ||
+      Math.abs(ratio - Math.round(ratio)) > 1e-9) {
+      throw new Error('Physics timestep must divide the 30 Hz control interval');
+    }
+    this.substeps = Math.round(ratio);
+    this.rig = new PassiveRig(0.002, 0, { ...resolution, initialPose: BALANCED_STANCE });
   }
 
   reset(seed: number, perturbationDegrees = 1): Transition {
@@ -164,7 +211,7 @@ export class BalanceEnvironment {
       const bone = BONES.find((candidate) => candidate.id === id)!;
       pose[id] = clampAngles(bone, { ...pose[id], pitch: pose[id].pitch + perturb() });
     }
-    this.rig = new PassiveRig(0.002, perturb(), { initialPose: pose });
+    this.rig = new PassiveRig(0.002, perturb(), { ...this.resolution, initialPose: pose });
     this.reason = 'running';
     this.supportedSeconds = 0;
     this.stableSeconds = 0;
@@ -179,7 +226,7 @@ export class BalanceEnvironment {
     let foot = 0;
     let other = 0;
     let steps = 0;
-    for (let i = 0; i < SUBSTEPS; i++) {
+    for (let i = 0; i < this.substeps; i++) {
       this.rig.step({ ligaments: this.ligaments, mode: 'manual', commands });
       state = this.rig.snapshot();
       steps++;
@@ -199,7 +246,7 @@ export class BalanceEnvironment {
       else if (state.seconds >= this.duration) this.reason = 'time-limit';
       if (this.reason !== 'running') break;
     }
-    return this.transition(state, foot / steps, other / steps, steps * STEP);
+    return this.transition(state, foot / steps, other / steps, steps * this.rig.timestep);
   }
 
   snapshot(): PhysicsSnapshot {
@@ -218,6 +265,7 @@ export class BalanceEnvironment {
       this.reason = 'invalid';
       observation = null;
     }
+    const fault = this.reason === 'invalid' ? this.failure(state) : undefined;
     const support = measureSupport(state, velocity, foot, other);
     if (support.supported && this.reason !== 'invalid') this.supportedSeconds += elapsed;
     this.stableSeconds =
@@ -234,6 +282,21 @@ export class BalanceEnvironment {
       supportedSeconds: this.supportedSeconds,
       stableSeconds: this.stableSeconds,
       longestStableSeconds: this.longestStableSeconds,
+      ...(fault ? { physicsFault: fault } : {}),
+    };
+  }
+
+  private failure(state: PhysicsSnapshot): PhysicsFault {
+    const kinds = physicsFaultKinds(state);
+    if (!kinds.length) kinds.push('observation');
+    const finite = (value: number) => Number.isFinite(value) ? value : null;
+    return {
+      ...this.rig.constraintLocations(state),
+      kinds,
+      elapsed: state.seconds,
+      gapM: finite(state.jointGap),
+      excessDegrees: finite(state.angleExcess),
+      penetrationM: finite(state.penetration),
     };
   }
 }

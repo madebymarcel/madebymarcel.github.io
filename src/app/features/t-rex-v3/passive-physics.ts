@@ -36,6 +36,13 @@ interface Segment {
   center: Vector;
 }
 
+export interface ConstraintLocations {
+  readonly gapJoint: string;
+  readonly limitJoint: string;
+  readonly limitAxis: Axis;
+  readonly groundBody: string;
+}
+
 export interface PhysicsSnapshot {
   readonly pose: readonly PosedBone[];
   readonly seconds: number;
@@ -703,6 +710,45 @@ export class PassiveRig {
     this.specificForce = this.pelvis.body.velocity.vsub(previous).scale(1 / this.timestep);
     this.specificForce.z -= this.world.gravity.z;
     this.steps++;
+  }
+
+  // Read-only localization, used only on invalid physics. No changes to
+  // transforms, constraints or the simulated body.
+  constraintLocations(state: PhysicsSnapshot): ConstraintLocations {
+    let gapJoint = '';
+    let gap = -Infinity;
+    for (const joint of this.joints) {
+      const value = joint.gap();
+      if (value > gap) {
+        gap = value;
+        gapJoint = joint.read().id;
+      }
+    }
+    let limitJoint = '';
+    let limitAxis: Axis = 'pitch';
+    let excess = -Infinity;
+    for (const joint of state.sensors.joints) {
+      const bone = BONES.find((entry) => entry.id === joint.id)!;
+      for (const axis of AXES) {
+        const [min, max] = bone.limits[axis];
+        const angle = joint.axes[axis].angle / DEG;
+        const value = Math.max(min - angle, angle - max);
+        if (value > excess) {
+          excess = value;
+          limitJoint = joint.id;
+          limitAxis = axis;
+        }
+      }
+    }
+    let groundBody = '';
+    let lowest = Infinity;
+    for (const { bone, body } of this.segments) {
+      if (body.aabb.lowerBound.z < lowest) {
+        groundBody = bone.id;
+        lowest = body.aabb.lowerBound.z;
+      }
+    }
+    return { gapJoint, limitJoint, limitAxis, groundBody };
   }
 
   snapshot(): PhysicsSnapshot {
