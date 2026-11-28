@@ -110,7 +110,7 @@ export class DistanceTrainingPanel implements OnDestroy {
   private startCollection(jobs: readonly RolloutJob[]): void {
     const collection: Collection = {
       round: jobs[0].round,
-      results: Array.from({ length: jobs.length }),
+      results: jobs.map(() => undefined),
       attempts: jobs.map(() => 0),
     };
     this.collection = collection;

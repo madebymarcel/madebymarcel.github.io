@@ -1,0 +1,47 @@
+name: T. rex exploration benchmark
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/app/features/t-rex-v3/ppo.ts'
+      - 'src/app/features/t-rex-v3/rollout-collection.ts'
+      - 'src/app/features/t-rex-v3/distance-training.ts'
+      - 'scripts/trex-v3-exploration-benchmark.mjs'
+      - '.github/workflows/trex-v3-exploration.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: trex-exploration-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    name: Compare IID and correlated exploration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - run: npm ci --no-audit --no-fund
+      - name: Bundle benchmark against the exact V3 source
+        run: |
+          ./node_modules/.bin/esbuild scripts/trex-v3-exploration-benchmark.mjs \
+            --bundle --platform=node --format=esm --outfile=/tmp/trex-v3-benchmark.mjs
+      - name: Matched-budget seeded comparison
+        shell: bash
+        run: |
+          set -o pipefail
+          node /tmp/trex-v3-benchmark.mjs | tee trex-v3-benchmark.log
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: trex-v3-exploration-results
+          path: trex-v3-benchmark.log
+          if-no-files-found: ignore

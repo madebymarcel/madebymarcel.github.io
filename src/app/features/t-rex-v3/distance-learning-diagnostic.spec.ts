@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { ACTIONS, BalanceEnvironment, seededRandom } from './balance-environment';
-import { DistanceTrainer } from './distance-training';
 import { PpoAgent } from './ppo';
 import { OBSERVATIONS } from './balance-environment';
 
-describe('deployed V3 training diagnostic', () => {
+describe('V3 independent-exploration baseline', () => {
   it('compares passive, untrained mean policy and stochastic rollout outcomes', () => {
     const results = [];
     for (const mode of ['zero', 'mean', 'explore'] as const) {
@@ -57,43 +56,4 @@ describe('deployed V3 training diagnostic', () => {
     expect(results).toHaveLength(9);
   }, 120000);
 
-  it('runs the exact deployed trainer until two updates or a bounded diagnostic budget', () => {
-    const trainer = new DistanceTrainer(37, 30);
-    const initial = trainer.checkpoint();
-    let frame = trainer.frame();
-    const trace = [];
-    for (let i = 0; i < 64; i++) {
-      frame = trainer.advance(8);
-      if (i % 4 === 0 || frame.phase === 'blocked') {
-        trace.push({
-          phase: frame.phase,
-          reason: frame.reason,
-          elapsed: frame.elapsed,
-          distanceM: frame.distanceM,
-          pelvisHeight: frame.snapshot.pelvisHeight,
-          gap: frame.snapshot.jointGap,
-          excess: frame.snapshot.angleExcess,
-          penetration: frame.snapshot.penetration,
-          stats: frame.stats,
-          message: frame.message,
-        });
-      }
-      if (frame.phase === 'blocked' || frame.stats.updates >= 2) break;
-    }
-    const changed = trainer
-      .checkpoint()
-      .learner.actor.weights.some((value, i) => value !== initial.learner.actor.weights[i]);
-    console.info(
-      'V3_TRAINER_DIAGNOSTIC ' +
-        JSON.stringify({
-          trace,
-          phase: frame.phase,
-          reason: frame.reason,
-          message: frame.message,
-          stats: frame.stats,
-          weightsChanged: changed,
-        }),
-    );
-    expect(frame.stats.actions).toBeGreaterThan(0);
-  }, 180000);
 });
