@@ -226,7 +226,9 @@ class MuscleEquation extends Equation {
   override computeGiMGt(): number {
     const a = this.jacobianElementA.rotational;
     const b = this.jacobianElementB.rotational;
-    return a.dot(this.bi.invInertiaWorldSolve.vmult(a)) + b.dot(this.bj.invInertiaWorldSolve.vmult(b));
+    return (
+      a.dot(this.bi.invInertiaWorldSolve.vmult(a)) + b.dot(this.bj.invInertiaWorldSolve.vmult(b))
+    );
   }
 
   torqueNm(): number {
