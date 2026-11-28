@@ -6,6 +6,7 @@ import {
   distanceScore,
   evaluate,
   GAIT_DEFAULTS,
+  ADAPTIVE_DEFAULTS,
   trial,
 } from '../src/app/features/t-rex/servo-learning.mjs';
 import {
@@ -17,6 +18,7 @@ import {
   parseCheckpoint,
   propose,
   robustFitness,
+  selectPopulation,
   WAVE_SIZE,
 } from '../src/app/features/t-rex/servo-search.mjs';
 
@@ -127,7 +129,7 @@ test('population search retains its champion, explores alternatives, and adapts 
   assert.deepEqual(next.records, state.records);
   assert.equal(next.stale, 1);
   assert.equal(next.iteration, WAVE_SIZE);
-  assert.ok(next.mutationScale < state.mutationScale);
+  assert.ok(next.mutationScale > state.mutationScale);
   assert.equal(next.population.length, 1);
   assert.ok(next.population.some((entry) => entry.iteration === state.best.iteration));
   const viable = {
@@ -142,9 +144,9 @@ test('population search retains its champion, explores alternatives, and adapts 
     fitness: robustFitness(viable, state.best.trials),
   };
   const explored = completeWave(next, propose(next), Array(WAVE_SIZE).fill(alternatives));
-  assert.ok(explored.population.length > 1);
+  assert.equal(explored.lineages.length, 4);
   const following = propose(explored);
-  assert.ok(new Set(following.candidates.map((candidate) => candidate.parent)).size > 1);
+  assert.equal(new Set(following.candidates.map((candidate) => candidate.lineage)).size, 4);
   const restored = parseCheckpoint(JSON.stringify(explored));
   assert.deepEqual(propose(restored), following);
   assert.throws(() => parseCheckpoint(JSON.stringify({ ...next, format: 'trex-servo-v3' })));
@@ -163,7 +165,7 @@ test('legacy checkpoint migration preserves weights, count and behavior, and res
   assert.equal(state.iteration, old.iteration);
   assert.equal(state.rng, old.rng);
   assert.equal(state.best.iteration, old.best.iteration);
-  assert.deepEqual(state.best.policy, [...old.best.policy, ...GAIT_DEFAULTS]);
+  assert.deepEqual(state.best.policy, [...old.best.policy, ...GAIT_DEFAULTS, ...ADAPTIVE_DEFAULTS]);
   assertReplayMetrics(state.best.metrics, seed.metrics);
   assertReplayTrials(state.best.trials, seed.trials);
   assert.equal(state.best.fitness, robustFitness(state.best.metrics, state.best.trials));
@@ -236,6 +238,7 @@ test('v5 checkpoints retain policies but discard stale scores and mutation scale
   const state = emptyCheckpoint();
   const entry = {
     ...state.best,
+    policy: seed.policy,
     metrics: { ...state.best.metrics, score: 999 },
     trials: state.best.trials.map((m) => ({ ...m, score: 999 })),
     fitness: 999,
@@ -249,9 +252,84 @@ test('v5 checkpoints retain policies but discard stale scores and mutation scale
     records: {},
   };
   const restored = parseCheckpoint(JSON.stringify(old));
-  assert.equal(restored.format, 'trex-population-v6');
-  assert.deepEqual(restored.best.policy, entry.policy);
+  assert.equal(restored.format, 'trex-population-v7');
+  assert.deepEqual(restored.best.policy, [...entry.policy, ...ADAPTIVE_DEFAULTS]);
   assert.equal(restored.best.metrics.score, distanceScore(entry.metrics));
-  assert.equal(restored.mutationScale, 0.12);
+  assert.equal(restored.mutationScale, 0.2);
   assert.deepEqual(parseCheckpoint(JSON.stringify(restored)), restored);
+});
+
+test('distance leader cannot be vetoed by slip, drift or a lower robust score', () => {
+  const old = emptyCheckpoint().best;
+  const farther = {
+    ...old,
+    metrics: {
+      ...old.metrics,
+      distance: old.metrics.distance + 0.03,
+      forwardUpright: old.metrics.forwardUpright + 0.005,
+      steps: old.metrics.steps + 1,
+      score: old.metrics.score - 1,
+    },
+    fitness: old.fitness - 2,
+  };
+  assert.ok(better(farther, old));
+  assert.ok(!better(old, farther));
+});
+
+test('stagnation escalates exploration and never discards the distance champion', () => {
+  let state = emptyCheckpoint();
+  const initial = state;
+  const bad = {
+    ...state.best.metrics,
+    distance: 0,
+    forwardUpright: 0,
+    steps: 0,
+    score: -10,
+  };
+  const evaluation = { metrics: bad, trials: [bad, bad], fitness: -10 };
+  for (let i = 0; i < 12; i++) {
+    state = completeWave(state, propose(state), Array(WAVE_SIZE).fill(evaluation));
+  }
+  assert.deepEqual(state.best, initial.best);
+  assert.equal(state.stale, 12);
+  assert.ok(state.mutationScale > initial.mutationScale);
+  const wave = propose(state);
+  assert.ok(wave.candidates.every((candidate) => !candidate.local));
+  assert.equal(new Set(wave.candidates.map((candidate) => candidate.lineage)).size, 4);
+  assert.ok(
+    wave.candidates.some(
+      (candidate) => candidate.policy.filter((value, i) => value !== state.best.policy[i]).length > 6,
+    ),
+  );
+});
+
+test('near-identical policies do not fill the archive', () => {
+  const champion = emptyCheckpoint().best;
+  const clones = Array.from({ length: 10 }, (_, i) => ({
+    ...champion,
+    iteration: i + 1,
+    policy: champion.policy.map((value, j) => (j === 0 ? value + i * 0.000001 : value)),
+  }));
+  assert.ok(selectPopulation(clones, champion).length <= 2);
+});
+
+test('v6 migration preserves the physical replay and iteration counter', () => {
+  const state = emptyCheckpoint();
+  const entry = { ...state.best, policy: seed.policy };
+  const old = { ...state, format: 'trex-population-v6', iteration: 2048, best: entry, population: [entry], records: {} };
+  const restored = parseCheckpoint(JSON.stringify(old));
+  assert.equal(restored.iteration, 2048);
+  assertReplayMetrics(evaluate(restored.best.policy), seed.metrics);
+  assert.deepEqual(parseCheckpoint(JSON.stringify(restored)), restored);
+});
+
+test('nonzero adaptive feedback runs through real physics with bounded motors', () => {
+  const policy = [...seed.policy, ...ADAPTIVE_DEFAULTS];
+  policy[33] = 0.1;
+  policy[41] = 0.1;
+  policy[45] = 0.5;
+  policy[47] = 0.1;
+  const metrics = evaluate(policy);
+  assert.ok(metrics.ticks > 0);
+  assert.ok(Object.values(metrics).every((value) => typeof value === 'boolean' || Number.isFinite(value)));
 });

@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { evaluate } from '../src/app/features/t-rex/servo-learning.mjs';
 import {
   assess,
   completeWave,
@@ -37,3 +38,13 @@ for (let i = 0; i < generations; i++) {
     }),
   );
 }
+
+const verification = evaluate(state.best.policy, { seconds: 60 });
+console.log(
+  'Long replay',
+  JSON.stringify({
+    ...verification,
+    tenMetresWithoutFalling:
+      !verification.fell && verification.distance >= 10 && verification.steps > 0,
+  }),
+);

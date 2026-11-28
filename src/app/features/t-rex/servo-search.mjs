@@ -3,17 +3,25 @@ import {
   boundPolicy,
   distanceScore,
   evaluate,
+  expandPolicy,
   GAIT_DEFAULTS,
+  LEGACY_POLICY_SIZE,
   PARAMETER_SCALE,
   POLICY_SIZE,
   TRIAL_SECONDS,
 } from './servo-learning.mjs';
 
-export const FORMAT = 'trex-population-v6';
+export const FORMAT = 'trex-population-v7';
 // Keep the storage key so existing browsers discover and migrate their checkpoints.
 export const STORAGE_KEY = 'made-by-marcel-trex-continuous-v4';
 export const WAVE_SIZE = 16;
 export const POPULATION_SIZE = 8;
+const LINEAGE_COUNT = 4;
+const INITIAL_SCALE = 0.2;
+const MIN_SCALE = 0.08;
+const MAX_SCALE = 1.5;
+const RESTART_AFTER = 8;
+const MIN_SEPARATION = 0.35;
 const MILESTONES = {
   stand: 'Standing independently',
   support: 'Balancing on one leg',
@@ -73,7 +81,7 @@ export function assess(policy) {
 function seedEntry() {
   return {
     iteration: 0,
-    policy: seed.policy.slice(),
+    policy: expandPolicy(seed.policy),
     metrics: { ...seed.metrics },
     trials: seed.trials.map((m) => ({ ...m })),
     fitness: robustFitness(seed.metrics, seed.trials),
@@ -97,10 +105,11 @@ export function emptyCheckpoint(randomSeed = 3) {
     rng: randomSeed >>> 0 || 1,
     iteration: 0,
     stale: 0,
-    mutationScale: 0.12,
+    mutationScale: INITIAL_SCALE,
     successRate: 0,
     best,
     population: [best],
+    lineages: initializeLineages([best], best),
     records: collectRecords([best]),
   };
 }
@@ -135,137 +144,202 @@ function rates(entry, measure) {
   );
 }
 
-const progress = (m) => Math.min(m.distance, m.forwardUpright);
+// Actual forward landings distinguish walking from sliding.
+const progress = (m) => Math.max(0, Math.min(m.distance, m.forwardUpright));
+const walkingDistance = (m) => (m.steps > 0 ? progress(m) : 0);
+const precursor = (m) => (m.steps > 0 ? progress(m) : 0.1 * progress(m));
 const mean = (values) => values.reduce((sum, value) => sum + value, 0) / values.length;
+const robustProgress = (entry) => Math.min(...rates(entry, walkingDistance));
+const objectives = [
+  (entry) => walkingDistance(entry.metrics),
+  robustProgress,
+  (entry) => mean(rates(entry, precursor)),
+  (entry) => precursor(entry.metrics) + 0.2 * mean(rates(entry, precursor)),
+];
 
-// Quality-diversity archive: preserve leaders for complementary physical abilities,
-// not eight near-identical copies of the same winning score.
-export function selectPopulation(entries, champion) {
-  const unique = new Map();
-  for (const entry of [champion, ...entries]) {
-    const key = entry.policy.join(',');
-    if (!unique.has(key)) unique.set(key, entry);
-  }
-  const pool = [...unique.values()];
-  const selected = [champion];
-  const add = (entry) => {
-    if (!selected.some((other) => separation(other, entry) < 1e-9)) selected.push(entry);
-  };
-  const objectives = [
-    (e) => e.fitness,
-    (e) => Math.min(...rates(e, progress)),
-    (e) => e.metrics.score,
-    (e) => mean(rates(e, (m) => m.score)),
-    (e) => mean(rates(e, progress)),
-    (e) => Math.min(...rates(e, (m) => m.score)),
-  ];
-  for (const objective of objectives) add(bestBy(pool, objective));
-  // Fill spare niches with useful explorers rather than maximizing diversity among failures.
-  const ranked = pool
-    .filter((entry) => entry.fitness >= 0 && entry.metrics.distance >= 0)
-    .sort((a, b) => b.fitness - a.fitness)
-    .slice(0, 24);
-  while (selected.length < POPULATION_SIZE) {
-    const remaining = ranked.filter(
-      (entry) =>
-        !selected.includes(entry) && selected.every((other) => separation(entry, other) >= 1e-9),
-    );
-    if (!remaining.length) break;
-    add(
-      bestBy(remaining, (entry) => Math.min(...selected.map((other) => separation(entry, other)))),
-    );
-  }
-  return selected.slice(0, POPULATION_SIZE);
+function lineageBetter(candidate, incumbent, index) {
+  if (index === 0) return better(candidate, incumbent);
+  const a = objectives[index](candidate);
+  const b = objectives[index](incumbent);
+  return a > b + 1e-8 || (Math.abs(a - b) <= 1e-8 && candidate.fitness > incumbent.fitness);
 }
 
-// Tiny paired mutations exploit the champion. Other archive parents explore
-// different basins; broad mutations and recombination never replace the champion directly.
+function distinct(entries) {
+  return [...new Map(entries.map((entry) => [entry.policy.join(','), entry])).values()];
+}
+
+// Preserve distinct viable strategies, a robust leader and the distance champion.
+export function selectPopulation(entries, champion) {
+  const pool = distinct([champion, ...entries]);
+  const selected = [champion];
+  const robust = bestBy(pool, robustProgress);
+  if (separation(robust, champion) >= 1e-9) selected.push(robust);
+  const viable = pool.filter((entry) => entry.metrics.distance > 0 && entry.fitness >= 0);
+  while (selected.length < POPULATION_SIZE) {
+    const remaining = viable.filter((entry) =>
+      selected.every((other) => separation(entry, other) >= MIN_SEPARATION),
+    );
+    if (!remaining.length) break;
+    const novelty = (entry) => Math.min(...selected.map((other) => separation(entry, other)));
+    selected.push(bestBy(remaining, (entry) => novelty(entry) + 0.1 * precursor(entry.metrics)));
+  }
+  return selected;
+}
+
+function initializeLineages(entries, champion) {
+  const pool = selectPopulation(entries, champion);
+  const used = [champion];
+  return Array.from({ length: LINEAGE_COUNT }, (_, index) => {
+    const alternatives = pool.filter((entry) =>
+      used.every((other) => separation(entry, other) >= MIN_SEPARATION),
+    );
+    const entry =
+      index === 0 || !alternatives.length ? champion : bestBy(alternatives, objectives[index]);
+    if (index > 0) used.push(entry);
+    return { entry, scale: INITIAL_SCALE, stale: 0 };
+  });
+}
+
+// Overlapping groups allow coordinated changes to balance, propulsion, swing and tail.
+const GROUPS = [
+  [0, 1, 2, 3, 9, 10, 31, 32, 33, 34, 35, 36, 51],
+  [4, 5, 6, 7, 8, 19, 20, 21, 41, 42, 43],
+  [11, 12, 13, 14, 28, 29, 37, 38, 39, 40, 44],
+  [15, 16, 17, 18, 28, 30, 44, 45, 46],
+  [22, 23, 24, 25, 26, 27, 41, 47, 48, 49, 50],
+];
+
+function direction(state, broad) {
+  const group = GROUPS[Math.floor(random(state) * GROUPS.length)];
+  const second = GROUPS[Math.floor(random(state) * GROUPS.length)];
+  const indices = broad ? new Set([...group, ...second]) : new Set(group);
+  const shared = 2 * random(state) - 1;
+  return PARAMETER_SCALE.map((scale, index) => {
+    if (!indices.has(index)) return 0;
+    return scale * (0.35 * shared + 0.65 * (2 * random(state) - 1));
+  });
+}
+
 export function propose(checkpoint) {
   if (checkpoint.iteration > Number.MAX_SAFE_INTEGER - WAVE_SIZE) {
     throw new Error('Candidate limit reached.');
   }
   const state = { ...checkpoint };
   const candidates = [];
-  const parents = state.population;
-  for (let pair = 0; pair < WAVE_SIZE / 2; pair++) {
-    const parent =
-      pair < 2
-        ? state.best
-        : parents[(Math.floor(state.iteration / WAVE_SIZE) + pair - 2) % parents.length];
-    const direction = Array(POLICY_SIZE).fill(0);
-    const count = 1 + Math.floor(random(state) * (pair >= 6 ? 6 : 3));
-    for (let i = 0; i < count; i++) {
-      const j = Math.floor(random(state) * POLICY_SIZE);
-      direction[j] += (random(state) - 0.5) * PARAMETER_SCALE[j];
-    }
-    const local = pair < 6;
-    const noise =
-      pair === 0
-        ? state.mutationScale * 0.1
-        : pair === 1
-          ? state.mutationScale * 0.5
-          : local
-            ? state.mutationScale
-            : pair === 6
-              ? 0.3
-              : 0.8;
-    let centre = parent.policy;
-    if (pair === 7 && parents.length > 1) {
-      const other = parents[Math.floor(random(state) * parents.length)];
-      const mix = random(state) * 0.35;
-      centre = centre.map((w, i) => w + mix * (other.policy[i] - w));
-    }
-    for (const sign of [1, -1]) {
-      candidates.push({
-        iteration: checkpoint.iteration + candidates.length + 1,
-        policy: boundPolicy(centre.map((w, i) => w + sign * noise * direction[i])),
-        parent: parent.iteration,
-        local,
-      });
+  for (const [lineage, island] of state.lineages.entries()) {
+    const parent = island.entry;
+    const stalled = Math.max(island.stale, lineage === 0 ? state.stale : 0);
+    const restart = lineage !== 0 && island.stale >= RESTART_AFTER;
+    for (let pair = 0; pair < 2; pair++) {
+      const broad = pair === 1 || stalled >= 4;
+      const delta = direction(state, broad);
+      const scale = broad
+        ? Math.max(0.45, island.scale, Math.min(MAX_SCALE, 0.15 * stalled))
+        : island.scale * 0.5;
+      let centre = parent.policy;
+      if (restart && pair === 1) {
+        const archive = distinct([...state.population, ...state.lineages.map((item) => item.entry)]);
+        const alternatives = archive.filter((entry) => separation(entry, parent) >= MIN_SEPARATION);
+        const other = alternatives.length
+          ? alternatives[Math.floor(random(state) * alternatives.length)]
+          : seedEntry();
+        centre = other.policy;
+      } else if (pair === 1 && lineage !== 0 && random(state) < 0.35) {
+        const other = state.lineages[Math.floor(random(state) * LINEAGE_COUNT)].entry;
+        const mix = 0.2 + 0.5 * random(state);
+        centre = centre.map((value, index) => value + mix * (other.policy[index] - value));
+      }
+      for (const sign of [1, -1]) {
+        candidates.push({
+          iteration: checkpoint.iteration + candidates.length + 1,
+          policy: boundPolicy(centre.map((value, index) => value + sign * scale * delta[index])),
+          parent: parent.iteration,
+          local: !broad,
+          lineage,
+        });
+      }
     }
   }
   return { rng: state.rng, candidates };
 }
 
-// Replay selection prioritizes forward motion. Falling is a small cost, not a veto.
+// Replay the furthest physically walking policy, regardless of shaped score.
+// Robust performance remains a separate archive objective.
 export function better(candidate, incumbent) {
-  const a = candidate.metrics;
-  const b = incumbent.metrics;
-  const walkA = achievements(a, candidate.trials).includes('walk');
-  const walkB = achievements(b, incumbent.trials).includes('walk');
+  const a = walkingDistance(candidate.metrics);
+  const b = walkingDistance(incumbent.metrics);
+  if (Math.abs(a - b) > 1e-8) return a > b;
+  const walkA = achievements(candidate.metrics, candidate.trials).includes('walk');
+  const walkB = achievements(incumbent.metrics, incumbent.trials).includes('walk');
   if (walkA !== walkB) return walkA;
-  if (progress(a) < progress(b) - 0.005) return false;
-  return a.score + 0.1 * candidate.fitness > b.score + 0.1 * incumbent.fitness;
+  if (a === 0 && b === 0) {
+    const delta = precursor(candidate.metrics) - precursor(incumbent.metrics);
+    if (Math.abs(delta) > 1e-8) return delta > 0;
+  }
+  return candidate.fitness > incumbent.fitness;
 }
 
 export function completeWave(state, wave, evaluations) {
   if (wave.candidates.length !== WAVE_SIZE || evaluations.length !== WAVE_SIZE) {
     throw new Error('Incomplete search wave.');
   }
-  let best = state.best;
-  const parents = new Map(state.population.map((entry) => [entry.iteration, entry]));
-  let attempts = 0;
+  const entries = wave.candidates.map(({ iteration, policy }, index) => ({
+    iteration,
+    policy,
+    ...evaluations[index],
+  }));
+  const best = entries.reduce(
+    (champion, entry) => (better(entry, champion) ? entry : champion),
+    state.best,
+  );
+  const progressed = walkingDistance(best.metrics) > walkingDistance(state.best.metrics) + 1e-8;
+  const stale = progressed ? 0 : state.stale + 1;
   let successes = 0;
-  const entries = wave.candidates.map(({ iteration, policy, parent, local }, i) => {
-    const entry = { iteration, policy, ...evaluations[i] };
-    if (better(entry, best)) best = entry;
-    if (local) {
-      attempts++;
-      if (entry.fitness > parents.get(parent).fitness) successes++;
+  const lineages = state.lineages.map((island, index) => {
+    const offspring = entries.filter((_, i) => wave.candidates[i].lineage === index);
+    successes += offspring.filter((entry) => lineageBetter(entry, island.entry, index)).length;
+    let entry =
+      index === 0
+        ? best
+        : offspring.reduce(
+            (leader, candidate) => (lineageBetter(candidate, leader, index) ? candidate : leader),
+            island.entry,
+          );
+    const improved = objectives[index](entry) > objectives[index](island.entry) + 1e-8;
+    let age = improved ? 0 : island.stale + 1;
+    if (index > 0 && island.stale >= RESTART_AFTER && !improved) {
+      // Only exploratory islands may accept a worse but genuinely different strategy.
+      const viable = offspring.filter(
+        (candidate) =>
+          candidate.metrics.distance > 0 &&
+          candidate.fitness >= 0 &&
+          separation(candidate, best) >= MIN_SEPARATION &&
+          state.lineages.every(
+            (other, i) => i === index || separation(candidate, other.entry) >= MIN_SEPARATION,
+          ),
+      );
+      if (viable.length) {
+        entry = bestBy(viable, objectives[index]);
+        age = 0;
+      }
     }
-    return entry;
+    const scale = clamp(island.scale * (improved ? 0.9 : 1.18), MIN_SCALE, MAX_SCALE);
+    return { entry, scale, stale: age };
   });
-  const successRate = attempts ? successes / attempts : 0;
-  const mutationScale = clamp(state.mutationScale * (successRate > 0.2 ? 1.12 : 0.86), 0.025, 0.6);
+  const population = selectPopulation(
+    [...state.population, ...state.lineages.map((item) => item.entry), ...entries],
+    best,
+  );
   return {
     ...state,
     rng: wave.rng,
     iteration: state.iteration + WAVE_SIZE,
-    stale: best === state.best ? state.stale + 1 : 0,
-    mutationScale,
-    successRate,
+    stale,
+    mutationScale: lineages[0].scale,
+    successRate: successes / WAVE_SIZE,
     best,
-    population: selectPopulation([...state.population, ...entries], best),
+    population,
+    lineages,
     records: collectRecords(entries, state.records),
   };
 }
@@ -329,7 +403,7 @@ export function migrateCheckpoint(state) {
   }
   const evaluated = new Map();
   const entries = oldEntries.map(({ iteration, policy: oldPolicy }) => {
-    const policy = [...oldPolicy, ...GAIT_DEFAULTS];
+    const policy = expandPolicy([...oldPolicy, ...GAIT_DEFAULTS]);
     const key = policy.join(',');
     if (!evaluated.has(key)) evaluated.set(key, assess(policy));
     return { iteration, policy, ...evaluated.get(key) };
@@ -341,6 +415,7 @@ export function migrateCheckpoint(state) {
     iteration: state.iteration,
     best,
     population: selectPopulation(all, best),
+    lineages: initializeLineages(all, best),
     records: collectRecords(all),
   };
 }
@@ -356,7 +431,7 @@ function migratePopulation(state) {
         object(entry) &&
         count(entry.iteration) &&
         entry.iteration <= state.iteration &&
-        validPolicy(entry.policy, POLICY_SIZE) &&
+        validPolicy(entry.policy, LEGACY_POLICY_SIZE) &&
         validMetrics(entry.metrics, TRIAL_SECONDS) &&
         Array.isArray(entry.trials) &&
         entry.trials.length === VARIATIONS.length &&
@@ -371,7 +446,7 @@ function migratePopulation(state) {
     const trials = entry.trials.map(rescore);
     return {
       iteration: entry.iteration,
-      policy: entry.policy,
+      policy: expandPolicy(entry.policy),
       metrics,
       trials,
       fitness: robustFitness(metrics, trials),
@@ -384,6 +459,7 @@ function migratePopulation(state) {
     iteration: state.iteration,
     best,
     population: selectPopulation(all, best),
+    lineages: initializeLineages(all, best),
     records: collectRecords(all),
   };
 }
@@ -391,14 +467,16 @@ function migratePopulation(state) {
 export function parseCheckpoint(source) {
   const state = JSON.parse(source);
   if (state?.format === 'trex-continuous-v4') return migrateCheckpoint(state);
-  if (state?.format === 'trex-population-v5') return migratePopulation(state);
+  if (['trex-population-v5', 'trex-population-v6'].includes(state?.format)) {
+    return migratePopulation(state);
+  }
   if (
     !validBase(state) ||
     state.format !== FORMAT ||
     !validEntry(state.best, state.iteration) ||
     !Number.isFinite(state.mutationScale) ||
-    state.mutationScale < 0.025 ||
-    state.mutationScale > 0.6 ||
+    state.mutationScale < MIN_SCALE ||
+    state.mutationScale > MAX_SCALE ||
     !Number.isFinite(state.successRate) ||
     state.successRate < 0 ||
     state.successRate > 1 ||
@@ -409,6 +487,21 @@ export function parseCheckpoint(source) {
     !state.population.some(
       (entry) => entry.iteration === state.best.iteration && separation(entry, state.best) < 1e-9,
     ) ||
+    !Array.isArray(state.lineages) ||
+    state.lineages.length !== LINEAGE_COUNT ||
+    !state.lineages.every(
+      (island) =>
+        object(island) &&
+        validEntry(island.entry, state.iteration) &&
+        Number.isFinite(island.scale) &&
+        island.scale >= MIN_SCALE &&
+        island.scale <= MAX_SCALE &&
+        count(island.stale) &&
+        island.stale <= state.iteration / WAVE_SIZE,
+    ) ||
+    state.lineages[0].entry.iteration !== state.best.iteration ||
+    separation(state.lineages[0].entry, state.best) >= 1e-9 ||
+    state.lineages[0].scale !== state.mutationScale ||
     !Object.entries(state.records).every(
       ([key, entry]) =>
         Object.hasOwn(MILESTONES, key) &&

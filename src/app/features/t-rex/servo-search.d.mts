@@ -1,6 +1,12 @@
 import type { Metrics } from './servo-learning.mjs';
 
-export type Candidate = { iteration: number; policy: number[]; parent: number; local: boolean };
+export type Candidate = {
+  iteration: number;
+  policy: number[];
+  parent: number;
+  local: boolean;
+  lineage: number;
+};
 export type Evaluation = { metrics: Metrics; trials: Metrics[]; fitness: number };
 export type Entry = { iteration: number; policy: number[] } & Evaluation;
 export type Milestone = 'stand' | 'support' | 'step' | 'alternate' | 'walk';
@@ -13,6 +19,7 @@ export type Checkpoint = {
   successRate: number;
   best: Entry;
   population: Entry[];
+  lineages: { entry: Entry; scale: number; stale: number }[];
   records: Partial<Record<Milestone, Entry>>;
 };
 export type Wave = { rng: number; candidates: Candidate[] };
