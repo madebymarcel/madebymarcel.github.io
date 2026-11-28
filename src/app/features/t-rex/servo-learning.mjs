@@ -14,8 +14,8 @@ export const PARAMETER_SCALE = [
   0.18, 0.2, 0.2, 0.15, 0.25, 0.16, 1, 0.4, 0.5, 0.4, 0.6, 0.3, 0.3, 0.3, 0.25, 0.3, 0.3, 0.3, 0.25,
   0.16, 0.3, 0.3, 0.2, 0.08, 0.2, 0.2, 0.08, 0.2, 0.15, 0.06, 0.12, 0.25,
   // Speed, stance, swing, balance, transitions and tail feedback.
-  0.5, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.2, 0.2, 0.2, 0.15, 0.5, 0.5,
-  0.25, 0.25, 0.25, 0.25, 0.2,
+  0.5, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.2, 0.2, 0.2, 0.15, 0.5, 0.5, 0.25, 0.25,
+  0.25, 0.25, 0.2,
 ];
 
 // Standing time is not locomotion. Reward net upright forward travel.
@@ -44,7 +44,10 @@ export function boundPolicy(policy) {
 }
 
 export function trial(policy, options = {}) {
-  if (![LEGACY_POLICY_SIZE, POLICY_SIZE].includes(policy.length) || !policy.every(Number.isFinite)) {
+  if (
+    ![LEGACY_POLICY_SIZE, POLICY_SIZE].includes(policy.length) ||
+    !policy.every(Number.isFinite)
+  ) {
     throw new Error('Invalid locomotion policy.');
   }
   const p = boundPolicy(expandPolicy(policy));

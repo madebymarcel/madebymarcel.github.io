@@ -238,7 +238,10 @@ export function propose(checkpoint) {
         : island.scale * 0.5;
       let centre = parent.policy;
       if (restart && pair === 1) {
-        const archive = distinct([...state.population, ...state.lineages.map((item) => item.entry)]);
+        const archive = distinct([
+          ...state.population,
+          ...state.lineages.map((item) => item.entry),
+        ]);
         const alternatives = archive.filter((entry) => separation(entry, parent) >= MIN_SEPARATION);
         const other = alternatives.length
           ? alternatives[Math.floor(random(state) * alternatives.length)]

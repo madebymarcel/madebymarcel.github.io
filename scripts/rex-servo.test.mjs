@@ -298,7 +298,8 @@ test('stagnation escalates exploration and never discards the distance champion'
   assert.equal(new Set(wave.candidates.map((candidate) => candidate.lineage)).size, 4);
   assert.ok(
     wave.candidates.some(
-      (candidate) => candidate.policy.filter((value, i) => value !== state.best.policy[i]).length > 6,
+      (candidate) =>
+        candidate.policy.filter((value, i) => value !== state.best.policy[i]).length > 6,
     ),
   );
 });
@@ -316,7 +317,14 @@ test('near-identical policies do not fill the archive', () => {
 test('v6 migration preserves the physical replay and iteration counter', () => {
   const state = emptyCheckpoint();
   const entry = { ...state.best, policy: seed.policy };
-  const old = { ...state, format: 'trex-population-v6', iteration: 2048, best: entry, population: [entry], records: {} };
+  const old = {
+    ...state,
+    format: 'trex-population-v6',
+    iteration: 2048,
+    best: entry,
+    population: [entry],
+    records: {},
+  };
   const restored = parseCheckpoint(JSON.stringify(old));
   assert.equal(restored.iteration, 2048);
   assertReplayMetrics(evaluate(restored.best.policy), seed.metrics);
@@ -331,5 +339,7 @@ test('nonzero adaptive feedback runs through real physics with bounded motors', 
   policy[47] = 0.1;
   const metrics = evaluate(policy);
   assert.ok(metrics.ticks > 0);
-  assert.ok(Object.values(metrics).every((value) => typeof value === 'boolean' || Number.isFinite(value)));
+  assert.ok(
+    Object.values(metrics).every((value) => typeof value === 'boolean' || Number.isFinite(value)),
+  );
 });
