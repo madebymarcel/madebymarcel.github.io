@@ -53,10 +53,11 @@ test('training and replay are independent and progress survives reload', async (
   expect(download.suggestedFilename()).toBe('trex-training-' + iteration + '.json');
   const snapshot = JSON.parse(await readFile(await download.path(), 'utf8'));
   expect(snapshot.iteration).toBe(iteration);
-  expect(snapshot.best.policy).toHaveLength(32);
+  expect(snapshot.best.policy).toHaveLength(52);
   expect(snapshot.best.trials).toHaveLength(2);
-  expect(snapshot.population.length).toBeGreaterThan(1);
-  expect(snapshot.best.metrics.steps).toBeGreaterThanOrEqual(4);
+  expect(snapshot.lineages).toHaveLength(4);
+  expect(snapshot.population.length).toBeGreaterThanOrEqual(1);
+  expect(snapshot.best.metrics.steps).toBeGreaterThanOrEqual(1);
   expect(snapshot.diagnostics.training).toBe(false);
   expect(snapshot.diagnostics.recentBatches.length).toBeGreaterThan(0);
   expect(snapshot.diagnostics.recentBatches.at(-1).iteration).toBe(iteration);

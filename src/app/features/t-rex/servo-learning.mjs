@@ -1,12 +1,21 @@
 import { createServoRig } from './servo-rig.mjs';
 
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
-export const POLICY_SIZE = 32;
+export const LEGACY_POLICY_SIZE = 32;
+export const POLICY_SIZE = 52;
+export const ADAPTIVE_DEFAULTS = Array(POLICY_SIZE - LEGACY_POLICY_SIZE).fill(0);
+
+export function expandPolicy(policy) {
+  return policy.length === LEGACY_POLICY_SIZE ? [...policy, ...ADAPTIVE_DEFAULTS] : policy.slice();
+}
 export const TRIAL_SECONDS = 12;
 export const GAIT_DEFAULTS = [0.07, 0.025, 0.05, 0];
 export const PARAMETER_SCALE = [
   0.18, 0.2, 0.2, 0.15, 0.25, 0.16, 1, 0.4, 0.5, 0.4, 0.6, 0.3, 0.3, 0.3, 0.25, 0.3, 0.3, 0.3, 0.25,
   0.16, 0.3, 0.3, 0.2, 0.08, 0.2, 0.2, 0.08, 0.2, 0.15, 0.06, 0.12, 0.25,
+  // Speed, stance, swing, balance, transitions and tail feedback.
+  0.5, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.2, 0.2, 0.2, 0.15, 0.5, 0.5, 0.25, 0.25,
+  0.25, 0.25, 0.2,
 ];
 
 // Standing time is not locomotion. Reward net upright forward travel.
@@ -28,15 +37,21 @@ export function boundPolicy(policy) {
     if (i === 29) return clamp(value, 0.025, 0.16);
     if (i === 30) return clamp(value, 0.05, 0.35);
     if (i === 31) return clamp(value, -0.2, 0.35);
+    if (i === 45) return clamp(value, 0, 1);
+    if (i >= LEGACY_POLICY_SIZE) return clamp(value, -1.5, 1.5);
     return clamp(value, -3, 3);
   });
 }
 
 export function trial(policy, options = {}) {
-  if (policy.length !== POLICY_SIZE || !policy.every(Number.isFinite)) {
+  if (
+    ![LEGACY_POLICY_SIZE, POLICY_SIZE].includes(policy.length) ||
+    !policy.every(Number.isFinite)
+  ) {
     throw new Error('Invalid locomotion policy.');
   }
-  const p = boundPolicy(policy);
+  const p = boundPolicy(expandPolicy(policy));
+  const adaptive = p.slice(LEGACY_POLICY_SIZE).some((value) => value !== 0);
   const rig = createServoRig({ ...options, startSplit: options.startSplit ?? 0.045 });
   const { bones, world, ground, dt } = rig;
   const trunk = rig.trunk.body;
@@ -50,6 +65,8 @@ export function trial(policy, options = {}) {
   const loads = [0, 0];
   const contacts = [false, false];
   let phase = 0;
+  let lastPhase = 0;
+  let phaseTicks = 0;
   let swing = options.startSplit < 0 ? 0 : 1;
   let start = feet[swing].position.x;
   let prevComZ = 0;
@@ -108,7 +125,8 @@ export function trial(policy, options = {}) {
       phase = 3;
       lifts++;
     }
-    if (phase === 3 && ahead > p[28] && travel > p[28]) phase = 4;
+    const stepLength = p[44] === 0 ? p[28] : clamp(p[28] + p[44] * trunk.velocity.x, 0.055, 0.45);
+    if (phase === 3 && ahead > stepLength && travel > stepLength) phase = 4;
     if (phase === 4 && contacts[swing] && h < 0.025) {
       if (contacts[support] && ahead > p[30] && travel > p[30] && vertical.y > 0.9) {
         steps++;
@@ -120,9 +138,33 @@ export function trial(policy, options = {}) {
       phase = 1;
       start = feet[swing].position.x;
     }
+    phaseTicks = phase === lastPhase ? phaseTicks + 1 : 0;
+    // Optional recovery from a stalled phase, driven by measured load and contact.
+    if (p[45] > 0 && phaseTicks > Math.round((1.5 - p[45]) / dt)) {
+      if (contacts[0] && contacts[1]) {
+        if (p[46] > 0) swing = loads[0] > loads[1] ? 1 : 0;
+        phase = 1;
+        start = feet[swing].position.x;
+      } else if (contacts[1 - swing]) {
+        phase = 4;
+      } else if (contacts[swing]) {
+        swing = 1 - swing;
+        phase = 1;
+        start = feet[swing].position.x;
+      }
+      phaseTicks = 0;
+    }
+    lastPhase = phase;
     phaseProgress = Math.max(phaseProgress, phase);
-    const goalZ = phase === 0 ? 0 : desiredZ;
-    const lateral = clamp(p[6] * (goalZ - comZ) - p[7] * comVz + p[8] * roll, -0.32, 0.32);
+    const stance = adaptive ? 1 - swing : support;
+    const goalZ = phase === 0 ? 0 : adaptive ? feet[stance].position.z : desiredZ;
+    const captureZ = clamp(goalZ - comZ - 0.2 * comVz, -0.5, 0.5);
+    const speedError = clamp(0.5 + p[32] - trunk.velocity.x, -1, 1);
+    const lateral = clamp(
+      p[6] * (goalZ - comZ) - p[7] * comVz + p[8] * roll + (adaptive ? p[41] * captureZ : 0),
+      -0.32,
+      0.32,
+    );
     const targets = Array(32).fill(0);
     for (let side = 0; side < 2; side++) {
       const j = 16 + 8 * side;
@@ -136,6 +178,17 @@ export function trial(policy, options = {}) {
         const offset = phase === 4 ? 15 : 11;
         for (let k = 0; k < 4; k++) targets[j + 1 + 2 * k] += p[offset + k];
       }
+      // Independent learned stance propulsion and swing/capture feedback. Motors only.
+      if (adaptive) {
+        const planted = contacts[side];
+        const feedback = planted ? speedError : clamp(speedError + pitch, -1, 1);
+        const offset = planted ? 33 : 37;
+        for (let k = 0; k < 4; k++) targets[j + 1 + 2 * k] += p[offset + k] * feedback;
+        targets[j] += planted ? p[42] * roll : p[43] * captureZ;
+        if (side === stance && planted) {
+          targets[j + 1] += p[51] * (comX - feet[stance].position.x);
+        }
+      }
     }
     // Each axial joint uses physical feedback; the tail remains a massive, freely moving chain.
     for (let i = 0; i < 8; i++) {
@@ -143,6 +196,12 @@ export function trial(policy, options = {}) {
       targets[2 * i] = scale * (p[22] * roll + p[23] * trunk.angularVelocity.x + p[24] * comVz);
       targets[2 * i + 1] =
         scale * (p[25] * pitch + p[26] * trunk.angularVelocity.z + p[27] * trunk.velocity.x);
+      if (adaptive && i >= 2) {
+        // Tail feedback is independently learnable rather than tied to the neck.
+        const leverage = (i - 1) / 6;
+        targets[2 * i] += leverage * (p[47] * captureZ + p[48] * roll);
+        targets[2 * i + 1] += leverage * (p[49] * pitch + p[50] * trunk.angularVelocity.z);
+      }
     }
     rig.drive(targets);
     ticks++;

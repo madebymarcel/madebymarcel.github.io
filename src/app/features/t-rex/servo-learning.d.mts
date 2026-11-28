@@ -39,7 +39,10 @@ export type Metrics = {
   forwardUpright: number;
 };
 
+export const LEGACY_POLICY_SIZE: number;
 export const POLICY_SIZE: number;
+export const ADAPTIVE_DEFAULTS: number[];
+export function expandPolicy(policy: number[]): number[];
 export const GAIT_DEFAULTS: number[];
 export const TRIAL_SECONDS: number;
 export const PARAMETER_SCALE: number[];
