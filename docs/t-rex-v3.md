@@ -112,3 +112,66 @@ held-out seeds, with an initial and passive baseline. A serial/parallel
 probe verifies deterministic records and reports wall-clock throughput.
 The benchmark is a short screening experiment, not proof of sustained
 walking; a passing workflow alone does not establish an improvement.
+
+## DEP exploration and experimental MPO
+
+Reference: Schumacher et al., ICLR 2023, *DEP-RL: Embodied Exploration for Reinforcement Learning in Overactuated and Musculoskeletal Systems*
+(https://openreview.net/forum?id=C-xa_D3oTj6).
+The MIT-licensed implementation at
+https://github.com/martius-lab/depRL/tree/790df8652f7ce7bae432435e44e509a5b427433e
+is the reference for the differential outer-product controller and the
+decomposed MPO update. Its license is preserved in
+`docs/third-party/deprl-license.txt`.
+
+Pure DEP is the default new-session mode. No reward is used to update DEP.
+The signed joint angle proxy is minus angle / pi, since positive signed
+motor torque increases its coordinate, unlike a shortening muscle.
+One controller per lane uses the original ostrich values (kappa 20,
+tau 8, time distance 5, bias rate 0.03, independent row normalization,
+L2 action normalization and regularization 1e-32). It retains its matrix
+and bias across valid resets but clears temporal differences across
+teleports. Invalid episodes roll back controller adaptation and discard
+all replay. This is a joint-actuated adaptation, not an anatomical
+muscle-length simulation.
+
+The experimental MPO mode starts with 2,048 valid pure DEP decisions
+(versus 300,000 in the original ostrich experiment). Subsequently the
+frozen Gaussian policy alternates with four-step DEP interventions
+(probability 0.02 per eligible decision, adapted from 0.0004 because
+episodes are currently short). DEP continues updating from actual
+sensory feedback even during RL actions. All valid actions are stored
+off-policy with source labels, three-step rewards and terminal-aware
+bootstrap; a circular Float32 replay buffer holds 8,192 transitions.
+Only signed forward distance is rewarded; neither capability validation
+nor survival time enters reward. The browser implementation uses
+64-unit actor/critic networks, a learned tanh-squashed Gaussian, scalar
+Q, expected SARSA, 20 action samples, E-step KL budget 0.1, separate
+mean/std KL duals and Polyak target updates. Four batches of 32 are
+trained per collection round. These reduced settings and undiscounted
+returns are intentionally different from the research GPU experiment.
+It is an experimental MPO variant, not a reproduction of its results.
+
+The audit compares pure DEP with zero action and IID exploration at
+identical attempted-action budgets on three seeds. A supported lift
+requires the opposite foot to bear at least 75% body weight and
+0.1 seconds of clearance at least 3 cm after a planted contact. A step
+requires a qualified lift and a loaded touchdown at least 5 cm forward.
+The validation gate requires valid episodes, at most 10% invalid,
+two seconds of stable standing, left and right supported lifts,
+transfer, alternating steps and loaded tail/torso counter-rotation.
+Counter-rotation is a proxy (opposite signed summed joint pitch rates
+while supported for at least 0.1 s), not proof of stabilizing causality.
+A fall is never a successful step. Reported best capability numbers
+are maxima across valid episodes, not evidence of a single gait.
+
+The gate is deliberately diagnostic: pure DEP remains the default,
+and MPO is explicitly labeled experimental even when the gate fails.
+Users may choose to continue an exploratory MPO experiment using the
+pure DEP buffer, but no validation success is implied. The separate CI
+benchmark exercises the production warmup and a mixed collection round,
+or reports a physics block. A successful software test does not
+establish walking. The PPO brain is retained as a selectable baseline,
+and PPO checkpoints load only into PPO. DEP checkpoints carry complete
+bounded replay memory, optimizer and target networks, per-lane DEP
+matrices and biases, scores, evaluation duration, and the last 2,000
+round/evaluation records. In-flight simulation is not serialized.

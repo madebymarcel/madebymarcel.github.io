@@ -165,6 +165,7 @@
     <p>Right supported foot lift: {{ gate.rightLift ? 'Observed' : 'Not observed' }}</p>
     <p>Weight transfer: {{ gate.transfer ? 'Observed' : 'Not observed' }}</p>
     <p>Alternating forward steps: {{ gate.alternatingSteps ? 'Observed' : 'Not observed' }}</p>
+    <p>Loaded tail/torso counter-rotation: {{ gate.tailTorsoCounterRotation ? 'Observed' : 'Not observed' }}</p>
   </div>
   }
   @if (state.bestCapability; as capability) {
@@ -176,9 +177,10 @@
     <p>Weight transfers: {{ capability.weightTransfers }}</p>
     <p>Forward steps (left/right): {{ capability.leftSteps }}/{{ capability.rightSteps }}</p>
     <p>Alternating steps: {{ capability.alternatingSteps }}</p>
+    <p>Loaded tail/torso counter-rotation: {{ capability.counterRotationSeconds.toFixed(2) }} s</p>
     <p>Peak tail/torso pitch: {{ capability.maxTailPitchDegrees.toFixed(1) }}° / {{ capability.maxTorsoPitchDegrees.toFixed(1) }}°</p>
   </div>
-  <small>Pitch alone does not demonstrate tail and torso coordination. Counts require measured foot load, clearance, and forward touchdown.</small>
+  <small>Counter-rotation is a proxy, not proof that the tail stabilizes the torso. Counts require measured foot load, clearance, and forward touchdown.</small>
   }
   @if (state.message) {
   <p role="alert">{{ state.message }}</p>

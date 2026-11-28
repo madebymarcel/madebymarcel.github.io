@@ -100,6 +100,7 @@ function emptyCapability(): CapabilityReport {
     alternatingSteps: 0,
     maxTailPitchDegrees: 0,
     maxTorsoPitchDegrees: 0,
+    counterRotationSeconds: 0,
   };
 }
 
@@ -112,6 +113,7 @@ function combineGate(a: CapabilityGate, b: CapabilityGate): CapabilityGate {
     rightLift: a.rightLift || b.rightLift,
     transfer: a.transfer || b.transfer,
     alternatingSteps: a.alternatingSteps || b.alternatingSteps,
+    tailTorsoCounterRotation: a.tailTorsoCounterRotation || b.tailTorsoCounterRotation,
   };
   return {
     ...result,
@@ -119,7 +121,7 @@ function combineGate(a: CapabilityGate, b: CapabilityGate): CapabilityGate {
       result.validEpisodes >= 3 &&
       result.invalidEpisodes <= 0.1 * (result.invalidEpisodes + result.validEpisodes) &&
       result.stableStanding && result.leftLift && result.rightLift &&
-      result.transfer && result.alternatingSteps,
+      result.transfer && result.alternatingSteps && result.tailTorsoCounterRotation,
   };
 }
 
@@ -481,7 +483,7 @@ export class DepTrainer {
       ![saved.gate.validEpisodes, saved.gate.invalidEpisodes]
         .every((value) => Number.isSafeInteger(value) && value >= 0) ||
       ![saved.gate.stableStanding, saved.gate.leftLift, saved.gate.rightLift,
-        saved.gate.transfer, saved.gate.alternatingSteps, saved.gate.passed]
+        saved.gate.transfer, saved.gate.alternatingSteps, saved.gate.tailTorsoCounterRotation, saved.gate.passed]
         .every((value) => typeof value === 'boolean')
     ) throw new Error('Invalid capability gate');
     next.rng = saved.rng;

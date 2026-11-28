@@ -24,6 +24,7 @@ test('starts the distance learning worker and exposes separate training metrics'
   page,
 }) => {
   await page.goto('/projects/t-rex-v3/');
+  await page.getByLabel('Brain').selectOption('ppo');
   await page.getByLabel('Simulation workers').selectOption('2');
   await page.getByRole('button', { name: 'Start training', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Training progress' })).toBeVisible();
@@ -37,4 +38,20 @@ test('starts the distance learning worker and exposes separate training metrics'
   if (await pause.isEnabled()) await pause.click();
   await expect(page.getByRole('button', { name: 'Save learning checkpoint' })).toBeEnabled();
   await expect(page.getByText('Uncommitted decisions this round: 0')).toBeVisible();
+});
+
+test('starts pure DEP and preserves collected memory when enabling experimental MPO', async ({ page }) => {
+  await page.goto('/projects/t-rex-v3/');
+  await expect(page.getByLabel('Brain')).toHaveValue('dep');
+  await page.getByLabel('Simulation workers').selectOption('1');
+  await page.getByRole('button', { name: 'Start training', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Pure DEP capability audit' })).toBeVisible();
+  await expect(page.getByText(/^Action decisions: [1-9]\d*$/)).toBeVisible({ timeout: 40000 });
+  const pause = page.getByRole('button', { name: 'Pause training or replay' });
+  if (await pause.isEnabled()) await pause.click();
+  await expect(page.getByRole('button', { name: 'Save learning checkpoint' })).toBeEnabled();
+  const memory = await page.getByText(/^Replay memory:/).textContent();
+  await page.getByRole('button', { name: 'Enable experimental MPO (keep DEP memory)' }).click();
+  await expect(page.getByText('Brain: dep-mpo', { exact: true })).toBeVisible();
+  await expect(page.getByText(/^Replay memory:/)).toHaveText(memory ?? '');
 });

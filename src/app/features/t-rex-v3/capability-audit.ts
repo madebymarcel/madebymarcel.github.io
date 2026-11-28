@@ -19,6 +19,7 @@ export interface CapabilityReport {
   readonly alternatingSteps: number;
   readonly maxTailPitchDegrees: number;
   readonly maxTorsoPitchDegrees: number;
+  readonly counterRotationSeconds: number;
 }
 
 interface FootState {
@@ -53,6 +54,7 @@ export class CapabilityAudit {
   private longestSupported = 0;
   private maxTail = 0;
   private maxTorso = 0;
+  private counterRotationSeconds = 0;
   private lastElapsed = 0;
 
   observe(state: Transition, snapshot: PhysicsSnapshot): void {
@@ -102,10 +104,21 @@ export class CapabilityAudit {
         }
       }
     }
+    let tailRate = 0;
+    let torsoRate = 0;
     for (const joint of sensor.joints) {
       const pitch = Math.abs(joint.axes.pitch.angle * 180 / Math.PI);
-      if (joint.id.startsWith('tail-')) this.maxTail = Math.max(this.maxTail, pitch);
-      if (joint.id.startsWith('spine-')) this.maxTorso = Math.max(this.maxTorso, pitch);
+      if (joint.id.startsWith('tail-')) {
+        this.maxTail = Math.max(this.maxTail, pitch);
+        tailRate += joint.axes.pitch.rate;
+      }
+      if (joint.id.startsWith('spine-')) {
+        this.maxTorso = Math.max(this.maxTorso, pitch);
+        torsoRate += joint.axes.pitch.rate;
+      }
+    }
+    if (state.support.supported && Math.abs(tailRate) >= 0.1 && Math.abs(torsoRate) >= 0.1 && tailRate * torsoRate < 0) {
+      this.counterRotationSeconds += dt;
     }
   }
 
@@ -122,6 +135,7 @@ export class CapabilityAudit {
       alternatingSteps: this.alternatingSteps,
       maxTailPitchDegrees: this.maxTail,
       maxTorsoPitchDegrees: this.maxTorso,
+      counterRotationSeconds: this.counterRotationSeconds,
     };
   }
 }
@@ -134,6 +148,7 @@ export interface CapabilityGate {
   readonly rightLift: boolean;
   readonly transfer: boolean;
   readonly alternatingSteps: boolean;
+  readonly tailTorsoCounterRotation: boolean;
   readonly passed: boolean;
 }
 
@@ -147,6 +162,7 @@ export function assessCapabilities(
   const rightLift = valid.some((report) => report.capability.rightLifts > 0);
   const transfer = valid.some((report) => report.capability.weightTransfers > 0);
   const alternatingSteps = valid.some((report) => report.capability.alternatingSteps > 0);
+  const tailTorsoCounterRotation = valid.some((report) => report.capability.counterRotationSeconds >= 0.1 - 1e-9);
   return {
     validEpisodes: valid.length,
     invalidEpisodes,
@@ -155,10 +171,11 @@ export function assessCapabilities(
     rightLift,
     transfer,
     alternatingSteps,
+    tailTorsoCounterRotation,
     passed:
       valid.length >= 3 &&
       invalidEpisodes <= (valid.length + invalidEpisodes) * 0.1 &&
-      stableStanding && leftLift && rightLift && transfer && alternatingSteps,
+      stableStanding && leftLift && rightLift && transfer && alternatingSteps && tailTorsoCounterRotation,
   };
 }
 
