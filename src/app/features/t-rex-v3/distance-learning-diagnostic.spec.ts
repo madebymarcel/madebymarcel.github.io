@@ -80,17 +80,20 @@ describe('deployed V3 training diagnostic', () => {
       }
       if (frame.phase === 'blocked' || frame.stats.updates >= 2) break;
     }
-    const changed = trainer.checkpoint().learner.actor.weights.some(
-      (value, i) => value !== initial.learner.actor.weights[i],
+    const changed = trainer
+      .checkpoint()
+      .learner.actor.weights.some((value, i) => value !== initial.learner.actor.weights[i]);
+    console.info(
+      'V3_TRAINER_DIAGNOSTIC ' +
+        JSON.stringify({
+          trace,
+          phase: frame.phase,
+          reason: frame.reason,
+          message: frame.message,
+          stats: frame.stats,
+          weightsChanged: changed,
+        }),
     );
-    console.info('V3_TRAINER_DIAGNOSTIC ' + JSON.stringify({
-      trace,
-      phase: frame.phase,
-      reason: frame.reason,
-      message: frame.message,
-      stats: frame.stats,
-      weightsChanged: changed,
-    }));
     expect(frame.stats.actions).toBeGreaterThan(0);
   }, 180000);
 });
