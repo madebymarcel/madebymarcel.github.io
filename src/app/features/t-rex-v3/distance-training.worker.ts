@@ -1,9 +1,12 @@
 import { DistanceTrainer } from './distance-training';
 import type { Checkpoint, TrainingFrame } from './distance-training';
+import type { RolloutJob, RolloutResult } from './rollout-collection';
 
 export type TrainingRequest =
   | { type: 'start'; seed: number; horizon: number }
-  | { type: 'advance'; count: number }
+  | { type: 'advance'; count: number; lanes: number }
+  | { type: 'finish-round'; results: readonly RolloutResult[] }
+  | { type: 'cancel-round'; round: number }
   | { type: 'replay' }
   | { type: 'train' }
   | { type: 'export' }
@@ -11,6 +14,7 @@ export type TrainingRequest =
 
 export type TrainingResponse =
   | { type: 'frame'; frame: TrainingFrame }
+  | { type: 'collect'; jobs: readonly RolloutJob[] }
   | { type: 'checkpoint'; checkpoint: Checkpoint }
   | { type: 'error'; message: string };
 
@@ -30,7 +34,17 @@ addEventListener('message', ({ data }: MessageEvent<TrainingRequest>) => {
     if (!trainer) throw new Error('Start or load training first');
     switch (data.type) {
       case 'advance':
-        send({ type: 'frame', frame: trainer.advance(data.count) });
+        if (trainer.frame().phase === 'training') {
+          send({ type: 'collect', jobs: trainer.beginRound(data.lanes) });
+        } else {
+          send({ type: 'frame', frame: trainer.advance(data.count, true) });
+        }
+        break;
+      case 'finish-round':
+        send({ type: 'frame', frame: trainer.finishRound(data.results) });
+        break;
+      case 'cancel-round':
+        send({ type: 'frame', frame: trainer.cancelRound(data.round) });
         break;
       case 'replay':
         send({ type: 'frame', frame: trainer.startReplay() });

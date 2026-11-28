@@ -4,6 +4,14 @@ import { ACTIONS, OBSERVATIONS } from './balance-environment';
 import type { Checkpoint, TrainingFrame } from './distance-training';
 import type { TrainingRequest, TrainingResponse } from './distance-training.worker';
 import { projectRig, viewBox } from './rig';
+import type { RolloutJob, RolloutResult } from './rollout-collection';
+import type { RolloutResponse } from './rollout.worker';
+
+interface Collection {
+  readonly round: number;
+  readonly results: (RolloutResult | undefined)[];
+  readonly attempts: number[];
+}
 
 @Component({
   selector: 'app-t-rex-training',
@@ -12,6 +20,9 @@ import { projectRig, viewBox } from './rig';
 })
 export class DistanceTrainingPanel implements OnDestroy {
   private worker: Worker | null = null;
+  private pool: Worker[] = [];
+  private collection: Collection | null = null;
+  private destroyed = false;
   private timer: number | null = null;
   protected readonly frame = signal<TrainingFrame | null>(null);
   protected readonly running = signal(false);
@@ -19,6 +30,8 @@ export class DistanceTrainingPanel implements OnDestroy {
   protected readonly error = signal('');
   protected readonly seed = signal(37);
   protected readonly horizon = signal(30);
+  protected readonly lanes = signal(4);
+  protected readonly collectingActions = signal(0);
   protected readonly actionCount = ACTIONS.length;
   protected readonly observationCount = OBSERVATIONS.length;
   protected readonly projection = computed(() => {
@@ -36,6 +49,10 @@ export class DistanceTrainingPanel implements OnDestroy {
     this.horizon.set(Number(value));
   }
 
+  protected setLanes(value: string): void {
+    this.lanes.set(Math.max(1, Math.min(4, Math.round(Number(value) || 1))));
+  }
+
   protected distance(value: number | null): string {
     return value === null ? 'Not measured' : value.toFixed(3) + ' m';
   }
@@ -48,7 +65,15 @@ export class DistanceTrainingPanel implements OnDestroy {
     });
     this.worker = worker;
     worker.onmessage = ({ data }: MessageEvent<TrainingResponse>) => {
-      if (this.worker !== worker) return;
+      if (this.worker !== worker || this.destroyed) return;
+      if (data.type === 'collect') {
+        if (this.running()) {
+          this.startCollection(data.jobs);
+        } else {
+          this.send({ type: 'cancel-round', round: data.jobs[0].round });
+        }
+        return;
+      }
       this.busy.set(false);
       if (data.type === 'error') {
         this.fail(data.message);
@@ -67,11 +92,74 @@ export class DistanceTrainingPanel implements OnDestroy {
     };
     worker.onerror = (event) => {
       if (this.worker !== worker) return;
-      this.fail(event.message || 'Training worker failed');
       worker.terminate();
       this.worker = null;
+      this.collection = null;
+      this.stopPool();
+      this.fail(event.message || 'Training worker failed');
     };
     return worker;
+  }
+
+  private stopPool(): void {
+    for (const worker of this.pool) worker.terminate();
+    this.pool = [];
+    this.collectingActions.set(0);
+  }
+
+  private startCollection(jobs: readonly RolloutJob[]): void {
+    const collection: Collection = {
+      round: jobs[0].round,
+      results: jobs.map(() => undefined),
+      attempts: jobs.map(() => 0),
+    };
+    this.collection = collection;
+    this.collectingActions.set(0);
+    try {
+      if (this.pool.length !== jobs.length) {
+        this.stopPool();
+        for (let i = 0; i < jobs.length; i++) {
+          this.pool.push(
+            new Worker(new URL('./rollout.worker', import.meta.url), { type: 'module' }),
+          );
+        }
+      }
+      jobs.forEach((job, lane) => {
+        const worker = this.pool[lane];
+        worker.onmessage = ({ data }: MessageEvent<RolloutResponse>) => {
+          if (this.collection !== collection || this.destroyed) return;
+          if (data.type === 'error') {
+            this.fail(data.message);
+            return;
+          }
+          const event = data.type === 'progress' ? data.progress : data.result;
+          if (event.round !== collection.round || event.lane !== lane) return;
+          collection.attempts[lane] = event.attempts;
+          this.collectingActions.set(collection.attempts.reduce((sum, count) => sum + count, 0));
+          if (lane === 0) {
+            const frame = this.frame();
+            if (frame) this.frame.set({ ...frame, ...event.view });
+          }
+          if (data.type === 'result') {
+            collection.results[lane] = data.result;
+            const results = collection.results.filter(
+              (result): result is RolloutResult => result !== undefined,
+            );
+            if (results.length === jobs.length) {
+              this.collection = null;
+              this.collectingActions.set(0);
+              this.send({ type: 'finish-round', results });
+            }
+          }
+        };
+        worker.onerror = (event) => {
+          if (this.collection === collection) this.fail(event.message || 'Rollout worker failed');
+        };
+        worker.postMessage(job);
+      });
+    } catch (error) {
+      this.fail(error instanceof Error ? error.message : String(error));
+    }
   }
 
   private send(message: TrainingRequest): void {
@@ -90,7 +178,7 @@ export class DistanceTrainingPanel implements OnDestroy {
       () => {
         this.timer = null;
         if (this.running() && !this.busy()) {
-          this.send({ type: 'advance', count: replay ? 1 : 8 });
+          this.send({ type: 'advance', count: replay ? 1 : 8, lanes: this.lanes() });
         }
       },
       replay ? 1000 / 30 : 0,
@@ -98,8 +186,9 @@ export class DistanceTrainingPanel implements OnDestroy {
   }
 
   private fail(message: string): void {
+    const canceling = this.collection !== null && this.worker !== null;
     this.pause();
-    this.busy.set(false);
+    if (!canceling) this.busy.set(false);
     this.error.set(message);
   }
 
@@ -114,6 +203,14 @@ export class DistanceTrainingPanel implements OnDestroy {
     this.running.set(false);
     if (this.timer !== null) window.clearTimeout(this.timer);
     this.timer = null;
+    const collection = this.collection;
+    if (collection) {
+      this.collection = null;
+      this.stopPool();
+      if (this.worker && !this.destroyed) {
+        this.send({ type: 'cancel-round', round: collection.round });
+      }
+    }
   }
 
   protected resume(): void {
@@ -171,7 +268,9 @@ export class DistanceTrainingPanel implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.destroyed = true;
     this.pause();
+    this.stopPool();
     this.worker?.terminate();
     this.worker = null;
   }

@@ -5,6 +5,7 @@
     from learning. No gait, balance controller, or standing bonus is used.
   </p>
   <p>{{ observationCount }} observations · {{ actionCount }} muscle actions · PPO at 30 Hz</p>
+  <p>Independent workers collect complete episodes with the same frozen policy.</p>
   <div class="physics-readings">
     <label for="training-seed">
       Training seed
@@ -33,6 +34,21 @@
         [disabled]="running() || busy()"
         (change)="setHorizon(horizonInput.value)"
       />
+    </label>
+    <label for="training-lanes">
+      Simulation workers
+      <select
+        id="training-lanes"
+        #laneInput
+        [value]="lanes()"
+        [disabled]="running() || busy()"
+        (change)="setLanes(laneInput.value)"
+      >
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+      </select>
     </label>
   </div>
   <div class="physics-controls">
@@ -86,7 +102,8 @@
   />
   <small>
     Loading restores the learned policy, optimizer and recorded scores, then starts a fresh episode.
-    Save before leaving this page. Replay has no time limit.
+    Pausing discards any in-flight collection round, not learned weights. Save before leaving this
+    page. Replay has no time limit.
   </small>
   @if (error()) {
   <p role="alert">{{ error() }}</p>
@@ -98,10 +115,12 @@
     <p>Episode result: {{ state.reason }}</p>
     <p>Current distance: {{ distance(state.distanceM) }}</p>
     <p>Training horizon: {{ state.horizon }} s</p>
+    <p>Exploration correlation: {{ state.correlation.toFixed(2) }}</p>
     <p>Training episodes: {{ state.stats.episodes }}</p>
     <p>Invalid training episodes: {{ state.stats.invalidEpisodes }}</p>
     <p>Invalid evaluations: {{ state.stats.invalidEvaluations }}</p>
     <p>Action decisions: {{ state.stats.actions }}</p>
+    <p>Uncommitted decisions this round: {{ collectingActions() }}</p>
     <p>Valid learned decisions: {{ state.stats.learnedActions }}</p>
     <p>PPO updates: {{ state.stats.updates }}</p>
     <p>Last valid episode: {{ distance(state.stats.lastDistanceM) }}</p>

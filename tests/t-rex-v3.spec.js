@@ -24,12 +24,17 @@ test('starts the distance learning worker and exposes separate training metrics'
   page,
 }) => {
   await page.goto('/projects/t-rex-v3/');
+  await page.getByLabel('Simulation workers').selectOption('2');
   await page.getByRole('button', { name: 'Start training', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Training progress' })).toBeVisible();
   await expect(page.getByText('PPO updates: 0')).toBeVisible();
   await expect(page.getByRole('img', { name: 'Live training dinosaur side view' })).toBeVisible();
   await expect(page.getByText('Invalid training episodes:', { exact: false })).toBeVisible();
+  await expect(page.getByText('Uncommitted decisions this round: 0')).not.toBeVisible({
+    timeout: 20000,
+  });
   const pause = page.getByRole('button', { name: 'Pause training or replay' });
   if (await pause.isEnabled()) await pause.click();
   await expect(page.getByRole('button', { name: 'Save learning checkpoint' })).toBeEnabled();
+  await expect(page.getByText('Uncommitted decisions this round: 0')).toBeVisible();
 });

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { seededRandom } from './balance-environment';
-import { PpoAgent, advantages, clippedPolicyDerivative, gaussianLogProbability } from './ppo';
+import {
+  PpoAgent,
+  advantages,
+  clippedPolicyDerivative,
+  conditionalGaussian,
+  gaussianLogProbability,
+} from './ppo';
 import type { Sample } from './ppo';
 
 describe('V3 PPO', () => {
@@ -21,6 +27,52 @@ describe('V3 PPO', () => {
     expect(gaussianLogProbability([0, 0], [0, 0])).toBeGreaterThan(
       gaussianLogProbability([1, -1], [0, 0]),
     );
+  });
+
+  it('samples stationary correlated residuals and recomputes their exact conditional likelihood', () => {
+    const rho = 0.85;
+    const agent = new PpoAgent(1, 1, seededRandom(37), rho);
+    const observation = [0.25];
+    const mean = Math.atanh(agent.action(observation)[0]);
+    const residuals: number[] = [];
+    let previous: { observation: readonly number[]; latent: readonly number[] } | undefined;
+    for (let i = 0; i < 2048; i++) {
+      const decision = agent.sample(observation, previous);
+      expect(agent.logProbability({ observation, ...decision })).toBeCloseTo(
+        decision.logProbability,
+        10,
+      );
+      residuals.push(decision.latent[0] - mean);
+      previous = { observation, latent: decision.latent };
+    }
+    const average = residuals.reduce((sum, value) => sum + value, 0) / residuals.length;
+    const variance = residuals.reduce((sum, value) => sum + (value - average) ** 2, 0);
+    const lag =
+      residuals
+        .slice(1)
+        .reduce((sum, value, index) => sum + (value - average) * (residuals[index] - average), 0) /
+      variance;
+    expect(lag).toBeGreaterThan(0.79);
+    expect(lag).toBeLessThan(0.91);
+    expect(variance / residuals.length).toBeGreaterThan(0.14);
+    expect(variance / residuals.length).toBeLessThan(0.27);
+    expect(agent.sample(observation).history).toBeUndefined();
+  });
+
+  it('conditions on both network means, not on a fixed old residual', () => {
+    const rho = 0.85;
+    const gaussian = conditionalGaussian([0.2], [0.1], [0.5], rho);
+    expect(gaussian.mean[0]).toBeCloseTo(0.54);
+    expect(gaussian.std).toBeCloseTo(0.45 * Math.sqrt(1 - rho ** 2));
+    const evaluate = (current: number, previous: number) => {
+      const distribution = conditionalGaussian([current], [previous], [0.5], rho);
+      return gaussianLogProbability([0.7], distribution.mean, distribution.std);
+    };
+    const h = 1e-5;
+    const currentGradient = (evaluate(0.2 + h, 0.1) - evaluate(0.2 - h, 0.1)) / (2 * h);
+    const previousGradient = (evaluate(0.2, 0.1 + h) - evaluate(0.2, 0.1 - h)) / (2 * h);
+    expect(previousGradient).toBeCloseTo(-rho * currentGradient, 6);
+    expect(conditionalGaussian([0.2], undefined, undefined, rho).std).toBe(0.45);
   });
 
   it('learns a positive action in a seeded one-state reward task', () => {

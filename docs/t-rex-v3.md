@@ -53,7 +53,7 @@ reinforcement-learning readiness from a finite trajectory alone.
 ## Distance learning
 
 The separate worker implements Gaussian PPO with independent 64-unit actor
-and critic networks, a bounded tanh action, fixed exploration variance,
+and critic networks, a bounded tanh action, fixed marginal exploration variance,
 clipped updates, GAE and Adam. All training decisions use the same 30 Hz
 environment as deterministic evaluation. The only reward is the signed
 change in world-forward centre of mass position (metres), excluding the
@@ -74,3 +74,41 @@ Save/load checkpoints carry network and Adam state, random generator state,
 scores, and best policy. Import requires the same action/observation schema
 and format. Loading starts a new episode and discards unfinished rollout
 data; it is not exact in-flight simulation resumption.
+
+## Correlated exploration and parallel collection
+
+The new default sampler is autoregressive Gaussian exploration (rho = 0.85)
+in latent action space. With the actor mean denoted by mu, the residual
+between a sampled latent action and its mean follows
+
+`e(t) = rho * e(t-1) + sigma * sqrt(1 - rho^2) * N(0, 1)`.
+
+At episode reset the residual is sampled from the stationary marginal.
+PPO computes conditional likelihoods using the recorded previous latent
+action and both the current and previous observation's means under the
+updated actor, including the gradient through the previous mean. The
+critic remains an approximate function of the current observation. The
+deterministic policy remains tanh of the actor mean. This is an
+autoregressive exploration variant inspired by correlated-exploration
+research, not DEP-RL or a scripted movement generator.
+
+A coordinator freezes one actor and critic while 1–4 independent Web
+Workers collect complete episodes. Each worker has separate seed streams
+for exploration and body resets. Results are committed in lane order,
+with whole invalid episodes excluded. The next PPO update uses only
+experiences from the frozen policy. Pausing cancels an in-flight round;
+completed updates and previously committed statistics are preserved.
+A worker's nominal action count is a minimum, not an episode time limit.
+Checkpoint format 2 stores the rollout seed, round number and correlation.
+Version 1 checkpoints can be imported with their old parameters and
+optimizer state, then use the new exploration strategy.
+
+The separate exploration benchmark workflow compares IID noise (rho = 0)
+with correlated noise (rho = 0.85) in the same collector, at 768 attempted
+actions per mode for each of two training seeds. Only for this benchmark,
+an exact collection budget discards any unfinished episode; no partial
+invalid episode is trained on. Evaluation is deterministic on three
+held-out seeds, with an initial and passive baseline. A serial/parallel
+probe verifies deterministic records and reports wall-clock throughput.
+The benchmark is a short screening experiment, not proof of sustained
+walking; a passing workflow alone does not establish an improvement.

@@ -1,12 +1,22 @@
 import { ACTIONS, OBSERVATIONS, BalanceEnvironment } from './balance-environment';
 import type { EndReason, Transition } from './balance-environment';
 import type { PhysicsSnapshot } from './passive-physics';
-import { PpoAgent, advantages } from './ppo';
+import { DEFAULT_CORRELATION, PpoAgent, advantages } from './ppo';
+import { distanceReward } from './rollout-collection';
+import type {
+  CompletedRollout,
+  RolloutJob,
+  RolloutResult,
+  RolloutView,
+} from './rollout-collection';
+
+export { distanceReward } from './rollout-collection';
 import type { Sample, TrainingSample } from './ppo';
 
 const BATCH = 256;
 const EVALUATION_SEEDS = [0x5a17d31, 0x1e529f3] as const;
-const FORMAT = 'trex-v3-ppo-distance-1';
+const FORMAT = 'trex-v3-ppo-distance-2';
+const PREVIOUS_FORMAT = 'trex-v3-ppo-distance-1';
 const ACTION_KEYS = ACTIONS.map(({ id, axis }) => id + ':' + axis);
 
 export type Phase = 'training' | 'evaluation' | 'replay' | 'blocked';
@@ -25,6 +35,7 @@ export interface TrainingStats {
 
 export interface TrainingFrame {
   readonly phase: Phase;
+  readonly correlation: number;
   readonly stats: Readonly<TrainingStats>;
   readonly distanceM: number;
   readonly elapsed: number;
@@ -36,6 +47,9 @@ export interface TrainingFrame {
 
 export interface Checkpoint {
   readonly format: typeof FORMAT;
+  readonly correlation: number;
+  readonly rolloutSeed: number;
+  readonly round: number;
   readonly actions: readonly string[];
   readonly observations: readonly string[];
   readonly horizon: number;
@@ -50,13 +64,6 @@ interface Episode {
   state: Transition;
   samples: Sample[];
   distance: number;
-}
-
-// Reward is exactly signed forward COM displacement before falling.
-// An invalid run is discarded, not scored as a zero-distance fall.
-export function distanceReward(previous: number, next: number, reason: EndReason): number | null {
-  if (reason === 'invalid' || !Number.isFinite(previous) || !Number.isFinite(next)) return null;
-  return reason === 'fall' ? 0 : next - previous;
 }
 
 function episode(seed: number, horizon: number): Episode {
@@ -81,6 +88,10 @@ function emptyStats(): TrainingStats {
 
 export class DistanceTrainer {
   private rng: number;
+  private readonly rolloutSeed: number;
+  private round = 0;
+  private pendingRound: readonly RolloutJob[] | null = null;
+  private lastRollout: RolloutView | null = null;
   private readonly random = () => {
     this.rng = (Math.imul(this.rng, 1664525) + 1013904223) >>> 0;
     return this.rng / 4294967296;
@@ -100,6 +111,7 @@ export class DistanceTrainer {
   constructor(
     seed: number,
     readonly horizon = 30,
+    readonly correlation = DEFAULT_CORRELATION,
   ) {
     if (!Number.isSafeInteger(seed) || seed < 0 || seed > 0xffffffff) {
       throw new Error('Invalid training seed');
@@ -108,7 +120,8 @@ export class DistanceTrainer {
       throw new Error('Training horizon must be between 5 and 120 seconds');
     }
     this.rng = seed;
-    this.agent = new PpoAgent(OBSERVATIONS.length, ACTIONS.length, this.random);
+    this.rolloutSeed = seed;
+    this.agent = new PpoAgent(OBSERVATIONS.length, ACTIONS.length, this.random, correlation);
     this.active = this.newTrainingEpisode();
   }
 
@@ -116,9 +129,8 @@ export class DistanceTrainer {
     return episode(Math.floor(this.random() * 4294967296), this.horizon);
   }
 
-  private finishTraining(): void {
-    const run = this.active;
-    const invalid = run.state.reason === 'invalid' || !run.state.observation;
+  private recordEpisode(run: CompletedRollout): void {
+    const invalid = run.distanceM === null;
     this.stats.episodes++;
     this.recentInvalid.push(invalid);
     if (this.recentInvalid.length > 20) this.recentInvalid.shift();
@@ -127,10 +139,9 @@ export class DistanceTrainer {
       this.consecutiveInvalid++;
     } else {
       this.consecutiveInvalid = 0;
-      this.stats.lastDistanceM = run.distance;
-      this.stats.bestTrainingM = Math.max(this.stats.bestTrainingM ?? -Infinity, run.distance);
-      const bootstrap = run.state.truncated ? this.agent.value(run.state.observation!) : 0;
-      this.batch.push(...advantages(run.samples, bootstrap));
+      this.stats.lastDistanceM = run.distanceM;
+      this.stats.bestTrainingM = Math.max(this.stats.bestTrainingM ?? -Infinity, run.distanceM!);
+      this.batch.push(...run.samples);
     }
     if (
       this.consecutiveInvalid >= 8 ||
@@ -139,6 +150,11 @@ export class DistanceTrainer {
       this.phase = 'blocked';
       this.message =
         'Too many invalid physics episodes. Training stopped; inspect the body before learning.';
+    }
+  }
+
+  private afterCollection(): void {
+    if (this.phase === 'blocked') {
       this.batch = [];
       return;
     }
@@ -154,6 +170,90 @@ export class DistanceTrainer {
     } else {
       this.active = this.newTrainingEpisode();
     }
+  }
+
+  private finishTraining(): void {
+    const run = this.active;
+    const invalid = run.state.reason === 'invalid' || !run.state.observation;
+    const bootstrap =
+      !invalid && run.state.truncated ? this.agent.value(run.state.observation!) : 0;
+    this.recordEpisode({
+      actions: run.samples.length,
+      distanceM: invalid ? null : run.distance,
+      elapsed: run.state.elapsed,
+      reason: run.state.reason,
+      samples: invalid ? [] : advantages(run.samples, bootstrap),
+    });
+    this.afterCollection();
+  }
+
+  beginRound(lanes: number, minimumActions = 64, exactBudget = false): readonly RolloutJob[] {
+    if (this.phase !== 'training' || this.replay || this.pendingRound || this.active.samples.length)
+      throw new Error('Cannot start a collection round from this state');
+    if (
+      !Number.isSafeInteger(lanes) ||
+      lanes < 1 ||
+      lanes > 4 ||
+      !Number.isSafeInteger(minimumActions) ||
+      minimumActions < 1 ||
+      minimumActions > 1024
+    )
+      throw new Error('Invalid collection budget');
+    const round = ++this.round;
+    const policy = this.agent.inference();
+    this.pendingRound = Array.from({ length: lanes }, (_, lane) => ({
+      round,
+      lane,
+      seed:
+        (this.rolloutSeed ^ Math.imul(round, 0x9e3779b9) ^ Math.imul(lane + 1, 0x85ebca6b)) >>> 0,
+      horizon: this.horizon,
+      correlation: this.correlation,
+      policy,
+      minimumActions,
+      exactBudget,
+    }));
+    return this.pendingRound;
+  }
+
+  finishRound(results: readonly RolloutResult[]): TrainingFrame {
+    const jobs = this.pendingRound;
+    if (!jobs || results.length !== jobs.length) throw new Error('Incomplete collection round');
+    const ordered = [...results].sort((a, b) => a.lane - b.lane);
+    ordered.forEach((result, lane) => {
+      const job = jobs[lane];
+      if (
+        result.round !== job.round ||
+        result.lane !== lane ||
+        !Number.isSafeInteger(result.attempts) ||
+        result.attempts < 0 ||
+        (job.exactBudget && result.attempts > job.minimumActions) ||
+        result.episodes.reduce((sum, run) => sum + run.actions, 0) > result.attempts
+      ) {
+        throw new Error('Mismatched collection result');
+      }
+      for (const run of result.episodes) {
+        if (
+          run.reason === 'running' ||
+          (run.reason === 'invalid' && (run.samples.length || run.distanceM !== null)) ||
+          (run.reason !== 'invalid' &&
+            (run.distanceM === null || run.samples.length !== run.actions))
+        )
+          throw new Error('Invalid completed rollout');
+      }
+    });
+    this.pendingRound = null;
+    for (const result of ordered) {
+      this.stats.actions += result.attempts;
+      for (const run of result.episodes) this.recordEpisode(run);
+    }
+    this.lastRollout = ordered[0].view;
+    this.afterCollection();
+    return this.frame();
+  }
+
+  cancelRound(round: number): TrainingFrame {
+    if (this.pendingRound?.[0].round === round) this.pendingRound = null;
+    return this.frame();
   }
 
   private finishEvaluation(): void {
@@ -191,7 +291,7 @@ export class DistanceTrainer {
     const observation = run.state.observation;
     const previous = run.state.forwardPositionM;
     const learning = !this.replay && this.phase === 'training';
-    const decision = learning ? this.agent.sample(observation) : null;
+    const decision = learning ? this.agent.sample(observation, run.samples.at(-1)) : null;
     const action =
       decision?.action ??
       this.agent.action(observation, this.replay ? (this.bestPolicy ?? undefined) : undefined);
@@ -204,6 +304,7 @@ export class DistanceTrainer {
         run.samples.push({
           observation,
           latent: decision.latent,
+          history: decision.history,
           logProbability: decision.logProbability,
           value: decision.value,
           reward,
@@ -216,12 +317,15 @@ export class DistanceTrainer {
     else this.finishEvaluation();
   }
 
-  advance(count: number): TrainingFrame {
+  advance(count: number, stopAtTraining = false): TrainingFrame {
+    if (this.pendingRound) throw new Error('Collection round is in flight');
+    this.lastRollout = null;
     if (!Number.isSafeInteger(count) || count < 1 || count > 16)
       throw new Error('Invalid step budget');
     for (let i = 0; i < count; i++) {
       if (this.replay && this.replay.state.reason !== 'running') break;
       if (this.phase === 'blocked' && !this.replay) break;
+      if (stopAtTraining && this.phase === 'training' && !this.replay) break;
       this.advanceOne();
     }
     return this.frame();
@@ -242,13 +346,15 @@ export class DistanceTrainer {
 
   frame(): TrainingFrame {
     const run = this.replay ?? this.active;
+    const collected = this.replay || this.phase === 'evaluation' ? null : this.lastRollout;
     return {
       phase: this.replay ? 'replay' : this.phase,
+      correlation: this.correlation,
       stats: { ...this.stats },
-      distanceM: run.distance,
-      elapsed: run.state.elapsed,
-      reason: run.state.reason,
-      snapshot: run.env.snapshot(),
+      distanceM: collected?.distanceM ?? run.distance,
+      elapsed: collected?.elapsed ?? run.state.elapsed,
+      reason: collected?.reason ?? run.state.reason,
+      snapshot: collected?.snapshot ?? run.env.snapshot(),
       horizon: this.horizon,
       message: this.replay ? '' : this.message,
     };
@@ -257,6 +363,9 @@ export class DistanceTrainer {
   checkpoint(): Checkpoint {
     return {
       format: FORMAT,
+      correlation: this.correlation,
+      rolloutSeed: this.rolloutSeed,
+      round: this.round,
       actions: ACTION_KEYS,
       observations: OBSERVATIONS,
       horizon: this.horizon,
@@ -269,15 +378,27 @@ export class DistanceTrainer {
 
   static restore(data: unknown): DistanceTrainer {
     if (typeof data !== 'object' || data === null) throw new Error('Invalid checkpoint');
-    const saved = data as Checkpoint;
+    const saved = data as Omit<Checkpoint, 'format'> & { format: string };
     if (
-      saved.format !== FORMAT ||
+      (saved.format !== FORMAT && saved.format !== PREVIOUS_FORMAT) ||
       JSON.stringify(saved.actions) !== JSON.stringify(ACTION_KEYS) ||
       JSON.stringify(saved.observations) !== JSON.stringify(OBSERVATIONS) ||
       !saved.stats
     )
       throw new Error('Checkpoint does not match this V3 environment');
-    const next = new DistanceTrainer(saved.rng, saved.horizon);
+    const legacy = saved.format === PREVIOUS_FORMAT;
+    const next = new DistanceTrainer(
+      legacy ? saved.rng : saved.rolloutSeed,
+      saved.horizon,
+      legacy ? DEFAULT_CORRELATION : saved.correlation,
+    );
+    if (!legacy && (!Number.isSafeInteger(saved.round) || saved.round < 0)) {
+      throw new Error('Invalid checkpoint collection round');
+    }
+    if (!Number.isSafeInteger(saved.rng) || saved.rng < 0 || saved.rng > 0xffffffff) {
+      throw new Error('Invalid checkpoint RNG');
+    }
+    next.round = legacy ? 0 : saved.round;
     next.agent.restore(saved.learner);
     const stats = emptyStats();
     for (const key of [
