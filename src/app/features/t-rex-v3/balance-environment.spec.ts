@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { ACTIONS, OBSERVATIONS, BalanceEnvironment, decodeActions, measureSupport, seededRandom } from './balance-environment';
+import {
+  ACTIONS,
+  OBSERVATIONS,
+  BalanceEnvironment,
+  decodeActions,
+  measureSupport,
+  seededRandom,
+} from './balance-environment';
 import { BALANCED_STANCE } from './muscle-profile';
 import { GRAVITY, MASS_KG, PassiveRig } from './passive-physics';
 
@@ -51,7 +58,12 @@ describe('V3 deterministic balance environment', () => {
     expect(supported.stable).toBe(true);
     const moving = measureSupport(state, [1, 0, 0], MASS_KG * GRAVITY, 0);
     expect(moving.stable).toBe(false);
-    const propped = measureSupport(state, [0, 0, 0], 0.8 * MASS_KG * GRAVITY, 0.2 * MASS_KG * GRAVITY);
+    const propped = measureSupport(
+      state,
+      [0, 0, 0],
+      0.8 * MASS_KG * GRAVITY,
+      0.2 * MASS_KG * GRAVITY,
+    );
     expect(propped.supported).toBe(false);
   });
 });

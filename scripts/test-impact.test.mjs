@@ -35,7 +35,10 @@ const smoke = ['tests/route-smoke.spec.js', 'tests/site.spec.js'];
 const select = (...paths) => selectImpact(paths, specs);
 
 test('isolated dinosaur changes retain cross-page accessibility and all smoke checks', () => {
-  const plan = select('src/app/features/t-rex-v3/rig.ts', 'src/app/features/t-rex-v3/passive-physics.ts');
+  const plan = select(
+    'src/app/features/t-rex-v3/rig.ts',
+    'src/app/features/t-rex-v3/passive-physics.ts',
+  );
   assert.equal(plan.mode, 'affected');
   assert.deepEqual(plan.files, ['tests/accessibility.spec.js', ...smoke, 'tests/t-rex-v3.spec.js']);
   assert.equal(plan.lighthouse, false);

@@ -131,7 +131,13 @@ describe('V3 physics invariants', () => {
       }
       const energyJ = rig.invariants().energyJ - initial.energyJ;
       results.push({
-        seed, maxLinear, maxAngular, maxGap, maxExcess, positiveWorkJ, energyJ,
+        seed,
+        maxLinear,
+        maxAngular,
+        maxGap,
+        maxExcess,
+        positiveWorkJ,
+        energyJ,
         angularPass: maxAngular < 0.02 * MASS_KG * GRAVITY,
         constraintsPass: maxGap < 0.03 && maxExcess < 3,
         workPass: energyJ <= positiveWorkJ + 1000,
@@ -171,7 +177,15 @@ describe('V3 physics invariants', () => {
       const finalEnergy = rig.invariants().energyJ;
       expect(landed).toBe(true);
       expect(finalEnergy).toBeLessThan(initial);
-      results.push({ timestep, initial, finalEnergy, peakEnergy, peakGap, peakExcess, peakPenetration });
+      results.push({
+        timestep,
+        initial,
+        finalEnergy,
+        peakEnergy,
+        peakGap,
+        peakExcess,
+        peakPenetration,
+      });
     }
     console.info('V3_PASSIVE_AUDIT ' + JSON.stringify(results));
   }, 60000);

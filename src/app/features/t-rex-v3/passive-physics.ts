@@ -18,12 +18,7 @@ import type { MechanicsFrame, JointMechanics, SupportPoint } from './biomechanic
 import { GRAVITY, MASS_KG, STEP } from './physical-constants';
 import { calibrationPoses, calibrateMuscles, muscleKey } from './muscle-profile';
 import type { MuscleProfile } from './muscle-profile';
-import {
-  PASSIVE,
-  activationStep,
-  ligamentTorque,
-  reflexCommands,
-} from './neuromuscular';
+import { PASSIVE, activationStep, ligamentTorque, reflexCommands } from './neuromuscular';
 import type { AxisSense, Commands, ControlInput, JointSense, SensorFrame } from './neuromuscular';
 
 export { GRAVITY, MASS_KG, STEP } from './physical-constants';
@@ -116,7 +111,13 @@ function makeSegment(bone: Bone): Segment {
   if (bone.kind === 'spine') {
     const ribs = midpoint.vadd(new Vector(0, 0, -0.61));
     body.addShape(
-      new Box(new Vector(direction.length() * 0.47, ['spine-3', 'spine-4'].includes(bone.id) ? 0.3 : 0.54, 0.49)),
+      new Box(
+        new Vector(
+          direction.length() * 0.47,
+          ['spine-3', 'spine-4'].includes(bone.id) ? 0.3 : 0.54,
+          0.49,
+        ),
+      ),
       localPoint(segment, ribs),
     );
   }
@@ -592,7 +593,11 @@ export class PassiveRig {
       for (let j = i + 1; j < this.segments.length; j++) {
         const a = this.segments[i];
         const b = this.segments[j];
-        if (a.bone.parent !== b.bone.id && b.bone.parent !== a.bone.id && collisionExcluded(a.bone, b.bone)) {
+        if (
+          a.bone.parent !== b.bone.id &&
+          b.bone.parent !== a.bone.id &&
+          collisionExcluded(a.bone, b.bone)
+        ) {
           this.world.addConstraint(new CollisionExclusion(a.body, b.body));
         }
       }
@@ -638,7 +643,10 @@ export class PassiveRig {
   }
 
   sense(): SensorFrame {
-    const contacts: Record<string, { touching: boolean; groundTouching: boolean; normalLoadN: number }> = {};
+    const contacts: Record<
+      string,
+      { touching: boolean; groundTouching: boolean; normalLoadN: number }
+    > = {};
     const ids = new Map<Body, string>();
     for (const segment of this.segments) {
       ids.set(segment.body, segment.bone.id);
@@ -708,7 +716,11 @@ export class PassiveRig {
       weightedHeight += body.mass * body.position.z;
       body.updateAABB();
       penetration = Math.max(penetration, -body.aabb.lowerBound.z);
-      valid &&= [...body.position.toArray(), ...body.velocity.toArray(), ...body.angularVelocity.toArray()].every(Number.isFinite);
+      valid &&= [
+        ...body.position.toArray(),
+        ...body.velocity.toArray(),
+        ...body.angularVelocity.toArray(),
+      ].every(Number.isFinite);
       valid &&= [body.quaternion.x, body.quaternion.y, body.quaternion.z, body.quaternion.w].every(
         Number.isFinite,
       );
@@ -724,9 +736,25 @@ export class PassiveRig {
     const centerHeight = weightedHeight / mass;
     valid &&= [jointGap, angleExcess, centerHeight, penetration].every(Number.isFinite);
     const sensors = this.sense();
-    valid &&= Object.values(sensors.contacts).every((contact) => Number.isFinite(contact.normalLoadN));
-    valid &&= sensors.joints.every((joint) => AXES.every((axis) => Object.values(joint.axes[axis]).every((value) => typeof value === 'boolean' || Number.isFinite(value))));
-    valid &&= [...sensors.gravityDirection, ...sensors.angularVelocity, ...sensors.specificForce, sensors.leftFootLoadN, sensors.rightFootLoadN, sensors.leftFootClearanceM, sensors.rightFootClearanceM].every(Number.isFinite);
+    valid &&= Object.values(sensors.contacts).every((contact) =>
+      Number.isFinite(contact.normalLoadN),
+    );
+    valid &&= sensors.joints.every((joint) =>
+      AXES.every((axis) =>
+        Object.values(joint.axes[axis]).every(
+          (value) => typeof value === 'boolean' || Number.isFinite(value),
+        ),
+      ),
+    );
+    valid &&= [
+      ...sensors.gravityDirection,
+      ...sensors.angularVelocity,
+      ...sensors.specificForce,
+      sensors.leftFootLoadN,
+      sensors.rightFootLoadN,
+      sensors.leftFootClearanceM,
+      sensors.rightFootClearanceM,
+    ].every(Number.isFinite);
     return {
       pose,
       seconds: this.steps * this.timestep,

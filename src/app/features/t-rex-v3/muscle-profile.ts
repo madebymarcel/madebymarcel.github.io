@@ -32,7 +32,10 @@ export function muscleKey(id: string, axis: Axis): string {
 // and sagittal/lateral/axial variations. Capacities are fixed once,
 // not increased on demand in response to the learner.
 export function calibrationPoses(): { angles: Readonly<Record<string, Angles>>; tilt: number }[] {
-  const poses = [{ angles: BALANCED_STANCE, tilt: 0 }, { angles: {}, tilt: 0 }];
+  const poses = [
+    { angles: BALANCED_STANCE, tilt: 0 },
+    { angles: {}, tilt: 0 },
+  ];
   for (const delta of [-15, -7, 7, 15]) {
     for (const part of ['thigh', 'lower-leg', 'foot', 'inner-toe', 'middle-toe', 'outer-toe']) {
       const angles: Record<string, Angles> = { ...BALANCED_STANCE };

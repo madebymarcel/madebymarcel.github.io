@@ -10,13 +10,14 @@ export const ACTION_HZ = 30;
 export const SUBSTEPS = Math.round(1 / (STEP * ACTION_HZ));
 const WEIGHT = GRAVITY * MASS_KG;
 
-export const ACTIONS = BONES.filter((bone) => bone.parent !== null && bone.parent !== 'root')
-  .flatMap((bone) =>
-    AXES.filter((axis) => bone.limits[axis][0] !== bone.limits[axis][1]).map((axis) => ({
-      id: bone.id,
-      axis,
-    })),
-  );
+export const ACTIONS = BONES.filter(
+  (bone) => bone.parent !== null && bone.parent !== 'root',
+).flatMap((bone) =>
+  AXES.filter((axis) => bone.limits[axis][0] !== bone.limits[axis][1]).map((axis) => ({
+    id: bone.id,
+    axis,
+  })),
+);
 
 export const OBSERVATIONS: readonly string[] = [
   ...ACTIONS.flatMap(({ id, axis }) =>
@@ -26,11 +27,22 @@ export const OBSERVATIONS: readonly string[] = [
     bone.id + ':ground-contact',
     bone.id + ':ground-load',
   ]),
-  'gravity:x', 'gravity:y', 'gravity:z',
-  'angular-velocity:x', 'angular-velocity:y', 'angular-velocity:z',
-  'specific-force:x', 'specific-force:y', 'specific-force:z',
-  'com-velocity:x', 'com-velocity:y', 'com-velocity:z',
-  'pelvis-height', 'com-height', 'left-clearance', 'right-clearance',
+  'gravity:x',
+  'gravity:y',
+  'gravity:z',
+  'angular-velocity:x',
+  'angular-velocity:y',
+  'angular-velocity:z',
+  'specific-force:x',
+  'specific-force:y',
+  'specific-force:z',
+  'com-velocity:x',
+  'com-velocity:y',
+  'com-velocity:z',
+  'pelvis-height',
+  'com-height',
+  'left-clearance',
+  'right-clearance',
 ];
 
 export function seededRandom(seed: number): () => number {
@@ -42,9 +54,11 @@ export function seededRandom(seed: number): () => number {
 }
 
 export function decodeActions(action: readonly number[]): Commands {
-  if (action.length !== ACTIONS.length || Array.from(action).some((value) =>
-    !Number.isFinite(value) || Math.abs(value) > 1,
-  )) throw new Error('Invalid action vector');
+  if (
+    action.length !== ACTIONS.length ||
+    Array.from(action).some((value) => !Number.isFinite(value) || Math.abs(value) > 1)
+  )
+    throw new Error('Invalid action vector');
   const commands: Record<string, Partial<Record<Axis, number>>> = {};
   ACTIONS.forEach(({ id, axis }, i) => {
     (commands[id] ??= {})[axis] = action[i];
@@ -93,8 +107,7 @@ export function measureSupport(
   const upright = state.pelvisHeight > 2.4 && -state.sensors.gravityDirection[2] > 0.9;
   const supported =
     !invalidPhysics(state) && upright && footLoadN >= 0.75 * WEIGHT && otherLoadN <= 0.05 * WEIGHT;
-  const stable =
-    supported && footLoadN <= 1.25 * WEIGHT && Math.hypot(...velocity) < 0.15;
+  const stable = supported && footLoadN <= 1.25 * WEIGHT && Math.hypot(...velocity) < 0.15;
   return { footLoadN, otherLoadN, upright, supported, stable };
 }
 
@@ -125,13 +138,22 @@ export class BalanceEnvironment {
   private stableSeconds = 0;
   private longestStableSeconds = 0;
 
-  constructor(readonly duration = 10, readonly ligaments = true) {
+  constructor(
+    readonly duration = 10,
+    readonly ligaments = true,
+  ) {
     if (!Number.isFinite(duration) || duration <= 0) throw new Error('Invalid episode duration');
   }
 
   reset(seed: number, perturbationDegrees = 1): Transition {
-    if (!Number.isSafeInteger(seed) || seed < 0 || seed > 0xffffffff || !Number.isFinite(perturbationDegrees)
-      || perturbationDegrees < 0 || perturbationDegrees > 5) {
+    if (
+      !Number.isSafeInteger(seed) ||
+      seed < 0 ||
+      seed > 0xffffffff ||
+      !Number.isFinite(perturbationDegrees) ||
+      perturbationDegrees < 0 ||
+      perturbationDegrees > 5
+    ) {
       throw new Error('Invalid reset options');
     }
     const random = seededRandom(seed);
@@ -167,8 +189,12 @@ export class BalanceEnvironment {
         .reduce((sum, [, contact]) => sum + contact.normalLoadN, 0);
       other += nonFootLoad;
       if (invalidPhysics(state)) this.reason = 'invalid';
-      else if (state.pelvisHeight < 2 || -sensors.gravityDirection[2] < 0.65
-        || nonFootLoad > 0.25 * WEIGHT) this.reason = 'fall';
+      else if (
+        state.pelvisHeight < 2 ||
+        -sensors.gravityDirection[2] < 0.65 ||
+        nonFootLoad > 0.25 * WEIGHT
+      )
+        this.reason = 'fall';
       else if (state.seconds >= this.duration) this.reason = 'time-limit';
       if (this.reason !== 'running') break;
     }
@@ -193,7 +219,8 @@ export class BalanceEnvironment {
     }
     const support = measureSupport(state, velocity, foot, other);
     if (support.supported && this.reason !== 'invalid') this.supportedSeconds += elapsed;
-    this.stableSeconds = support.stable && this.reason !== 'invalid' ? this.stableSeconds + elapsed : 0;
+    this.stableSeconds =
+      support.stable && this.reason !== 'invalid' ? this.stableSeconds + elapsed : 0;
     this.longestStableSeconds = Math.max(this.longestStableSeconds, this.stableSeconds);
     return {
       observation,

@@ -23,7 +23,6 @@ describe('V3 load-calibrated actuator system', () => {
         true,
       );
     }
-
   });
 
   it('does not vary torque capacity with pose, timestep or instantaneous inertia', () => {

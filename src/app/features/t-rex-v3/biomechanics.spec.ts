@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { allocateLoads, staticEquilibrium, supportHull, supportMargin, torqueRequirements } from './biomechanics';
+import {
+  allocateLoads,
+  staticEquilibrium,
+  supportHull,
+  supportMargin,
+  torqueRequirements,
+} from './biomechanics';
 import type { SupportPoint } from './biomechanics';
 import { BALANCED_STANCE, calibrationPoses, LOAD_RESERVE } from './muscle-profile';
 import { GRAVITY, MASS_KG, PassiveRig, STEP } from './passive-physics';
@@ -71,7 +77,7 @@ describe('V3 biomechanics', () => {
     };
     const initial = energy();
     for (let i = 0; i < 2 / STEP; i++) {
-      rate += ligamentTorque(angle, rate, -0.5, 0.5, 10) / 10 * STEP;
+      rate += (ligamentTorque(angle, rate, -0.5, 0.5, 10) / 10) * STEP;
       angle += rate * STEP;
     }
     expect(energy()).toBeLessThan(initial * 0.01);
