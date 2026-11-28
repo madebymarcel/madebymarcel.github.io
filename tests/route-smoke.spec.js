@@ -8,6 +8,7 @@ const routes = [
   ['/projects/canoe-polo/', 'Canoe polo AI'],
   ['/projects/biped/', 'Biped robot'],
   ['/projects/t-rex/', 'T. rex'],
+  ['/projects/t-rex-v2/', 'T. rex V2'],
   ['/lab/', 'Lab'],
   ['/contact/', 'Contact'],
   ['/404/', 'Page not found'],
