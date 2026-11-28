@@ -10,8 +10,11 @@ import {
   Vec3 as Vector,
   World,
 } from 'cannon-es';
-import { AXES, BONES } from './rig';
-import type { Axis, Bone, PosedBone, Vec3 } from './rig';
+import { AXES, BONES, poseRig } from './rig';
+import type { Angles, Axis, Bone, PosedBone, Vec3 } from './rig';
+import { isFoot } from './biomechanics';
+import type { MechanicsFrame, JointMechanics, SupportPoint } from './biomechanics';
+import { GRAVITY, MASS_KG, STEP } from './physical-constants';
 import {
   PASSIVE,
   activationStep,
@@ -22,9 +25,7 @@ import {
 } from './neuromuscular';
 import type { AxisSense, Commands, ControlInput, JointSense, SensorFrame } from './neuromuscular';
 
-export const STEP = 1 / 120;
-export const GRAVITY = 9.81;
-export const MASS_KG = 8000;
+export { GRAVITY, MASS_KG, STEP } from './physical-constants';
 const KG_PER_UNIT = 100;
 const DEG = Math.PI / 180;
 const MAX_IMPULSE = 1e6;
@@ -127,6 +128,7 @@ function makeSegment(bone: Bone): Segment {
 interface JointState {
   angles: Record<Axis, number>;
   gradients: Record<Axis, Vector>;
+  axes: Record<Axis, Vector>;
 }
 
 // Angular coordinates use the same local Rz(yaw) Ry(pitch) Rx(roll)
@@ -144,6 +146,7 @@ function jointState(parent: Segment, child: Segment): JointState {
   const d = new Vector(0, 0, 1);
   return {
     angles: { pitch, yaw, roll },
+    axes: { roll: frame.vmult(a), pitch: frame.vmult(b), yaw: frame.vmult(d) },
     gradients: {
       roll: frame.vmult(b.cross(d).scale(1 / c)),
       pitch: frame.vmult(d.cross(a).scale(1 / c)),
@@ -163,9 +166,10 @@ class AngularStop extends Equation {
     private readonly direction: number,
     private readonly bound: number,
     locked: boolean,
+    timestep: number,
   ) {
     super(parent, child, locked ? -MAX_IMPULSE : 0, MAX_IMPULSE);
-    this.setSpookParams(1e8, 4, STEP);
+    this.setSpookParams(1e8, 4, timestep);
   }
 
   updateStop(angle: number, gradient: Vector): void {
@@ -197,6 +201,7 @@ class Joint extends PointToPointConstraint {
   constructor(
     private readonly parent: Segment,
     private readonly child: Segment,
+    private readonly timestep: number,
   ) {
     const anchor = vec(child.bone.start);
     super(
@@ -208,16 +213,16 @@ class Joint extends PointToPointConstraint {
     );
     this.collideConnected = false;
     for (const equation of this.equations) {
-      equation.setSpookParams(1e8, 4, STEP);
+      equation.setSpookParams(1e8, 4, timestep);
     }
     for (const axis of AXES) {
       const [min, max] = child.bone.limits[axis];
       const locked = min === max;
-      const lower = new AngularStop(parent.body, child.body, 1, min * DEG, locked);
+      const lower = new AngularStop(parent.body, child.body, 1, min * DEG, locked, timestep);
       this.stops.push({ axis, equation: lower });
       this.equations.push(lower);
       if (!locked) {
-        const upper = new AngularStop(parent.body, child.body, -1, max * DEG, false);
+        const upper = new AngularStop(parent.body, child.body, -1, max * DEG, false, timestep);
         this.stops.push({ axis, equation: upper });
         this.equations.push(upper);
       }
@@ -242,6 +247,29 @@ class Joint extends PointToPointConstraint {
   private rate(gradient: Vector): number {
     const relative = this.child.body.angularVelocity.vsub(this.parent.body.angularVelocity);
     return gradient.dot(relative);
+  }
+
+  mechanics(): JointMechanics {
+    const state = jointState(this.parent, this.child);
+    const locked = (axis: Axis) => {
+      const [min, max] = this.child.bone.limits[axis];
+      return min === max;
+    };
+    const maximum = (axis: Axis) =>
+      locked(axis)
+        ? 0
+        : Math.min(nominalStrengthNm(this.child.bone.id), 180 * this.inertia(state.gradients[axis]));
+    return {
+      id: this.child.bone.id,
+      pivot: this.bodyB.pointToWorldFrame(this.pivotB).toArray(),
+      axes: {
+        pitch: state.axes.pitch.toArray(),
+        yaw: state.axes.yaw.toArray(),
+        roll: state.axes.roll.toArray(),
+      },
+      locked: { pitch: locked('pitch'), yaw: locked('yaw'), roll: locked('roll') },
+      maximumNm: { pitch: maximum('pitch'), yaw: maximum('yaw'), roll: maximum('roll') },
+    };
   }
 
   read(): JointSense {
@@ -278,7 +306,7 @@ class Joint extends PointToPointConstraint {
       this.maximum[axis] = limit;
       const target = commands[this.child.bone.id]?.[axis] ?? 0;
       this.activation[axis] =
-        powered && enabled ? activationStep(this.activation[axis], target, STEP) : 0;
+        powered && enabled ? activationStep(this.activation[axis], target, this.timestep) : 0;
       this.ligament[axis] = ligaments
         ? ligamentTorque(angle, rate, min * DEG, max * DEG, inertia)
         : 0;
@@ -339,18 +367,52 @@ function snapshotBone(segment: Segment): PosedBone {
   };
 }
 
+export interface PhysicsOptions {
+  readonly timestep?: number;
+  readonly iterations?: number;
+  readonly initialPose?: Readonly<Record<string, Angles>>;
+}
+
+// Convert the rig's world rotation matrix to a unit quaternion. This is
+// initialization only; the simulator never writes a target pose during stepping.
+function poseRotation(frame: PosedBone['frame']): Quaternion {
+  const [a, b, c] = frame;
+  const trace = a[0] + b[1] + c[2];
+  let q: Quaternion;
+  if (trace > 0) {
+    const s = 2 * Math.sqrt(1 + trace);
+    q = new Quaternion((b[2] - c[1]) / s, (c[0] - a[2]) / s, (a[1] - b[0]) / s, s / 4);
+  } else if (a[0] > b[1] && a[0] > c[2]) {
+    const s = 2 * Math.sqrt(1 + a[0] - b[1] - c[2]);
+    q = new Quaternion(s / 4, (b[0] + a[1]) / s, (c[0] + a[2]) / s, (b[2] - c[1]) / s);
+  } else if (b[1] > c[2]) {
+    const s = 2 * Math.sqrt(1 + b[1] - a[0] - c[2]);
+    q = new Quaternion((b[0] + a[1]) / s, s / 4, (c[1] + b[2]) / s, (c[0] - a[2]) / s);
+  } else {
+    const s = 2 * Math.sqrt(1 + c[2] - a[0] - b[1]);
+    q = new Quaternion((c[0] + a[2]) / s, (c[1] + b[2]) / s, s / 4, (a[1] - b[0]) / s);
+  }
+  q.normalize();
+  return q;
+}
+
 export class PassiveRig {
   private readonly world: World;
   private readonly ground = new Body({ mass: 0, shape: new Plane() });
   private readonly segments = VISIBLE.map(makeSegment);
   private readonly joints: Joint[] = [];
   private steps = 0;
+  readonly timestep: number;
   private readonly pelvis = this.segments[0];
   private specificForce = new Vector();
 
-  constructor(dropHeight = 0.35, tiltDegrees = 5) {
+  constructor(dropHeight = 0.35, tiltDegrees = 5, options: PhysicsOptions = {}) {
+    this.timestep = options.timestep ?? STEP;
+    if (!Number.isFinite(this.timestep) || this.timestep <= 0 || this.timestep > STEP) {
+      throw new Error('Invalid physics timestep');
+    }
     const solver = new GSSolver();
-    solver.iterations = 100;
+    solver.iterations = options.iterations ?? 100;
     solver.tolerance = 1e-7;
     this.world = new World({ gravity: new Vector(0, 0, -GRAVITY), solver, allowSleep: false });
     this.world.defaultContactMaterial.friction = 0.65;
@@ -365,7 +427,7 @@ export class PassiveRig {
       this.world.addBody(segment.body);
       const parent = segment.bone.parent === null ? undefined : byId.get(segment.bone.parent);
       if (parent) {
-        const joint = new Joint(parent, segment);
+        const joint = new Joint(parent, segment, this.timestep);
         this.joints.push(joint);
         this.world.addConstraint(joint);
       }
@@ -381,6 +443,18 @@ export class PassiveRig {
         if (!adjacent(a.bone, b.bone) && a.body.aabb.overlaps(b.body.aabb)) {
           this.world.addConstraint(new CollisionExclusion(a.body, b.body));
         }
+      }
+    }
+
+    if (options.initialPose) {
+      const posed = new Map(poseRig(options.initialPose).map((bone) => [bone.bone.id, bone]));
+      for (const segment of this.segments) {
+        const pose = posed.get(segment.bone.id);
+        if (!pose) throw new Error('Missing starting bone');
+        const rotation = poseRotation(pose.frame);
+        const offset = segment.center.vsub(vec(segment.bone.start));
+        segment.body.position.copy(vec(pose.start).vadd(rotation.vmult(offset)));
+        segment.body.quaternion.copy(rotation.mult(segment.rest));
       }
     }
 
@@ -400,6 +474,63 @@ export class PassiveRig {
       body.position.z += dropHeight - lowest;
       body.aabbNeedsUpdate = true;
     }
+  }
+
+  mechanics(tolerance = 0.005): MechanicsFrame {
+    const candidates: SupportPoint[] = [];
+    const contacts: SupportPoint[] = [];
+    const ids = new Map(this.segments.map((segment) => [segment.body, segment.bone.id]));
+    let lowest = Infinity;
+    const corners: SupportPoint[] = [];
+    for (const { bone, body } of this.segments) {
+      body.updateAABB();
+      lowest = Math.min(lowest, body.aabb.lowerBound.z);
+      if (!isFoot(bone.id)) continue;
+      body.shapes.forEach((shape, i) => {
+        if (!(shape instanceof Box)) return;
+        const h = shape.halfExtents;
+        for (const x of [-h.x, h.x]) {
+          for (const y of [-h.y, h.y]) {
+            for (const z of [-h.z, h.z]) {
+              const local = body.shapeOrientations[i].vmult(new Vector(x, y, z));
+              local.vadd(body.shapeOffsets[i], local);
+              const position = body.pointToWorldFrame(local).toArray();
+              corners.push({ id: bone.id, position, loadN: 0 });
+            }
+          }
+        }
+      });
+    }
+    for (const point of corners) {
+      if (point.position[2] <= lowest + tolerance) candidates.push(point);
+    }
+    for (const equation of this.world.contacts) {
+      if (!equation.enabled) continue;
+      const groundA = equation.bi === this.ground;
+      if (!groundA && equation.bj !== this.ground) continue;
+      const body = groundA ? equation.bj : equation.bi;
+      const id = ids.get(body);
+      if (!id) continue;
+      const offset = groundA ? equation.rj : equation.ri;
+      contacts.push({
+        id,
+        position: body.position.vadd(offset).toArray(),
+        loadN: Math.max(0, equation.multiplier) * KG_PER_UNIT,
+      });
+    }
+    return {
+      bodies: this.segments.map(({ bone, body }) => ({
+        id: bone.id,
+        parent: bone.parent,
+        massKg: body.mass * KG_PER_UNIT,
+        center: body.position.toArray(),
+        velocity: body.velocity.toArray(),
+        angularSpeed: body.angularVelocity.length(),
+      })),
+      joints: this.joints.map((joint) => joint.mechanics()),
+      candidates,
+      contacts,
+    };
   }
 
   sense(): SensorFrame {
@@ -453,8 +584,8 @@ export class PassiveRig {
       joint.drive(input.ligaments, input.mode !== 'off', commands);
     }
     const previous = this.pelvis.body.velocity.clone();
-    this.world.step(STEP);
-    this.specificForce = this.pelvis.body.velocity.vsub(previous).scale(1 / STEP);
+    this.world.step(this.timestep);
+    this.specificForce = this.pelvis.body.velocity.vsub(previous).scale(1 / this.timestep);
     this.specificForce.z += GRAVITY;
     this.steps++;
   }
@@ -486,7 +617,7 @@ export class PassiveRig {
     valid &&= [jointGap, angleExcess, centerHeight, penetration].every(Number.isFinite);
     return {
       pose,
-      seconds: this.steps * STEP,
+      seconds: this.steps * this.timestep,
       massKg: mass * KG_PER_UNIT,
       centerHeight,
       pelvisHeight: pose[0].start[2],
