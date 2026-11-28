@@ -39,9 +39,8 @@ export function standingControl(
       const torque = byJoint.get(joint.id + ':' + axis);
       const desired = ((target.angles[joint.id]?.[axis] ?? 0) * Math.PI) / 180;
       const feedback = 3 * (desired - state.angle) - 0.45 * state.rate;
-      const compensation = torque && torque.maximumNm > 0
-        ? torque.requiredNm / torque.maximumNm
-        : 0;
+      const compensation =
+        torque && torque.maximumNm > 0 ? torque.requiredNm / torque.maximumNm : 0;
       command[axis] = state.locked ? 0 : signedUnit(compensation + feedback);
     }
     commands[joint.id] = command;

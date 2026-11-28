@@ -57,14 +57,18 @@ export function supportHull(points: readonly SupportPoint[]): Point2[] {
   const sorted: Point2[] = points
     .map((point): Point2 => [point.position[0], point.position[1]])
     .sort((a, b) => a[0] - b[0] || a[1] - b[1])
-    .filter((point, i, all) => i === 0 || Math.hypot(
-      point[0] - all[i - 1][0], point[1] - all[i - 1][1],
-    ) > 1e-8);
+    .filter(
+      (point, i, all) =>
+        i === 0 || Math.hypot(point[0] - all[i - 1][0], point[1] - all[i - 1][1]) > 1e-8,
+    );
   if (sorted.length <= 2) return sorted;
   const half = (sequence: readonly Point2[]): Point2[] => {
     const result: Point2[] = [];
     for (const point of sequence) {
-      while (result.length >= 2 && turn(result[result.length - 2], result[result.length - 1], point) <= 1e-10) {
+      while (
+        result.length >= 2 &&
+        turn(result[result.length - 2], result[result.length - 1], point) <= 1e-10
+      ) {
         result.pop();
       }
       result.push(point);
@@ -74,7 +78,10 @@ export function supportHull(points: readonly SupportPoint[]): Point2[] {
   return [...half(sorted), ...half([...sorted].reverse())];
 }
 
-export function supportMargin(hull: readonly Point2[], point: Point2): {
+export function supportMargin(
+  hull: readonly Point2[],
+  point: Point2,
+): {
   margin: number;
   closest: Point2;
 } {
@@ -88,9 +95,10 @@ export function supportMargin(hull: readonly Point2[], point: Point2): {
     const dx = b[0] - a[0];
     const dy = b[1] - a[1];
     const length2 = dx * dx + dy * dy;
-    const fraction = length2 > 0
-      ? Math.max(0, Math.min(1, ((point[0] - a[0]) * dx + (point[1] - a[1]) * dy) / length2))
-      : 0;
+    const fraction =
+      length2 > 0
+        ? Math.max(0, Math.min(1, ((point[0] - a[0]) * dx + (point[1] - a[1]) * dy) / length2))
+        : 0;
     const candidate: Point2 = [a[0] + dx * fraction, a[1] + dy * fraction];
     const d = Math.hypot(candidate[0] - point[0], candidate[1] - point[1]);
     if (d < distance) {
@@ -117,7 +125,9 @@ export function allocateLoads(
   const add = (indices: number[], weights: number[]): void => {
     if (weights.some((value) => value < -1e-7 || value > 1 + 1e-7)) return;
     solutions++;
-    indices.forEach((index, i) => { loads[index] += Math.max(0, weights[i]); });
+    indices.forEach((index, i) => {
+      loads[index] += Math.max(0, weights[i]);
+    });
   };
   for (let i = 0; i < points.length; i++) {
     const a = xy(i);

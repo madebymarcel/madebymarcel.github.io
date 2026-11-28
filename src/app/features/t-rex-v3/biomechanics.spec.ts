@@ -1,6 +1,13 @@
 import { Vec3 as Vector } from 'cannon-es';
 import { describe, expect, it } from 'vitest';
-import { allocateLoads, isFoot, massCenter, staticEquilibrium, supportHull, supportMargin } from './biomechanics';
+import {
+  allocateLoads,
+  isFoot,
+  massCenter,
+  staticEquilibrium,
+  supportHull,
+  supportMargin,
+} from './biomechanics';
 import type { Point2, SupportPoint } from './biomechanics';
 import { ligamentTorque } from './neuromuscular';
 import type { ControlInput } from './neuromuscular';
@@ -16,9 +23,7 @@ const STANCE_HEIGHT = 2.4;
 
 function report(name: string, value: unknown): void {
   const json = JSON.stringify(value, (_, entry: unknown) =>
-    typeof entry === 'number' && Number.isFinite(entry)
-      ? Math.round(entry * 10000) / 10000
-      : entry,
+    typeof entry === 'number' && Number.isFinite(entry) ? Math.round(entry * 10000) / 10000 : entry,
   );
   console.info('V3_BIOMECHANICS ' + name + ' ' + json);
 }
@@ -69,18 +74,18 @@ function findStance() {
       }
     }
   }
-  const upright = candidates.filter((candidate) =>
-    candidate.height > STANCE_HEIGHT && candidate.candidates.length > 0,
+  const upright = candidates.filter(
+    (candidate) => candidate.height > STANCE_HEIGHT && candidate.candidates.length > 0,
   );
-  const feasible = upright.filter((candidate) =>
-    candidate.margin >= 0.005 && candidate.peakUtilization <= 1,
+  const feasible = upright.filter(
+    (candidate) => candidate.margin >= 0.005 && candidate.peakUtilization <= 1,
   );
   const score = (candidate: typeof neutral) =>
-    Math.max(0, 0.005 - candidate.margin) * 100
-    + Math.max(0, candidate.peakUtilization - 1)
-    + 0.1 * candidate.peakUtilization;
-  const best = [...(feasible.length ? feasible : upright)].sort((a, b) => score(a) - score(b))[0]
-    ?? neutral;
+    Math.max(0, 0.005 - candidate.margin) * 100 +
+    Math.max(0, candidate.peakUtilization - 1) +
+    0.1 * candidate.peakUtilization;
+  const best =
+    [...(feasible.length ? feasible : upright)].sort((a, b) => score(a) - score(b))[0] ?? neutral;
   return { neutral, relaxedNeutral, best, searched: candidates.length, feasible: feasible.length };
 }
 
@@ -102,9 +107,9 @@ function drop(timestep: number, iterations: number, ligaments: boolean) {
     peakGapM = Math.max(peakGapM, state.jointGap);
     peakExcessDeg = Math.max(peakExcessDeg, state.angleExcess);
     peakPenetrationM = Math.max(peakPenetrationM, state.penetration);
-    const quiet = initialContact && frame.bodies.every((body) =>
-      Math.hypot(...body.velocity) < 0.05 && body.angularSpeed < 0.1,
-    );
+    const quiet =
+      initialContact &&
+      frame.bodies.every((body) => Math.hypot(...body.velocity) < 0.05 && body.angularSpeed < 0.1);
     continuousQuiet = quiet ? continuousQuiet + 0.05 : 0;
     longestQuiet = Math.max(longestQuiet, continuousQuiet);
   }
@@ -131,14 +136,15 @@ function isolatedLigament(timestep: number, enabled: boolean) {
   let rate = 0;
   const energy = () => {
     const excess = Math.max(0, Math.abs(angle) - 0.125);
-    return 0.5 * inertia * rate * rate
-      + 100 * inertia * (0.5 * excess ** 2 + excess ** 3 / (3 * 0.375));
+    return (
+      0.5 * inertia * rate * rate + 100 * inertia * (0.5 * excess ** 2 + excess ** 3 / (3 * 0.375))
+    );
   };
   const initial = energy();
   let maximum = initial;
   for (let i = 0; i < Math.round(2 / timestep); i++) {
     const torque = enabled ? ligamentTorque(angle, rate, -0.5, 0.5, inertia) : 0;
-    rate += torque / inertia * timestep;
+    rate += (torque / inertia) * timestep;
     angle += rate * timestep;
     maximum = Math.max(maximum, energy());
   }
@@ -160,8 +166,8 @@ function freeAir(ligaments: boolean) {
   }
   return {
     ligaments,
-    startAngleDeg: initial.angle * 180 / Math.PI,
-    endAngleDeg: read().angle * 180 / Math.PI,
+    startAngleDeg: (initial.angle * 180) / Math.PI,
+    endAngleDeg: (read().angle * 180) / Math.PI,
     endRate: read().rate,
     maxRate,
     maxGap,
@@ -232,7 +238,10 @@ function stand(
     const sensors = rig.sense();
     left += sensors.leftFootLoadN / 6;
     right += sensors.rightFootLoadN / 6;
-    const normalLoad = Object.values(sensors.contacts).reduce((sum, contact) => sum + contact.normalLoadN, 0);
+    const normalLoad = Object.values(sensors.contacts).reduce(
+      (sum, contact) => sum + contact.normalLoadN,
+      0,
+    );
     other += Math.max(0, normalLoad - sensors.leftFootLoadN - sensors.rightFootLoadN) / 6;
     if (phase === 'push') {
       for (const equation of rig['world'].frictionEquations) {
@@ -263,8 +272,11 @@ function stand(
     const safe = state.jointGap < 0.05 && state.angleExcess < 5 && state.penetration < 0.05;
     const upright = state.pelvisHeight > STANCE_HEIGHT && -sensors.gravityDirection[2] > 0.9;
     const onFeet = safe && upright && other < 0.05 * WEIGHT;
-    const stable = onFeet && Math.hypot(...center.velocity) < 0.15
-      && left + right > 0.85 * WEIGHT && left + right < 1.15 * WEIGHT;
+    const stable =
+      onFeet &&
+      Math.hypot(...center.velocity) < 0.15 &&
+      left + right > 0.85 * WEIGHT &&
+      left + right < 1.15 * WEIGHT;
     current = stable ? current + 0.05 : 0;
     longest = Math.max(longest, current);
     if (onFeet) supported += 0.05;
@@ -275,7 +287,7 @@ function stand(
       phaseStart = time;
       recovery = 'failed';
       // A finite, known external perturbation, never a supporting force.
-      rig['pelvis'].body.applyImpulse(new Vector(0, MASS_KG * 0.1 / 100, 0));
+      rig['pelvis'].body.applyImpulse(new Vector(0, (MASS_KG * 0.1) / 100, 0));
       current = 0;
     } else if (phase === 'stand' && time >= 12) {
       break;
@@ -289,7 +301,8 @@ function stand(
         const leftPoints = footPoints.filter((point) => point.id.startsWith('left-'));
         const leftHull = supportHull(leftPoints);
         if (!leftHull.length) break;
-        const mean = (axis: number) => leftHull.reduce((sum, p) => sum + p[axis], 0) / leftHull.length;
+        const mean = (axis: number) =>
+          leftHull.reduce((sum, p) => sum + p[axis], 0) / leftHull.length;
         const leftCenter: Point2 = [mean(0), mean(1)];
         target = { angles, center: leftCenter };
       } else if (time - phaseStart > 4) break;
@@ -397,7 +410,13 @@ describe('V3 biomechanics acceptance suite', () => {
       peakUtilization: entry.peakUtilization,
       requirements: entry.requirements,
     });
-    report('static', { searched, feasible, neutral: compact(neutral), relaxedNeutral: compact(relaxedNeutral), best: compact(best) });
+    report('static', {
+      searched,
+      feasible,
+      neutral: compact(neutral),
+      relaxedNeutral: compact(relaxedNeutral),
+      best: compact(best),
+    });
     expect(neutral.totalReactionN).toBeCloseTo(WEIGHT);
     expect(best.height).toBeGreaterThan(STANCE_HEIGHT);
   }, 60000);
@@ -416,7 +435,11 @@ describe('V3 biomechanics acceptance suite', () => {
   }, 120000);
 
   it('separates ligament elasticity and damping from full-rig impact behavior', () => {
-    const isolated = [isolatedLigament(STEP, false), isolatedLigament(STEP, true), isolatedLigament(STEP / 4, true)];
+    const isolated = [
+      isolatedLigament(STEP, false),
+      isolatedLigament(STEP, true),
+      isolatedLigament(STEP / 4, true),
+    ];
     const air = [freeAir(false), freeAir(true)];
     report('ligaments', { isolated, air });
     expect(isolated[1].final).toBeLessThan(isolated[1].initial);

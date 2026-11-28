@@ -258,7 +258,10 @@ class Joint extends PointToPointConstraint {
     const maximum = (axis: Axis) =>
       locked(axis)
         ? 0
-        : Math.min(nominalStrengthNm(this.child.bone.id), 180 * this.inertia(state.gradients[axis]));
+        : Math.min(
+            nominalStrengthNm(this.child.bone.id),
+            180 * this.inertia(state.gradients[axis]),
+          );
     return {
       id: this.child.bone.id,
       pivot: this.bodyB.pointToWorldFrame(this.pivotB).toArray(),
