@@ -207,7 +207,7 @@ function stand(
   let peakPenetrationM = 0;
   let saturated = 0;
   let active = 0;
-  let phase: 'stand' | 'recovery' | 'transfer' | 'lift' | 'push' | 'done' = 'stand';
+  let phase: 'stand' | 'recovery' | 'transfer' | 'lift' | 'push' = 'stand';
   let phaseStart = 0;
   let recoverySeconds = 0;
   let transferSeconds = 0;
@@ -322,7 +322,6 @@ function stand(
       pushDeltaVMps = center.velocity[0] - pushStartV;
       if (onFeet && pushDeltaVMps > 0.15 && forwardImpulseNs > 0.1 * MASS_KG) {
         pushOff = 'passed';
-        phase = 'done';
         break;
       }
       if (time - phaseStart > 2) break;
