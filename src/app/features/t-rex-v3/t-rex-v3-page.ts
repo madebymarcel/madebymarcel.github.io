@@ -4,6 +4,7 @@ import { PassiveRig, STEP } from './passive-physics';
 import type { PhysicsSnapshot } from './passive-physics';
 import { AXES, BONES, ZERO, clampAngles, poseRig, projectRig, viewBox } from './rig';
 import type { Angles, Axis, View } from './rig';
+import { BALANCED_STANCE } from './muscle-profile';
 import { signedUnit } from './neuromuscular';
 import type { Commands, ControlMode } from './neuromuscular';
 
@@ -88,14 +89,22 @@ export class TRexV3Page implements OnDestroy {
     this.startExperiment(0.02, 0);
   }
 
+  protected balancedStance(): void {
+    this.startExperiment(0.002, 0, BALANCED_STANCE);
+  }
+
   protected airborne(): void {
     this.startExperiment(2, 0);
   }
 
-  private startExperiment(height: number, tilt: number): void {
+  private startExperiment(
+    height: number,
+    tilt: number,
+    initialPose?: Readonly<Record<string, Angles>>,
+  ): void {
     this.pause();
     this.clearMuscles();
-    this.simulation = new PassiveRig(height, tilt);
+    this.simulation = new PassiveRig(height, tilt, { initialPose });
     this.snapshot.set(this.simulation.snapshot());
     this.resume();
   }
