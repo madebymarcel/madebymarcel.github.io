@@ -20,6 +20,7 @@ export interface JointSense {
 
 export interface ContactSense {
   readonly touching: boolean;
+  readonly groundTouching: boolean;
   readonly normalLoadN: number;
 }
 

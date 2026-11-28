@@ -3,7 +3,6 @@ import {
   Box,
   Constraint,
   Equation,
-  GSSolver,
   Plane,
   PointToPointConstraint,
   Quaternion,
@@ -13,22 +12,23 @@ import {
 import { AXES, BONES, poseRig } from './rig';
 import type { Angles, Axis, Bone, PosedBone, Vec3 } from './rig';
 import { isFoot } from './biomechanics';
+import { collisionExcluded } from './collision-policy';
+import { CoulombSolver } from './coulomb-solver';
 import type { MechanicsFrame, JointMechanics, SupportPoint } from './biomechanics';
 import { GRAVITY, MASS_KG, STEP } from './physical-constants';
-import { BALANCED_STANCE, calibrateMuscles, muscleKey } from './muscle-profile';
-import type { MuscleModel, MuscleProfile } from './muscle-profile';
+import { calibrationPoses, calibrateMuscles, muscleKey } from './muscle-profile';
+import type { MuscleProfile } from './muscle-profile';
 import {
   PASSIVE,
   activationStep,
   ligamentTorque,
-  muscleTorque,
-  nominalStrengthNm,
   reflexCommands,
 } from './neuromuscular';
 import type { AxisSense, Commands, ControlInput, JointSense, SensorFrame } from './neuromuscular';
 
 export { GRAVITY, MASS_KG, STEP } from './physical-constants';
 const KG_PER_UNIT = 100;
+export const FRICTION = 0.65;
 const DEG = Math.PI / 180;
 const MAX_IMPULSE = 1e6;
 const VISIBLE = BONES.filter((bone) => bone.id !== 'root');
@@ -107,7 +107,7 @@ function makeSegment(bone: Bone): Segment {
   if (bone.kind === 'spine') center.z -= 0.45;
   const mass = (MASS_KG * weight(bone)) / TOTAL_WEIGHT / KG_PER_UNIT;
   // Build in local coordinates so Cannon computes inertia in the rest basis.
-  const body = new Body({ mass, linearDamping: 0.08, angularDamping: 0.35 });
+  const body = new Body({ mass, linearDamping: 0, angularDamping: 0 });
   const segment = { bone, body, rest, inverseRest, center };
   body.addShape(
     new Box(new Vector(direction.length() / 2, bone.width, bone.height)),
@@ -116,7 +116,7 @@ function makeSegment(bone: Bone): Segment {
   if (bone.kind === 'spine') {
     const ribs = midpoint.vadd(new Vector(0, 0, -0.61));
     body.addShape(
-      new Box(new Vector(direction.length() * 0.47, 0.54, 0.49)),
+      new Box(new Vector(direction.length() * 0.47, ['spine-3', 'spine-4'].includes(bone.id) ? 0.3 : 0.54, 0.49)),
       localPoint(segment, ribs),
     );
   }
@@ -240,7 +240,6 @@ class Joint extends PointToPointConstraint {
   private readonly stops: { axis: Axis; equation: AngularStop }[] = [];
   private readonly activation: Record<Axis, number> = { pitch: 0, yaw: 0, roll: 0 };
   private readonly ligament: Record<Axis, number> = { pitch: 0, yaw: 0, roll: 0 };
-  private readonly muscle: Record<Axis, number> = { pitch: 0, yaw: 0, roll: 0 };
   private readonly motors = new Map<Axis, MuscleEquation>();
   private profile: MuscleProfile | undefined;
 
@@ -248,7 +247,6 @@ class Joint extends PointToPointConstraint {
     private readonly parent: Segment,
     private readonly child: Segment,
     private readonly timestep: number,
-    private readonly muscleModel: MuscleModel,
   ) {
     const anchor = vec(child.bone.start);
     super(
@@ -272,11 +270,9 @@ class Joint extends PointToPointConstraint {
         const upper = new AngularStop(parent.body, child.body, -1, max * DEG, false, timestep);
         this.stops.push({ axis, equation: upper });
         this.equations.push(upper);
-        if (this.muscleModel === 'calibrated') {
-          const motor = new MuscleEquation(parent.body, child.body);
-          this.motors.set(axis, motor);
-          this.equations.push(motor);
-        }
+        const motor = new MuscleEquation(parent.body, child.body);
+        this.motors.set(axis, motor);
+        this.equations.push(motor);
       }
     }
   }
@@ -285,12 +281,7 @@ class Joint extends PointToPointConstraint {
     this.profile = profile;
   }
 
-  private maximumNm(axis: Axis, gradient: Vector): number {
-    const [min, max] = this.child.bone.limits[axis];
-    if (min === max) return 0;
-    if (this.muscleModel === 'legacy') {
-      return Math.min(nominalStrengthNm(this.child.bone.id), 180 * this.inertia(gradient));
-    }
+  private maximumNm(axis: Axis): number {
     return this.profile?.get(muscleKey(this.child.bone.id, axis)) ?? 0;
   }
 
@@ -320,7 +311,7 @@ class Joint extends PointToPointConstraint {
       const [min, max] = this.child.bone.limits[axis];
       return min === max;
     };
-    const maximum = (axis: Axis) => this.maximumNm(axis, state.gradients[axis]);
+    const maximum = (axis: Axis) => this.maximumNm(axis);
     return {
       id: this.child.bone.id,
       pivot: this.bodyB.pointToWorldFrame(this.pivotB).toArray(),
@@ -343,8 +334,8 @@ class Joint extends PointToPointConstraint {
         rate: this.rate(state.gradients[axis]),
         activation: this.activation[axis],
         ligamentNm: this.ligament[axis],
-        muscleNm: this.motors.get(axis)?.torqueNm() ?? this.muscle[axis],
-        maximumNm: this.maximumNm(axis, state.gradients[axis]),
+        muscleNm: this.motors.get(axis)?.torqueNm() ?? 0,
+        maximumNm: this.maximumNm(axis),
         locked: min === max,
       };
     };
@@ -363,7 +354,7 @@ class Joint extends PointToPointConstraint {
       const rate = this.rate(gradient);
       const inertia = this.inertia(gradient);
       const enabled = min !== max;
-      const limit = this.maximumNm(axis, gradient);
+      const limit = this.maximumNm(axis);
       const target = commands[this.child.bone.id]?.[axis] ?? 0;
       this.activation[axis] =
         powered && enabled ? activationStep(this.activation[axis], target, this.timestep) : 0;
@@ -372,8 +363,7 @@ class Joint extends PointToPointConstraint {
         : 0;
       const motor = this.motors.get(axis);
       if (motor) motor.configure(gradient, this.activation[axis], limit, this.timestep);
-      this.muscle[axis] = motor ? 0 : muscleTorque(this.activation[axis], rate, limit);
-      const torque = gradient.scale((this.ligament[axis] + this.muscle[axis]) / KG_PER_UNIT);
+      const torque = gradient.scale(this.ligament[axis] / KG_PER_UNIT);
       this.child.body.torque.vadd(torque, this.child.body.torque);
       this.parent.body.torque.vsub(torque, this.parent.body.torque);
     }
@@ -408,10 +398,6 @@ class CollisionExclusion extends Constraint {
   }
 }
 
-function adjacent(a: Bone, b: Bone): boolean {
-  return a.parent === b.id || b.parent === a.id;
-}
-
 function snapshotBone(segment: Segment): PosedBone {
   const { body, bone, inverseRest, center } = segment;
   const rotation = body.quaternion.mult(inverseRest);
@@ -433,7 +419,7 @@ export interface PhysicsOptions {
   readonly timestep?: number;
   readonly iterations?: number;
   readonly initialPose?: Readonly<Record<string, Angles>>;
-  readonly muscleModel?: MuscleModel;
+  readonly gravity?: number;
 }
 
 // Convert the rig's world rotation matrix to a unit quaternion. This is
@@ -459,8 +445,108 @@ function poseRotation(frame: PosedBone['frame']): Quaternion {
   return q;
 }
 
+function placeSegments(
+  segments: readonly Segment[],
+  dropHeight: number,
+  tiltDegrees: number,
+  initialPose?: Readonly<Record<string, Angles>>,
+): void {
+  if (initialPose) {
+    const posed = new Map(poseRig(initialPose).map((bone) => [bone.bone.id, bone]));
+    for (const segment of segments) {
+      const pose = posed.get(segment.bone.id);
+      if (!pose) throw new Error('Missing starting bone');
+      const rotation = poseRotation(pose.frame);
+      const offset = segment.center.vsub(vec(segment.bone.start));
+      segment.body.position.copy(vec(pose.start).vadd(rotation.vmult(offset)));
+      segment.body.quaternion.copy(rotation.mult(segment.rest));
+    }
+  }
+
+  // Apply one rigid rotation and translation to the entire neutral rig,
+  // preserving every joint anchor and its neutral relative orientation.
+  const tilt = new Quaternion().setFromAxisAngle(new Vector(1, 0, 0), tiltDegrees * DEG);
+  const pivot = vec(BONES[1].start);
+  let lowest = Infinity;
+  for (const { body } of segments) {
+    body.position.copy(pivot.vadd(tilt.vmult(body.position.vsub(pivot))));
+    body.quaternion.copy(tilt.mult(body.quaternion));
+    body.updateInertiaWorld(true);
+    body.updateAABB();
+    lowest = Math.min(lowest, body.aabb.lowerBound.z);
+  }
+  for (const { body } of segments) {
+    body.position.z += dropHeight - lowest;
+    body.aabbNeedsUpdate = true;
+  }
+}
+
+function mechanicsFrame(
+  segments: readonly Segment[],
+  joints: readonly Joint[],
+  ground: Body | null,
+  equations: World['contacts'],
+  tolerance: number,
+): MechanicsFrame {
+  const candidates: SupportPoint[] = [];
+  const contacts: SupportPoint[] = [];
+  const ids = new Map(segments.map((segment) => [segment.body, segment.bone.id]));
+  let lowest = Infinity;
+  const corners: SupportPoint[] = [];
+  for (const { bone, body } of segments) {
+    body.updateAABB();
+    lowest = Math.min(lowest, body.aabb.lowerBound.z);
+    if (!isFoot(bone.id)) continue;
+    body.shapes.forEach((shape, i) => {
+      if (!(shape instanceof Box)) return;
+      const h = shape.halfExtents;
+      for (const x of [-h.x, h.x]) {
+        for (const y of [-h.y, h.y]) {
+          for (const z of [-h.z, h.z]) {
+            const local = body.shapeOrientations[i].vmult(new Vector(x, y, z));
+            local.vadd(body.shapeOffsets[i], local);
+            const position = body.pointToWorldFrame(local).toArray();
+            corners.push({ id: bone.id, position, loadN: 0 });
+          }
+        }
+      }
+    });
+  }
+  for (const point of corners) {
+    if (point.position[2] <= lowest + tolerance) candidates.push(point);
+  }
+  for (const equation of equations) {
+    if (!equation.enabled) continue;
+    const groundA = equation.bi === ground;
+    if (!groundA && equation.bj !== ground) continue;
+    const body = groundA ? equation.bj : equation.bi;
+    const id = ids.get(body);
+    if (!id) continue;
+    const offset = groundA ? equation.rj : equation.ri;
+    contacts.push({
+      id,
+      position: body.position.vadd(offset).toArray(),
+      loadN: Math.max(0, equation.multiplier) * KG_PER_UNIT,
+    });
+  }
+  return {
+    bodies: segments.map(({ bone, body }) => ({
+      id: bone.id,
+      parent: bone.parent,
+      massKg: body.mass * KG_PER_UNIT,
+      center: body.position.toArray(),
+      velocity: body.velocity.toArray(),
+      angularSpeed: body.angularVelocity.length(),
+    })),
+    joints: joints.map((joint) => joint.mechanics()),
+    candidates,
+    contacts,
+  };
+}
+
 export class PassiveRig {
   private readonly world: World;
+  private readonly solver: CoulombSolver;
   private readonly ground = new Body({ mass: 0, shape: new Plane() });
   private readonly segments = VISIBLE.map(makeSegment);
   private readonly joints: Joint[] = [];
@@ -471,15 +557,19 @@ export class PassiveRig {
 
   constructor(dropHeight = 0.35, tiltDegrees = 5, options: PhysicsOptions = {}) {
     this.timestep = options.timestep ?? STEP;
-    const muscleModel = options.muscleModel ?? 'calibrated';
-    if (!Number.isFinite(this.timestep) || this.timestep <= 0 || this.timestep > STEP) {
+    if (!Number.isFinite(this.timestep) || this.timestep <= 0 || this.timestep > 1 / 120) {
       throw new Error('Invalid physics timestep');
     }
-    const solver = new GSSolver();
+    const solver = new CoulombSolver(FRICTION);
     solver.iterations = options.iterations ?? 100;
     solver.tolerance = 1e-7;
-    this.world = new World({ gravity: new Vector(0, 0, -GRAVITY), solver, allowSleep: false });
-    this.world.defaultContactMaterial.friction = 0.65;
+    this.solver = solver;
+    this.world = new World({
+      gravity: new Vector(0, 0, -(options.gravity ?? GRAVITY)),
+      solver,
+      allowSleep: false,
+    });
+    this.world.defaultContactMaterial.friction = 0;
     this.world.defaultContactMaterial.restitution = 0.02;
     this.world.defaultContactMaterial.contactEquationStiffness = 1e8;
     this.world.defaultContactMaterial.contactEquationRelaxation = 4;
@@ -491,122 +581,69 @@ export class PassiveRig {
       this.world.addBody(segment.body);
       const parent = segment.bone.parent === null ? undefined : byId.get(segment.bone.parent);
       if (parent) {
-        const joint = new Joint(parent, segment, this.timestep, muscleModel);
+        const joint = new Joint(parent, segment, this.timestep);
         this.joints.push(joint);
         this.world.addConstraint(joint);
       }
     }
 
-    // Neutral proxies intentionally overlap at joints and in the rib cage.
-    // Suppress these pairs, but keep other body-body collisions enabled.
-    for (const segment of this.segments) segment.body.updateAABB();
+    // Direct connections are already excluded by Joint. Only explicitly
+    // documented proximal overlaps may receive an additional exclusion.
     for (let i = 0; i < this.segments.length; i++) {
       for (let j = i + 1; j < this.segments.length; j++) {
         const a = this.segments[i];
         const b = this.segments[j];
-        if (!adjacent(a.bone, b.bone) && a.body.aabb.overlaps(b.body.aabb)) {
+        if (a.bone.parent !== b.bone.id && b.bone.parent !== a.bone.id && collisionExcluded(a.bone, b.bone)) {
           this.world.addConstraint(new CollisionExclusion(a.body, b.body));
         }
       }
     }
 
-    if (options.initialPose) {
-      const posed = new Map(poseRig(options.initialPose).map((bone) => [bone.bone.id, bone]));
-      for (const segment of this.segments) {
-        const pose = posed.get(segment.bone.id);
-        if (!pose) throw new Error('Missing starting bone');
-        const rotation = poseRotation(pose.frame);
-        const offset = segment.center.vsub(vec(segment.bone.start));
-        segment.body.position.copy(vec(pose.start).vadd(rotation.vmult(offset)));
-        segment.body.quaternion.copy(rotation.mult(segment.rest));
-      }
-    }
-
-    // Apply one rigid rotation and translation to the entire neutral rig,
-    // preserving every joint anchor and its neutral relative orientation.
-    const tilt = new Quaternion().setFromAxisAngle(new Vector(1, 0, 0), tiltDegrees * DEG);
-    const pivot = vec(BONES[1].start);
-    let lowest = Infinity;
-    for (const { body } of this.segments) {
-      body.position.copy(pivot.vadd(tilt.vmult(body.position.vsub(pivot))));
-      body.quaternion.copy(tilt.mult(body.quaternion));
-      body.updateInertiaWorld(true);
-      body.updateAABB();
-      lowest = Math.min(lowest, body.aabb.lowerBound.z);
-    }
-    for (const { body } of this.segments) {
-      body.position.z += dropHeight - lowest;
-      body.aabbNeedsUpdate = true;
-    }
-    if (muscleModel === 'calibrated') {
-      const profile = referenceMuscleProfile();
-      for (const joint of this.joints) joint.setProfile(profile);
-    }
+    placeSegments(this.segments, dropHeight, tiltDegrees, options.initialPose);
+    const profile = referenceMuscleProfile();
+    for (const joint of this.joints) joint.setProfile(profile);
   }
 
   mechanics(tolerance = 0.005): MechanicsFrame {
-    const candidates: SupportPoint[] = [];
-    const contacts: SupportPoint[] = [];
-    const ids = new Map(this.segments.map((segment) => [segment.body, segment.bone.id]));
-    let lowest = Infinity;
-    const corners: SupportPoint[] = [];
-    for (const { bone, body } of this.segments) {
-      body.updateAABB();
-      lowest = Math.min(lowest, body.aabb.lowerBound.z);
-      if (!isFoot(bone.id)) continue;
-      body.shapes.forEach((shape, i) => {
-        if (!(shape instanceof Box)) return;
-        const h = shape.halfExtents;
-        for (const x of [-h.x, h.x]) {
-          for (const y of [-h.y, h.y]) {
-            for (const z of [-h.z, h.z]) {
-              const local = body.shapeOrientations[i].vmult(new Vector(x, y, z));
-              local.vadd(body.shapeOffsets[i], local);
-              const position = body.pointToWorldFrame(local).toArray();
-              corners.push({ id: bone.id, position, loadN: 0 });
-            }
-          }
-        }
-      });
-    }
-    for (const point of corners) {
-      if (point.position[2] <= lowest + tolerance) candidates.push(point);
-    }
-    for (const equation of this.world.contacts) {
-      if (!equation.enabled) continue;
-      const groundA = equation.bi === this.ground;
-      if (!groundA && equation.bj !== this.ground) continue;
-      const body = groundA ? equation.bj : equation.bi;
-      const id = ids.get(body);
-      if (!id) continue;
-      const offset = groundA ? equation.rj : equation.ri;
-      contacts.push({
-        id,
-        position: body.position.vadd(offset).toArray(),
-        loadN: Math.max(0, equation.multiplier) * KG_PER_UNIT,
-      });
+    return mechanicsFrame(this.segments, this.joints, this.ground, this.world.contacts, tolerance);
+  }
+
+  contactForces() {
+    return this.solver.forces.map(({ normal, tangent }) => ({
+      normalN: normal * KG_PER_UNIT,
+      tangentN: tangent * KG_PER_UNIT,
+    }));
+  }
+
+  // Read-only diagnostics; never expose mutable engine bodies.
+  invariants() {
+    const momentum = new Vector();
+    const angularMomentum = new Vector();
+    let kineticJ = 0;
+    let potentialJ = 0;
+    for (const { body } of this.segments) {
+      const mass = body.mass * KG_PER_UNIT;
+      const linear = body.velocity.scale(mass);
+      momentum.vadd(linear, momentum);
+      const omega = body.quaternion.inverse().vmult(body.angularVelocity);
+      const spin = body.quaternion.vmult(body.inertia.vmul(omega).scale(KG_PER_UNIT));
+      angularMomentum.vadd(spin.vadd(body.position.cross(linear)), angularMomentum);
+      kineticJ += 0.5 * (mass * body.velocity.lengthSquared() + spin.dot(body.angularVelocity));
+      potentialJ -= mass * this.world.gravity.z * body.position.z;
     }
     return {
-      bodies: this.segments.map(({ bone, body }) => ({
-        id: bone.id,
-        parent: bone.parent,
-        massKg: body.mass * KG_PER_UNIT,
-        center: body.position.toArray(),
-        velocity: body.velocity.toArray(),
-        angularSpeed: body.angularVelocity.length(),
-      })),
-      joints: this.joints.map((joint) => joint.mechanics()),
-      candidates,
-      contacts,
+      momentum: momentum.toArray(),
+      angularMomentum: angularMomentum.toArray(),
+      energyJ: kineticJ + potentialJ,
     };
   }
 
   sense(): SensorFrame {
-    const contacts: Record<string, { touching: boolean; normalLoadN: number }> = {};
+    const contacts: Record<string, { touching: boolean; groundTouching: boolean; normalLoadN: number }> = {};
     const ids = new Map<Body, string>();
     for (const segment of this.segments) {
       ids.set(segment.body, segment.bone.id);
-      contacts[segment.bone.id] = { touching: false, normalLoadN: 0 };
+      contacts[segment.bone.id] = { touching: false, groundTouching: false, normalLoadN: 0 };
     }
     for (const contact of this.world.contacts) {
       if (!contact.enabled) continue;
@@ -615,7 +652,10 @@ export class PassiveRig {
       if (a) contacts[a].touching = true;
       if (b) contacts[b].touching = true;
       const id = contact.bi === this.ground ? b : contact.bj === this.ground ? a : undefined;
-      if (id) contacts[id].normalLoadN += Math.max(0, contact.multiplier) * KG_PER_UNIT;
+      if (id) {
+        contacts[id].groundTouching ||= contact.multiplier > 0;
+        contacts[id].normalLoadN += Math.max(0, contact.multiplier) * KG_PER_UNIT;
+      }
     }
     const load = (side: string): number =>
       Object.entries(contacts)
@@ -654,7 +694,7 @@ export class PassiveRig {
     const previous = this.pelvis.body.velocity.clone();
     this.world.step(this.timestep);
     this.specificForce = this.pelvis.body.velocity.vsub(previous).scale(1 / this.timestep);
-    this.specificForce.z += GRAVITY;
+    this.specificForce.z -= this.world.gravity.z;
     this.steps++;
   }
 
@@ -669,13 +709,14 @@ export class PassiveRig {
       weightedHeight += body.mass * body.position.z;
       body.updateAABB();
       penetration = Math.max(penetration, -body.aabb.lowerBound.z);
-      valid &&= [...body.position.toArray(), ...body.velocity.toArray()].every(Number.isFinite);
+      valid &&= [...body.position.toArray(), ...body.velocity.toArray(), ...body.angularVelocity.toArray()].every(Number.isFinite);
       valid &&= [body.quaternion.x, body.quaternion.y, body.quaternion.z, body.quaternion.w].every(
         Number.isFinite,
       );
     }
     const contacts = new Set<Body>();
     for (const contact of this.world.contacts) {
+      if (!contact.enabled || contact.multiplier <= 0) continue;
       if (contact.bi === this.ground) contacts.add(contact.bj);
       if (contact.bj === this.ground) contacts.add(contact.bi);
     }
@@ -683,6 +724,9 @@ export class PassiveRig {
     const angleExcess = Math.max(...this.joints.map((joint) => joint.excess()));
     const centerHeight = weightedHeight / mass;
     valid &&= [jointGap, angleExcess, centerHeight, penetration].every(Number.isFinite);
+    const sensors = this.sense();
+    valid &&= sensors.joints.every((joint) => AXES.every((axis) => Object.values(joint.axes[axis]).every((value) => typeof value === 'boolean' || Number.isFinite(value))));
+    valid &&= [...sensors.gravityDirection, ...sensors.angularVelocity, ...sensors.specificForce, sensors.leftFootLoadN, sensors.rightFootLoadN, sensors.leftFootClearanceM, sensors.rightFootClearanceM].every(Number.isFinite);
     return {
       pose,
       seconds: this.steps * this.timestep,
@@ -694,7 +738,7 @@ export class PassiveRig {
       angleExcess,
       penetration,
       valid,
-      sensors: this.sense(),
+      sensors,
     };
   }
 }
@@ -703,11 +747,17 @@ let cachedProfile: MuscleProfile | undefined;
 
 function referenceMuscleProfile(): MuscleProfile {
   if (!cachedProfile) {
-    const reference = new PassiveRig(0, 0, {
-      initialPose: BALANCED_STANCE,
-      muscleModel: 'legacy',
+    const frames = calibrationPoses().map(({ angles, tilt }) => {
+      const segments = VISIBLE.map(makeSegment);
+      const byId = new Map(segments.map((segment) => [segment.bone.id, segment]));
+      const joints = segments.flatMap((segment) => {
+        const parent = segment.bone.parent === null ? undefined : byId.get(segment.bone.parent);
+        return parent ? [new Joint(parent, segment, STEP)] : [];
+      });
+      placeSegments(segments, 0, tilt, angles);
+      return mechanicsFrame(segments, joints, null, [], 0.005);
     });
-    cachedProfile = calibrateMuscles(reference.mechanics());
+    cachedProfile = calibrateMuscles(frames);
   }
   return cachedProfile;
 }
