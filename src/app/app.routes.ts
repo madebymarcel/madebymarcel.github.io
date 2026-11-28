@@ -39,6 +39,11 @@ export const routes: Routes = [
     loadComponent: () => import('./features/t-rex/t-rex-page').then((m) => m.TRexPage),
   },
   {
+    path: 'projects/t-rex-v2',
+    title: 'T. rex V2 | Made by Marcel',
+    loadComponent: () => import('./features/t-rex/t-rex-v2-page').then((m) => m.TRexV2Page),
+  },
+  {
     path: 'lab',
     title: 'Lab | Made by Marcel',
     loadComponent: () => import('./features/lab/lab-page').then((m) => m.LabPage),

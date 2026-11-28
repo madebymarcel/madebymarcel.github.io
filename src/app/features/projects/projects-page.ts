@@ -21,6 +21,11 @@ import { RouterLink } from '@angular/router';
         <p>A top-down study of dinosaur anatomy using scalable vector shapes.</p>
         <a class="ds-button" routerLink="/projects/t-rex">Explore T. rex</a>
       </article>
+      <article class="ds-card ds-stack">
+        <h2>T. rex V2</h2>
+        <p>Experimental continuous feedback learning, with planar and full 3D training.</p>
+        <a class="ds-button" routerLink="/projects/t-rex-v2">Explore T. rex V2</a>
+      </article>
     </section>
   `,
 })
