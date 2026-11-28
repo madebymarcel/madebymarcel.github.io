@@ -28,7 +28,9 @@ describe('V3 distance-only training', () => {
           expect(episode.samples).toHaveLength(0);
         } else {
           expect(episode.samples[0].history).toBeUndefined();
-          expect(episode.samples[1]?.history?.latent).toEqual(episode.samples[0].latent);
+          for (let i = 1; i < episode.samples.length; i++) {
+            expect(episode.samples[i].history?.latent).toEqual(episode.samples[i - 1].latent);
+          }
         }
       }
     }

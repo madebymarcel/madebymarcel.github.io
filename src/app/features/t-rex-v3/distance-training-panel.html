@@ -5,7 +5,7 @@
     from learning. No gait, balance controller, or standing bonus is used.
   </p>
   <p>{{ observationCount }} observations · {{ actionCount }} muscle actions · PPO at 30 Hz</p>
-  <p>Temporally correlated exploration (ρ = 0.85). Independent workers collect complete episodes with the same frozen policy.</p>
+  <p>Independent workers collect complete episodes with the same frozen policy.</p>
   <div class="physics-readings">
     <label for="training-seed">
       Training seed
@@ -114,6 +114,7 @@
     <p>Episode result: {{ state.reason }}</p>
     <p>Current distance: {{ distance(state.distanceM) }}</p>
     <p>Training horizon: {{ state.horizon }} s</p>
+    <p>Exploration correlation: {{ state.correlation.toFixed(2) }}</p>
     <p>Training episodes: {{ state.stats.episodes }}</p>
     <p>Invalid training episodes: {{ state.stats.invalidEpisodes }}</p>
     <p>Invalid evaluations: {{ state.stats.invalidEvaluations }}</p>

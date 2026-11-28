@@ -30,6 +30,7 @@ export interface TrainingStats {
 
 export interface TrainingFrame {
   readonly phase: Phase;
+  readonly correlation: number;
   readonly stats: Readonly<TrainingStats>;
   readonly distanceM: number;
   readonly elapsed: number;
@@ -334,6 +335,7 @@ export class DistanceTrainer {
     const collected = this.replay || this.phase === 'evaluation' ? null : this.lastRollout;
     return {
       phase: this.replay ? 'replay' : this.phase,
+      correlation: this.correlation,
       stats: { ...this.stats },
       distanceM: collected?.distanceM ?? run.distance,
       elapsed: collected?.elapsed ?? run.state.elapsed,
