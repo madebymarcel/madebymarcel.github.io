@@ -72,7 +72,13 @@ export class CapabilityAudit {
       const safe = state.support.upright && state.support.otherLoadN <= 0.05 * WEIGHT;
       const lifted =
         safe && clearance >= 0.03 && load <= 0.05 * WEIGHT && otherLoad >= 0.75 * WEIGHT;
-      if (lifted) {
+      if (!safe) {
+        foot.liftedFrom = null;
+        foot.liftSeconds = 0;
+        foot.liftCounted = false;
+        foot.plantedX = null;
+      }
+      if (lifted && foot.plantedX !== null) {
         if (foot.liftedFrom === null) foot.liftedFrom = foot.plantedX;
         foot.liftSeconds += dt;
         if (!foot.liftCounted && foot.liftSeconds >= 0.1 - 1e-9) {
@@ -83,6 +89,7 @@ export class CapabilityAudit {
         }
       } else {
         foot.liftSeconds = 0;
+        if (!foot.liftCounted) foot.liftedFrom = null;
         if (safe && clearance <= 0.015 && load >= 0.15 * WEIGHT) {
           if (foot.liftCounted && foot.liftedFrom !== null && x - foot.liftedFrom >= 0.05) {
             foot.steps++;
