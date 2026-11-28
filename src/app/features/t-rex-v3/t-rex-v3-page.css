@@ -50,3 +50,35 @@ input {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.physics-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.physics-readings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: 0.25rem 1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.physics-readings p {
+  margin: 0;
+}
+
+.ground {
+  stroke: currentColor;
+  stroke-width: 0.035;
+  stroke-dasharray: 0.15 0.08;
+}
+
+fieldset {
+  display: grid;
+  min-width: 0;
+  gap: 0.75rem;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}

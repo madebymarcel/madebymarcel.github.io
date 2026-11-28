@@ -1,6 +1,55 @@
 <section class="content-page ds-stack">
   <h1>T. rex V3</h1>
   <p>Skeleton validation: 40 rig bones, 39 visible shapes, one shared pose.</p>
+  <article class="ds-card ds-stack">
+    <h2>Passive physics</h2>
+    <p>Release the neutral skeleton 35 cm above the floor with a small sideways tilt.</p>
+    <div class="physics-controls">
+      <button class="ds-button" type="button" (click)="release()">Release / restart</button>
+      <button class="ds-button" type="button" [disabled]="!running()" (click)="pause()">
+        Pause
+      </button>
+      <button
+        class="ds-button"
+        type="button"
+        [disabled]="running() || !snapshot()?.valid"
+        (click)="resume()"
+      >
+        Resume
+      </button>
+      <button
+        class="ds-button"
+        type="button"
+        [disabled]="running() || !snapshot()?.valid"
+        (click)="singleStep()"
+      >
+        Single step
+      </button>
+      <button
+        class="ds-button"
+        type="button"
+        [disabled]="snapshot() === null"
+        (click)="returnToRig()"
+      >
+        Return to rig
+      </button>
+    </div>
+    @if (snapshot(); as state) {
+    <div class="physics-readings">
+      <p>Time: {{ state.seconds.toFixed(2) }} s</p>
+      <p>Mass: {{ state.massKg.toFixed(0) }} kg (estimated)</p>
+      <p>Gravity: 9.81 m/s²</p>
+      <p>Centre of mass height: {{ state.centerHeight.toFixed(2) }} m</p>
+      <p>Ground contacts: {{ state.groundContacts }} bodies</p>
+      <p>Largest joint gap: {{ (state.jointGap * 100).toFixed(2) }} cm</p>
+      <p>Largest joint limit excess: {{ state.angleExcess.toFixed(2) }}°</p>
+      <p>Floor penetration: {{ (state.penetration * 100).toFixed(2) }} cm</p>
+    </div>
+    @if (!state.valid) {
+    <p role="alert">Invalid physics state. Simulation stopped; restart to inspect again.</p>
+    } }
+    <p>Passive rigid bodies only. No motors, balance controller or animation.</p>
+  </article>
   <div class="rig-layout">
     <div class="ds-stack">
       @for (view of views; track view) {
@@ -11,7 +60,9 @@
           role="img"
           [attr.aria-label]="view + ' view of the articulated T. rex skeleton'"
         >
-          @for (shape of projections()[view].shapes; track shape.id) {
+          @if (snapshot() && view === 'side') {
+          <line class="ground" x1="-1000" y1="0" x2="1000" y2="0" />
+          } @for (shape of projections()[view].shapes; track shape.id) {
           <g [class.selected]="shape.id === selected().id">
             <title>{{ shape.label }}</title>
             <polygon [attr.points]="shape.points" />
@@ -33,27 +84,30 @@
         }
       </select>
       <p>Parent: {{ selected().parent }}</p>
-      @for (axis of axes; track axis) {
-      <div class="joint-axis">
-        <label [attr.for]="'rig-' + axis">{{ axis }}: {{ rotation()[axis] }}°</label>
-        <input
-          #angleInput
-          [id]="'rig-' + axis"
-          type="range"
-          [min]="selected().limits[axis][0]"
-          [max]="selected().limits[axis][1]"
-          [value]="rotation()[axis]"
-          [disabled]="selected().limits[axis][0] === selected().limits[axis][1]"
-          (input)="setAngle(axis, angleInput.value)"
-        />
-        <small>
-          {{ selected().limits[axis][0] }}° to {{ selected().limits[axis][1] }}° @if
-          (selected().limits[axis][0] === selected().limits[axis][1]) { (locked) }
-        </small>
-      </div>
-      }
-      <button class="ds-button" type="button" (click)="resetJoint()">Reset joint</button>
-      <button class="ds-button" type="button" (click)="resetPose()">Reset pose</button>
+      <fieldset [disabled]="snapshot() !== null">
+        <legend>Manual pose (return to rig to edit)</legend>
+        @for (axis of axes; track axis) {
+        <div class="joint-axis">
+          <label [attr.for]="'rig-' + axis">{{ axis }}: {{ rotation()[axis] }}°</label>
+          <input
+            #angleInput
+            [id]="'rig-' + axis"
+            type="range"
+            [min]="selected().limits[axis][0]"
+            [max]="selected().limits[axis][1]"
+            [value]="rotation()[axis]"
+            [disabled]="selected().limits[axis][0] === selected().limits[axis][1]"
+            (input)="setAngle(axis, angleInput.value)"
+          />
+          <small>
+            {{ selected().limits[axis][0] }}° to {{ selected().limits[axis][1] }}° @if
+            (selected().limits[axis][0] === selected().limits[axis][1]) { (locked) }
+          </small>
+        </div>
+        }
+        <button class="ds-button" type="button" (click)="resetJoint()">Reset joint</button>
+        <button class="ds-button" type="button" (click)="resetPose()">Reset pose</button>
+      </fieldset>
       <p>Angles are relative to the neutral pose. Limits are initial engineering estimates.</p>
     </aside>
   </div>
