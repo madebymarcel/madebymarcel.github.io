@@ -1,5 +1,5 @@
 import { ACTIONS, OBSERVATIONS, BalanceEnvironment, seededRandom } from './balance-environment';
-import type { EndReason } from './balance-environment';
+import type { EndReason, PhysicsFault, PhysicsResolution } from './balance-environment';
 import { CapabilityAudit } from './capability-audit';
 import type { CapabilityReport } from './capability-audit';
 import { DepController, depSensors } from './dep-controller';
@@ -26,6 +26,7 @@ export interface DepJob {
   readonly exploration: 'dep' | 'mixed' | 'iid' | 'zero';
   readonly depState: DepState | null;
   readonly policy: readonly number[] | null;
+  readonly physics?: PhysicsResolution;
 }
 
 export interface DepEpisode {
@@ -36,6 +37,7 @@ export interface DepEpisode {
   readonly reason: EndReason;
   readonly capability: CapabilityReport;
   readonly experiences: readonly Experience[];
+  readonly physicsFault?: PhysicsFault;
 }
 
 export interface DepResult {
@@ -49,12 +51,19 @@ export interface DepResult {
   readonly view: RolloutView;
 }
 
+export interface FailureWitness {
+  readonly resetSeed: number;
+  readonly actions: readonly (readonly number[])[];
+  readonly fault: PhysicsFault;
+}
+
 // One controller per lane; preserve its learned C and bias between valid
 // episodes, but clear finite differences across resets. Discard both replay
 // and DEP adaptation from invalid or unfinished benchmark episodes.
 export function collectDepRollouts(
   job: DepJob,
   progress?: (event: RolloutProgress) => void,
+  captureFailure?: (witness: FailureWitness) => void,
 ): DepResult {
   const resetRandom = seededRandom((job.seed ^ 0x6a09e667) >>> 0);
   const actionRandom = seededRandom((job.seed ^ 0xbb67ae85) >>> 0);
@@ -69,8 +78,12 @@ export function collectDepRollouts(
     if (!job.policy) throw new Error('Missing frozen MPO policy');
     policy.restorePolicy(job.policy);
   }
-  const env = new BalanceEnvironment(job.horizon, true);
-  const reset = () => env.reset(Math.floor(resetRandom() * 4294967296));
+  const env = new BalanceEnvironment(job.horizon, true, job.physics);
+  let resetSeed = 0;
+  const reset = () => {
+    resetSeed = Math.floor(resetRandom() * 4294967296);
+    return env.reset(resetSeed);
+  };
   let state = reset();
   let distanceM = 0;
   let attempts = 0;
@@ -93,6 +106,7 @@ export function collectDepRollouts(
     let depActions = 0;
     const start = attempts;
     const experiences: Experience[] = [];
+    const trace: number[][] = [];
     while (state.reason === 'running' && state.observation) {
       if (job.exactBudget && attempts >= job.minimumActions) break;
       const observation = state.observation;
@@ -124,6 +138,7 @@ export function collectDepRollouts(
           action = policy!.action(observation, true);
         }
       }
+      if (captureFailure) trace.push(action.slice());
       const next = env.step(action);
       const reward = distanceReward(state.forwardPositionM, next.forwardPositionM, next.reason);
       state = next;
@@ -149,7 +164,11 @@ export function collectDepRollouts(
       break;
     }
     const invalid = state.reason === 'invalid' || !state.observation;
-    if (invalid) controller.restore(before);
+    if (invalid) {
+      controller.restore(before);
+      if (state.physicsFault)
+        captureFailure?.({ resetSeed, actions: trace, fault: state.physicsFault });
+    }
     episodes.push({
       actions: attempts - start,
       depActions,
@@ -158,6 +177,7 @@ export function collectDepRollouts(
       reason: state.reason,
       capability: audit.report(state),
       experiences: invalid ? [] : nStepExperiences(experiences),
+      ...(state.physicsFault ? { physicsFault: state.physicsFault } : {}),
     });
   }
   return {

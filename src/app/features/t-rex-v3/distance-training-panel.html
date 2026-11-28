@@ -173,7 +173,23 @@
     <p>Latest evaluation mean: {{ distance(state.stats.evaluationM) }}</p>
     <p>Best evaluation mean: {{ distance(state.stats.bestEvaluationM) }}</p>
   </div>
-  @if (state.gate; as gate) {
+  @if (state.physicsFaultCounts; as faults) {
+  <h3>Physics failure diagnosis</h3>
+  <div class="physics-readings">
+    <p>Joint separation: {{ faults['joint-gap'] ?? 0 }}</p>
+    <p>Angular limit violation: {{ faults['angle-limit'] ?? 0 }}</p>
+    <p>Ground penetration: {{ faults['ground-penetration'] ?? 0 }}</p>
+    <p>Non-finite physical state: {{ faults['non-finite'] ?? 0 }}</p>
+    <p>Non-finite observation: {{ faults['observation'] ?? 0 }}</p>
+  </div>
+  @if (state.lastPhysicsFault) {
+  <p>Last invalid episode: {{ state.lastPhysicsFault }}</p>
+  }
+  <small
+    >One episode can violate more than one constraint. Invalid episodes are never used for
+    learning.</small
+  >
+  } @if (state.gate; as gate) {
   <h3>Pure DEP capability audit</h3>
   <p>
     Validation: {{ gate.passed ? 'All configured criteria observed' : 'Not established' }}.

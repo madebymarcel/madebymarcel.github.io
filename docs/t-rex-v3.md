@@ -175,3 +175,23 @@ and PPO checkpoints load only into PPO. DEP checkpoints carry complete
 bounded replay memory, optimizer and target networks, per-lane DEP
 matrices and biases, scores, evaluation duration, and the last 2,000
 round/evaluation records. In-flight simulation is not serialized.
+
+## Invalid DEP episode diagnosis
+
+The environment's validity bounds are unchanged (3 cm joint separation,
+3 degrees angular excess, 3 cm ground penetration and finite state).
+An invalid transition records every violated bound and the worst joint,
+axis or ground collider, with measured values and simulation time.
+DEP checkpoints and the training panel retain counts and the last
+fault. Old checkpoints still load, but cannot reconstruct past faults.
+
+A dedicated diagnosis workflow captures complete applied-action traces
+and reset seeds from invalid pure DEP episodes. Baseline replays must
+reproduce each captured failure exactly. Replay the same actions at
+higher solver iteration counts and smaller physical timesteps without
+altering the 30 Hz controller, body, reward or thresholds. Then run a
+closed-loop DEP comparison using the strongest tested numerical candidate
+and the same seeds and decision budgets. A successful diagnostic
+workflow means the measurements completed, not that the candidate has
+repaired every failure. Production resolution remains unchanged until
+a candidate is supported by measurements.
