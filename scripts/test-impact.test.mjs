@@ -27,7 +27,7 @@ const specs = [
   'navigation',
   'route-smoke',
   'site',
-  't-rex',
+  't-rex-v3',
   'theme-preferences',
   'usability-regression',
 ].map((name) => 'tests/' + name + '.spec.js');
@@ -35,9 +35,9 @@ const smoke = ['tests/route-smoke.spec.js', 'tests/site.spec.js'];
 const select = (...paths) => selectImpact(paths, specs);
 
 test('isolated dinosaur changes retain cross-page accessibility and all smoke checks', () => {
-  const plan = select('src/app/features/t-rex/spatial-rig.mjs', 'scripts/rex-servo-experiment.mjs');
+  const plan = select('src/app/features/t-rex-v3/rig.ts', 'src/app/features/t-rex-v3/passive-physics.ts');
   assert.equal(plan.mode, 'affected');
-  assert.deepEqual(plan.files, ['tests/accessibility.spec.js', ...smoke, 'tests/t-rex.spec.js']);
+  assert.deepEqual(plan.files, ['tests/accessibility.spec.js', ...smoke, 'tests/t-rex-v3.spec.js']);
   assert.equal(plan.lighthouse, false);
 });
 
@@ -51,26 +51,26 @@ test('canoe polo runs all five of its own suites, not dinosaur or biped suites',
 
 test('multi-feature changes combine scopes without duplicate suites', () => {
   const plan = select(
-    'src/app/features/t-rex/t-rex-page.ts',
+    'src/app/features/t-rex-v3/t-rex-v3-page.ts',
     'src/app/features/home/water-shader.ts',
   );
   assert.equal(plan.mode, 'affected');
   assert.equal(plan.lighthouse, true);
   assert.ok(plan.files.includes('tests/home-water.spec.js'));
-  assert.ok(plan.files.includes('tests/t-rex.spec.js'));
+  assert.ok(plan.files.includes('tests/t-rex-v3.spec.js'));
   assert.equal(new Set(plan.files).size, plan.files.length);
 });
 
 test('project catalogue changes retain both tests which inspect its project order', () => {
   const plan = select('src/app/features/projects/projects-page.ts');
   assert.ok(plan.files.includes('tests/biped.spec.js'));
-  assert.ok(plan.files.includes('tests/t-rex.spec.js'));
+  assert.ok(plan.files.includes('tests/t-rex-v3.spec.js'));
   assert.ok(plan.files.includes('tests/accessibility.spec.js'));
 });
 
 test('docs-only changes run smoke, known test changes run smoke and the changed suite', () => {
-  assert.deepEqual(select('README.md', 'docs/t-rex-spatial.md').files, smoke);
-  assert.equal(select('docs/t-rex-spatial.md').mode, 'smoke');
+  assert.deepEqual(select('README.md', 'docs/ci-test-impact.md').files, smoke);
+  assert.equal(select('docs/ci-test-impact.md').mode, 'smoke');
   assert.deepEqual(select('tests/biped.spec.js').files, ['tests/biped.spec.js', ...smoke]);
 });
 
@@ -84,9 +84,9 @@ test('shared, unknown, mixed and unreliable changes fail open to the full suite'
     '.github/workflows/ci.yml',
     'tests/generation-picker.js',
     'src/app/features/new-project/page.ts',
-    'public/trex.svg',
+    'public/favicon.svg',
   ]) {
-    assert.equal(select('src/app/features/t-rex/t-rex-page.ts', path).mode, 'full', path);
+    assert.equal(select('src/app/features/t-rex-v3/t-rex-v3-page.ts', path).mode, 'full', path);
   }
   assert.equal(select().mode, 'full');
   assert.equal(selectImpact(undefined, specs).mode, 'full');
@@ -126,13 +126,13 @@ test('git comparison includes both sides of a rename and rejects missing baselin
 test('a shared import of a feature invalidates isolation, while the route manifest is allowed', (t) => {
   const root = mkdtempSync(join(tmpdir(), 'impact-import-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  mkdirSync(join(root, 'src/app/features/t-rex'), { recursive: true });
+  mkdirSync(join(root, 'src/app/features/t-rex-v3'), { recursive: true });
   writeFileSync(join(root, 'tsconfig.json'), JSON.stringify({ include: ['src/**/*.ts'] }));
-  writeFileSync(join(root, 'src/app/features/t-rex/policy.ts'), 'export const policy = 1;\n');
+  writeFileSync(join(root, 'src/app/features/t-rex-v3/policy.ts'), 'export const policy = 1;\n');
   const route = 'src/app/app.routes.ts';
-  const policy = 'src/app/features/t-rex/policy.ts';
+  const policy = 'src/app/features/t-rex-v3/policy.ts';
   const shared = 'src/app/shared.ts';
-  const source = "import { policy } from './features/t-rex/policy';\nexport { policy };\n";
+  const source = "import { policy } from './features/t-rex-v3/policy';\nexport { policy };\n";
   writeFileSync(join(root, route), source);
   assert.equal(isolationProblem(root, [route, policy]), undefined);
   writeFileSync(join(root, shared), source);
@@ -148,16 +148,16 @@ test('checkout planning selects only affected suites, including a real push diff
   git('config', 'user.name', 'Test');
   mkdirSync(join(root, 'tests'));
   for (const spec of specs) writeFileSync(join(root, spec), '');
-  mkdirSync(join(root, 'src/app/features/t-rex'), { recursive: true });
+  mkdirSync(join(root, 'src/app/features/t-rex-v3'), { recursive: true });
   writeFileSync(join(root, 'tsconfig.json'), JSON.stringify({ include: ['src/**/*.ts'] }));
-  const policy = join(root, 'src/app/features/t-rex/policy.ts');
+  const policy = join(root, 'src/app/features/t-rex-v3/policy.ts');
   writeFileSync(policy, 'export const policy = 1;\n');
   git('add', '.');
   git('commit', '-qm', 'base');
   const base = git('rev-parse', 'HEAD').trim();
   writeFileSync(policy, 'export const policy = 2;\n');
   git('commit', '-qam', 'isolated change');
-  const expected = select('src/app/features/t-rex/policy.ts');
+  const expected = select('src/app/features/t-rex-v3/policy.ts');
   assert.deepEqual(planFromCheckout(root, 'push', { before: base }), expected);
   assert.deepEqual(
     planFromCheckout(root, 'pull_request', { pull_request: { base: { sha: base } } }),

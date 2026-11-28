@@ -20,7 +20,7 @@ const featureTests = {
   'not-found': ['navigation.spec.js'],
   projects: [
     'biped.spec.js',
-    't-rex.spec.js',
+    't-rex-v3.spec.js',
     'accessibility.spec.js',
     'usability-regression.spec.js',
   ],
@@ -32,14 +32,12 @@ const featureTests = {
     'canoe-polo-vision.spec.js',
   ],
   biped: ['biped.spec.js'],
-  't-rex': ['t-rex.spec.js', 'accessibility.spec.js'],
+  't-rex-v3': ['t-rex-v3.spec.js', 'accessibility.spec.js'],
   lab: ['design-system.spec.js', 'layout-catalogue.spec.js', 'accessibility.spec.js'],
 };
 const featureScripts = {
   'scripts/biped-experiment.mjs': 'biped',
   'scripts/canoe-polo-experiment.mjs': 'canoe-polo',
-  'scripts/rex-servo-experiment.mjs': 't-rex',
-  'scripts/rex-servo.test.mjs': 't-rex',
 };
 const prefix = 'src/app/features/';
 const testPath = (name) => 'tests/' + name;

@@ -34,16 +34,6 @@ export const routes: Routes = [
     loadComponent: () => import('./features/biped/biped-page').then((m) => m.BipedPage),
   },
   {
-    path: 'projects/t-rex',
-    title: 'T. rex | Made by Marcel',
-    loadComponent: () => import('./features/t-rex/t-rex-page').then((m) => m.TRexPage),
-  },
-  {
-    path: 'projects/t-rex-v2',
-    title: 'T. rex V2 | Made by Marcel',
-    loadComponent: () => import('./features/t-rex/t-rex-v2-page').then((m) => m.TRexV2Page),
-  },
-  {
     path: 'projects/t-rex-v3',
     title: 'T. rex V3 | Made by Marcel',
     loadComponent: () => import('./features/t-rex-v3/t-rex-v3-page').then((m) => m.TRexV3Page),
