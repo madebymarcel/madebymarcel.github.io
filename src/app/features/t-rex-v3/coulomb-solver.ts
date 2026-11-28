@@ -44,7 +44,7 @@ export class CoulombSolver extends GSSolver {
     }
     const makeRow = (equation: Equation): Row => ({
       equation,
-      bias: equation.computeB(dt),
+      bias: (equation as Equation & { computeB(h: number): number }).computeB(dt),
       inverseDiagonal: 1 / equation.computeC(),
       impulse: 0,
     });
