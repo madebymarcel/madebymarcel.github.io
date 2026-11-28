@@ -5,10 +5,12 @@ import type { PhysicsSnapshot } from './passive-physics';
 import { AXES, BONES, ZERO, clampAngles, poseRig, projectRig, viewBox } from './rig';
 import type { Angles, Axis, View } from './rig';
 import { BALANCED_STANCE } from './muscle-profile';
+import { DistanceTrainingPanel } from './distance-training-panel';
 import { signedUnit } from './neuromuscular';
 import type { Commands, ControlMode } from './neuromuscular';
 
 @Component({
+  imports: [DistanceTrainingPanel],
   templateUrl: './t-rex-v3-page.html',
   styleUrl: './t-rex-v3-page.css',
 })
