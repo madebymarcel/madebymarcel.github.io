@@ -168,9 +168,7 @@
         />
         <small>Current torque limit: {{ joint.axes[axis].maximumNm.toFixed(0) }} Nm</small>
       </div>
-      }
-      }
-      @if (selectedContact(); as contact) {
+      } } @if (selectedContact(); as contact) {
       <h3>Contact receptors</h3>
       <p>Touch: {{ contact.touching ? 'Yes' : 'No' }}</p>
       <p>Ground normal load: {{ contact.normalLoadN.toFixed(0) }} N</p>
