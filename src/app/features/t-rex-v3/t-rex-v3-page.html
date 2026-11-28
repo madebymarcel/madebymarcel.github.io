@@ -1,0 +1,60 @@
+<section class="content-page ds-stack">
+  <h1>T. rex V3</h1>
+  <p>Skeleton validation: 40 rig bones, 39 visible shapes, one shared pose.</p>
+  <div class="rig-layout">
+    <div class="ds-stack">
+      @for (view of views; track view) {
+      <article class="ds-card">
+        <h2>{{ view === 'side' ? 'Side view' : 'Top view' }}</h2>
+        <svg
+          [attr.viewBox]="projections()[view].box"
+          role="img"
+          [attr.aria-label]="view + ' view of the articulated T. rex skeleton'"
+        >
+          @for (shape of projections()[view].shapes; track shape.id) {
+          <g [class.selected]="shape.id === selected().id">
+            <title>{{ shape.label }}</title>
+            <polygon [attr.points]="shape.points" />
+            @for (detail of shape.details; track $index) {
+            <polyline [attr.points]="detail" />
+            }
+          </g>
+          }
+        </svg>
+      </article>
+      }
+    </div>
+    <aside class="ds-card ds-stack">
+      <h2>Joint inspector</h2>
+      <label for="rig-bone">Bone</label>
+      <select id="rig-bone" #boneSelect [value]="selectedId()" (change)="select(boneSelect.value)">
+        @for (bone of bones; track bone.id) {
+        <option [value]="bone.id">{{ bone.label }}</option>
+        }
+      </select>
+      <p>Parent: {{ selected().parent }}</p>
+      @for (axis of axes; track axis) {
+      <div class="joint-axis">
+        <label [attr.for]="'rig-' + axis">{{ axis }}: {{ rotation()[axis] }}°</label>
+        <input
+          #angleInput
+          [id]="'rig-' + axis"
+          type="range"
+          [min]="selected().limits[axis][0]"
+          [max]="selected().limits[axis][1]"
+          [value]="rotation()[axis]"
+          [disabled]="selected().limits[axis][0] === selected().limits[axis][1]"
+          (input)="setAngle(axis, angleInput.value)"
+        />
+        <small>
+          {{ selected().limits[axis][0] }}° to {{ selected().limits[axis][1] }}° @if
+          (selected().limits[axis][0] === selected().limits[axis][1]) { (locked) }
+        </small>
+      </div>
+      }
+      <button class="ds-button" type="button" (click)="resetJoint()">Reset joint</button>
+      <button class="ds-button" type="button" (click)="resetPose()">Reset pose</button>
+      <p>Angles are relative to the neutral pose. Limits are initial engineering estimates.</p>
+    </aside>
+  </div>
+</section>

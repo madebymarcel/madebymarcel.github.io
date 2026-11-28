@@ -1,0 +1,52 @@
+.rig-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 20rem);
+  gap: 1rem;
+  align-items: start;
+}
+
+svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 2 / 1;
+}
+
+polygon {
+  fill: currentColor;
+  fill-opacity: 0.35;
+  stroke: currentColor;
+  stroke-width: 0.025;
+  stroke-linejoin: round;
+}
+
+polyline {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 0.04;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.selected polygon {
+  fill-opacity: 0.9;
+  stroke-width: 0.06;
+}
+
+.joint-axis {
+  display: grid;
+  gap: 0.25rem;
+}
+
+select,
+input {
+  width: 100%;
+  min-width: 0;
+  font: inherit;
+}
+
+@media (max-width: 55rem) {
+  .rig-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
