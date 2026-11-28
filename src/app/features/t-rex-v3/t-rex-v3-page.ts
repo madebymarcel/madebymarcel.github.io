@@ -4,6 +4,8 @@ import { PassiveRig, STEP } from './passive-physics';
 import type { PhysicsSnapshot } from './passive-physics';
 import { AXES, BONES, ZERO, clampAngles, poseRig, projectRig, viewBox } from './rig';
 import type { Angles, Axis, View } from './rig';
+import { signedUnit } from './neuromuscular';
+import type { Commands, ControlMode } from './neuromuscular';
 
 @Component({
   templateUrl: './t-rex-v3-page.html',
@@ -15,6 +17,14 @@ export class TRexV3Page implements OnDestroy {
   private lastFrame: number | null = null;
   private accumulator = 0;
   protected readonly running = signal(false);
+  protected readonly ligaments = signal(false);
+  protected readonly mode = signal<ControlMode>('off');
+  protected readonly commands = signal<Commands>({});
+  private readonly control = computed(() => ({
+    ligaments: this.ligaments(),
+    mode: this.mode(),
+    commands: this.commands(),
+  }));
   protected readonly snapshot = signal<PhysicsSnapshot | null>(null);
   protected readonly bones = BONES.filter((bone) => bone.id !== 'root');
   protected readonly axes = AXES;
@@ -25,6 +35,36 @@ export class TRexV3Page implements OnDestroy {
     () => this.bones.find((bone) => bone.id === this.selectedId()) ?? this.bones[0],
   );
   protected readonly rotation = computed(() => this.angles()[this.selected().id] ?? ZERO);
+  protected readonly selectedSense = computed(() =>
+    this.snapshot()?.sensors.joints.find((joint) => joint.id === this.selectedId()),
+  );
+  protected readonly selectedContact = computed(
+    () => this.snapshot()?.sensors.contacts[this.selectedId()],
+  );
+
+  protected setMode(value: string): void {
+    if (value === 'off' || value === 'manual' || value === 'reflex') {
+      this.mode.set(value);
+    }
+  }
+
+  protected setMuscle(axis: Axis, raw: string): void {
+    const id = this.selectedId();
+    const joint = this.selectedSense();
+    if (!joint || joint.axes[axis].locked || this.mode() !== 'manual') return;
+    this.commands.update((commands) => ({
+      ...commands,
+      [id]: { ...commands[id], [axis]: signedUnit(Number(raw)) },
+    }));
+  }
+
+  protected clearMuscles(): void {
+    this.commands.set({});
+  }
+
+  protected degrees(value: number): string {
+    return ((value * 180) / Math.PI).toFixed(1);
+  }
   protected readonly projections = computed(() => {
     const state = this.snapshot();
     const pose = state?.valid ? state.pose : poseRig(this.angles());
@@ -37,8 +77,21 @@ export class TRexV3Page implements OnDestroy {
   });
 
   protected release(): void {
+    this.startExperiment(0.35, 5);
+  }
+
+  protected stance(): void {
+    this.startExperiment(0.02, 0);
+  }
+
+  protected airborne(): void {
+    this.startExperiment(2, 0);
+  }
+
+  private startExperiment(height: number, tilt: number): void {
     this.pause();
-    this.simulation = new PassiveRig();
+    this.clearMuscles();
+    this.simulation = new PassiveRig(height, tilt);
     this.snapshot.set(this.simulation.snapshot());
     this.resume();
   }
@@ -59,7 +112,7 @@ export class TRexV3Page implements OnDestroy {
 
   protected singleStep(): void {
     if (!this.simulation || this.running() || !this.snapshot()?.valid) return;
-    this.simulation.step();
+    this.simulation.step(this.control());
     this.snapshot.set(this.simulation.snapshot());
   }
 
@@ -81,7 +134,7 @@ export class TRexV3Page implements OnDestroy {
     this.lastFrame = now;
     let steps = 0;
     while (this.accumulator >= STEP && steps < 6) {
-      this.simulation.step();
+      this.simulation.step(this.control());
       this.accumulator -= STEP;
       steps++;
     }
