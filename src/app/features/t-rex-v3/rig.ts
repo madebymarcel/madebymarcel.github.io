@@ -322,11 +322,7 @@ function dot(a: Vec3, b: Vec3): number {
 }
 
 function cross(a: Vec3, b: Vec3): Vec3 {
-  return [
-    a[1] * b[2] - a[2] * b[1],
-    a[2] * b[0] - a[0] * b[2],
-    a[0] * b[1] - a[1] * b[0],
-  ];
+  return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 }
 
 function unit(a: Vec3): Vec3 {
@@ -364,11 +360,7 @@ function rotateLocal(v: Vec3, angles: Angles): Vec3 {
   const z1 = y * Math.sin(roll) + z * Math.cos(roll);
   const x2 = x * Math.cos(pitch) + z1 * Math.sin(pitch);
   const z2 = -x * Math.sin(pitch) + z1 * Math.cos(pitch);
-  return [
-    x2 * Math.cos(yaw) - y1 * Math.sin(yaw),
-    x2 * Math.sin(yaw) + y1 * Math.cos(yaw),
-    z2,
-  ];
+  return [x2 * Math.cos(yaw) - y1 * Math.sin(yaw), x2 * Math.sin(yaw) + y1 * Math.cos(yaw), z2];
 }
 
 export function poseRig(angles: Readonly<Record<string, Angles>>): readonly PosedBone[] {
@@ -472,12 +464,7 @@ function details(p: PosedBone, view: View): string[] {
       [x + offset + 0.38, side * 0.44, z - 1.02],
       [x + offset + 0.41, side * 0.12, z - 1.14],
     ];
-    return [
-      line(rib(-1, 0.12)),
-      line(rib(1, 0.12)),
-      line(rib(-1, 0.36)),
-      line(rib(1, 0.36)),
-    ];
+    return [line(rib(-1, 0.12)), line(rib(1, 0.12)), line(rib(-1, 0.36)), line(rib(1, 0.36))];
   }
   if (b.kind === 'skull') {
     const orbit = (side: number): Vec3[] => [
