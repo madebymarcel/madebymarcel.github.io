@@ -15,6 +15,8 @@ import type { Angles, Axis, Bone, PosedBone, Vec3 } from './rig';
 import { isFoot } from './biomechanics';
 import type { MechanicsFrame, JointMechanics, SupportPoint } from './biomechanics';
 import { GRAVITY, MASS_KG, STEP } from './physical-constants';
+import { BALANCED_STANCE, calibrateMuscles, muscleKey } from './muscle-profile';
+import type { MuscleModel, MuscleProfile } from './muscle-profile';
 import {
   PASSIVE,
   activationStep,
@@ -191,17 +193,60 @@ class AngularStop extends Equation {
   }
 }
 
+// Implicit, unilateral force-velocity actuator. Cannon 0.20 clamps solver
+// impulses (lambda) directly, so convert Nm to scaled torque times timestep.
+// At zero contraction speed it supplies activation * capacity; at the free
+// contraction speed its torque falls to zero. It cannot pull in reverse.
+class MuscleEquation extends Equation {
+  private direction = 0;
+
+  constructor(parent: Body, child: Body) {
+    super(parent, child, 0, 0);
+    this.enabled = false;
+  }
+
+  configure(gradient: Vector, activation: number, capacityNm: number, timestep: number): void {
+    this.direction = Math.sign(activation);
+    const impulse = (Math.abs(activation) * capacityNm * timestep) / KG_PER_UNIT;
+    this.enabled = impulse > 1e-10;
+    this.minForce = 0;
+    this.maxForce = impulse;
+    this.multiplier = 0;
+    if (!this.enabled) return;
+    gradient.scale(this.direction, this.jacobianElementB.rotational);
+    this.jacobianElementB.rotational.negate(this.jacobianElementA.rotational);
+    // lambda = impulseMax * (1 - signedRate / 8), clamped to [0, impulseMax].
+    this.eps = 8 / impulse;
+  }
+
+  override computeB(h: number): number {
+    return 8 - this.computeGW() - h * this.computeGiMf();
+  }
+
+  override computeGiMGt(): number {
+    const a = this.jacobianElementA.rotational;
+    const b = this.jacobianElementB.rotational;
+    return a.dot(this.bi.invInertiaWorldSolve.vmult(a)) + b.dot(this.bj.invInertiaWorldSolve.vmult(b));
+  }
+
+  torqueNm(): number {
+    return this.enabled ? this.direction * this.multiplier * KG_PER_UNIT : 0;
+  }
+}
+
 class Joint extends PointToPointConstraint {
   private readonly stops: { axis: Axis; equation: AngularStop }[] = [];
   private readonly activation: Record<Axis, number> = { pitch: 0, yaw: 0, roll: 0 };
   private readonly ligament: Record<Axis, number> = { pitch: 0, yaw: 0, roll: 0 };
   private readonly muscle: Record<Axis, number> = { pitch: 0, yaw: 0, roll: 0 };
-  private readonly maximum: Record<Axis, number> = { pitch: 0, yaw: 0, roll: 0 };
+  private readonly motors = new Map<Axis, MuscleEquation>();
+  private profile: MuscleProfile | undefined;
 
   constructor(
     private readonly parent: Segment,
     private readonly child: Segment,
     private readonly timestep: number,
+    private readonly muscleModel: MuscleModel,
   ) {
     const anchor = vec(child.bone.start);
     super(
@@ -225,8 +270,26 @@ class Joint extends PointToPointConstraint {
         const upper = new AngularStop(parent.body, child.body, -1, max * DEG, false, timestep);
         this.stops.push({ axis, equation: upper });
         this.equations.push(upper);
+        if (this.muscleModel === 'calibrated') {
+          const motor = new MuscleEquation(parent.body, child.body);
+          this.motors.set(axis, motor);
+          this.equations.push(motor);
+        }
       }
     }
+  }
+
+  setProfile(profile: MuscleProfile): void {
+    this.profile = profile;
+  }
+
+  private maximumNm(axis: Axis, gradient: Vector): number {
+    const [min, max] = this.child.bone.limits[axis];
+    if (min === max) return 0;
+    if (this.muscleModel === 'legacy') {
+      return Math.min(nominalStrengthNm(this.child.bone.id), 180 * this.inertia(gradient));
+    }
+    return this.profile?.get(muscleKey(this.child.bone.id, axis)) ?? 0;
   }
 
   override update(): void {
@@ -255,13 +318,7 @@ class Joint extends PointToPointConstraint {
       const [min, max] = this.child.bone.limits[axis];
       return min === max;
     };
-    const maximum = (axis: Axis) =>
-      locked(axis)
-        ? 0
-        : Math.min(
-            nominalStrengthNm(this.child.bone.id),
-            180 * this.inertia(state.gradients[axis]),
-          );
+    const maximum = (axis: Axis) => this.maximumNm(axis, state.gradients[axis]);
     return {
       id: this.child.bone.id,
       pivot: this.bodyB.pointToWorldFrame(this.pivotB).toArray(),
@@ -284,8 +341,8 @@ class Joint extends PointToPointConstraint {
         rate: this.rate(state.gradients[axis]),
         activation: this.activation[axis],
         ligamentNm: this.ligament[axis],
-        muscleNm: this.muscle[axis],
-        maximumNm: this.maximum[axis],
+        muscleNm: this.motors.get(axis)?.torqueNm() ?? this.muscle[axis],
+        maximumNm: this.maximumNm(axis, state.gradients[axis]),
         locked: min === max,
       };
     };
@@ -304,16 +361,16 @@ class Joint extends PointToPointConstraint {
       const rate = this.rate(gradient);
       const inertia = this.inertia(gradient);
       const enabled = min !== max;
-      const nominal = nominalStrengthNm(this.child.bone.id);
-      const limit = enabled ? Math.min(nominal, 180 * inertia) : 0;
-      this.maximum[axis] = limit;
+      const limit = this.maximumNm(axis, gradient);
       const target = commands[this.child.bone.id]?.[axis] ?? 0;
       this.activation[axis] =
         powered && enabled ? activationStep(this.activation[axis], target, this.timestep) : 0;
       this.ligament[axis] = ligaments
         ? ligamentTorque(angle, rate, min * DEG, max * DEG, inertia)
         : 0;
-      this.muscle[axis] = muscleTorque(this.activation[axis], rate, limit);
+      const motor = this.motors.get(axis);
+      if (motor) motor.configure(gradient, this.activation[axis], limit, this.timestep);
+      this.muscle[axis] = motor ? 0 : muscleTorque(this.activation[axis], rate, limit);
       const torque = gradient.scale((this.ligament[axis] + this.muscle[axis]) / KG_PER_UNIT);
       this.child.body.torque.vadd(torque, this.child.body.torque);
       this.parent.body.torque.vsub(torque, this.parent.body.torque);
@@ -374,6 +431,7 @@ export interface PhysicsOptions {
   readonly timestep?: number;
   readonly iterations?: number;
   readonly initialPose?: Readonly<Record<string, Angles>>;
+  readonly muscleModel?: MuscleModel;
 }
 
 // Convert the rig's world rotation matrix to a unit quaternion. This is
@@ -411,6 +469,7 @@ export class PassiveRig {
 
   constructor(dropHeight = 0.35, tiltDegrees = 5, options: PhysicsOptions = {}) {
     this.timestep = options.timestep ?? STEP;
+    const muscleModel = options.muscleModel ?? 'calibrated';
     if (!Number.isFinite(this.timestep) || this.timestep <= 0 || this.timestep > STEP) {
       throw new Error('Invalid physics timestep');
     }
@@ -430,7 +489,7 @@ export class PassiveRig {
       this.world.addBody(segment.body);
       const parent = segment.bone.parent === null ? undefined : byId.get(segment.bone.parent);
       if (parent) {
-        const joint = new Joint(parent, segment, this.timestep);
+        const joint = new Joint(parent, segment, this.timestep, muscleModel);
         this.joints.push(joint);
         this.world.addConstraint(joint);
       }
@@ -476,6 +535,10 @@ export class PassiveRig {
     for (const { body } of this.segments) {
       body.position.z += dropHeight - lowest;
       body.aabbNeedsUpdate = true;
+    }
+    if (muscleModel === 'calibrated') {
+      const profile = referenceMuscleProfile();
+      for (const joint of this.joints) joint.setProfile(profile);
     }
   }
 
@@ -632,4 +695,17 @@ export class PassiveRig {
       sensors: this.sense(),
     };
   }
+}
+
+let cachedProfile: MuscleProfile | undefined;
+
+function referenceMuscleProfile(): MuscleProfile {
+  if (!cachedProfile) {
+    const reference = new PassiveRig(0, 0, {
+      initialPose: BALANCED_STANCE,
+      muscleModel: 'legacy',
+    });
+    cachedProfile = calibrateMuscles(reference.mechanics());
+  }
+  return cachedProfile;
 }
