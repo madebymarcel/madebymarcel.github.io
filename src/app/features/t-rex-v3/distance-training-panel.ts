@@ -1,15 +1,20 @@
 import { Component, computed, signal } from '@angular/core';
 import type { OnDestroy } from '@angular/core';
 import { ACTIONS, OBSERVATIONS } from './balance-environment';
-import type { Checkpoint, TrainingFrame } from './distance-training';
+import type {
+  Brain,
+  BrainCheckpoint,
+  BrainFrame,
+  BrainJob,
+  BrainResult,
+} from './training-protocol';
 import type { TrainingRequest, TrainingResponse } from './distance-training.worker';
 import { projectRig, viewBox } from './rig';
-import type { RolloutJob, RolloutResult } from './rollout-collection';
 import type { RolloutResponse } from './rollout.worker';
 
 interface Collection {
   readonly round: number;
-  readonly results: (RolloutResult | undefined)[];
+  readonly results: (BrainResult | undefined)[];
   readonly attempts: number[];
 }
 
@@ -24,10 +29,11 @@ export class DistanceTrainingPanel implements OnDestroy {
   private collection: Collection | null = null;
   private destroyed = false;
   private timer: number | null = null;
-  protected readonly frame = signal<TrainingFrame | null>(null);
+  protected readonly frame = signal<BrainFrame | null>(null);
   protected readonly running = signal(false);
   protected readonly busy = signal(false);
   protected readonly error = signal('');
+  protected readonly brain = signal<Brain>('dep');
   protected readonly seed = signal(37);
   protected readonly horizon = signal(30);
   protected readonly lanes = signal(4);
@@ -40,6 +46,20 @@ export class DistanceTrainingPanel implements OnDestroy {
     const shapes = projectRig(frame.snapshot.pose, 'side');
     return { shapes, box: viewBox(shapes, 'side') };
   });
+
+  protected setBrain(value: string): void {
+    if (value === 'dep' || value === 'dep-mpo' || value === 'ppo') this.brain.set(value);
+  }
+
+  protected seconds(value: number | null | undefined): string {
+    return value == null ? 'Not measured' : value.toFixed(2) + ' s';
+  }
+
+  protected enableMpo(): void {
+    if (this.busy() || this.running() || this.frame()?.brain !== 'dep') return;
+    this.error.set('');
+    this.send({ type: 'enable-mpo' });
+  }
 
   protected setSeed(value: string): void {
     this.seed.set(Number(value));
@@ -81,6 +101,7 @@ export class DistanceTrainingPanel implements OnDestroy {
         this.download(data.checkpoint);
       } else {
         this.frame.set(data.frame);
+        this.brain.set(data.frame.brain);
         if (
           data.frame.phase === 'blocked' ||
           (data.frame.phase === 'replay' && data.frame.reason !== 'running')
@@ -107,7 +128,7 @@ export class DistanceTrainingPanel implements OnDestroy {
     this.collectingActions.set(0);
   }
 
-  private startCollection(jobs: readonly RolloutJob[]): void {
+  private startCollection(jobs: readonly BrainJob[]): void {
     const collection: Collection = {
       round: jobs[0].round,
       results: jobs.map(() => undefined),
@@ -143,7 +164,7 @@ export class DistanceTrainingPanel implements OnDestroy {
           if (data.type === 'result') {
             collection.results[lane] = data.result;
             const results = collection.results.filter(
-              (result): result is RolloutResult => result !== undefined,
+              (result): result is BrainResult => result !== undefined,
             );
             if (results.length === jobs.length) {
               this.collection = null;
@@ -196,7 +217,7 @@ export class DistanceTrainingPanel implements OnDestroy {
     if (this.busy() || this.running()) return;
     this.error.set('');
     this.running.set(true);
-    this.send({ type: 'start', seed: this.seed(), horizon: this.horizon() });
+    this.send({ type: 'start', brain: this.brain(), seed: this.seed(), horizon: this.horizon() });
   }
 
   protected pause(): void {
@@ -249,7 +270,7 @@ export class DistanceTrainingPanel implements OnDestroy {
     this.error.set('');
     this.busy.set(true);
     try {
-      if (file.size > 20_000_000) throw new Error('Checkpoint is too large');
+      if (file.size > 64_000_000) throw new Error('Checkpoint is too large');
       const checkpoint: unknown = JSON.parse(await file.text());
       this.send({ type: 'import', checkpoint });
     } catch (error) {
@@ -257,12 +278,17 @@ export class DistanceTrainingPanel implements OnDestroy {
     }
   }
 
-  private download(checkpoint: Checkpoint): void {
+  private download(checkpoint: BrainCheckpoint): void {
     const blob = new Blob([JSON.stringify(checkpoint)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'trex-v3-distance-' + checkpoint.stats.updates + '.json';
+    link.download =
+      'trex-v3-' +
+      ('brain' in checkpoint ? checkpoint.brain : 'distance') +
+      '-' +
+      checkpoint.stats.updates +
+      '.json';
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }

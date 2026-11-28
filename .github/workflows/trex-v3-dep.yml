@@ -1,0 +1,47 @@
+name: T. rex DEP capability and MPO benchmark
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/app/features/t-rex-v3/**'
+      - 'scripts/trex-v3-dep-benchmark.mjs'
+      - '.github/workflows/trex-v3-dep.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: trex-dep-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    name: Audit pure DEP capabilities and experimental MPO
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - run: npm ci --no-audit --no-fund
+      - name: Bundle V3 benchmark
+        run: |
+          ./node_modules/.bin/esbuild scripts/trex-v3-dep-benchmark.mjs \
+            --bundle --platform=node --format=esm \
+            --banner:js='import { createRequire } from "node:module"; const require = createRequire(import.meta.url);' \
+            --outfile=/tmp/trex-v3-dep-benchmark.mjs
+      - name: Evaluate pure DEP and off-policy training
+        shell: bash
+        run: |
+          set -o pipefail
+          node /tmp/trex-v3-dep-benchmark.mjs | tee trex-v3-dep-benchmark.log
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: trex-v3-dep-results
+          path: trex-v3-dep-benchmark.log
+          if-no-files-found: ignore
