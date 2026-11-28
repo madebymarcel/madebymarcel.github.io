@@ -53,7 +53,7 @@
     <button
       class="ds-button"
       type="button"
-      [disabled]="running() || busy() || frame()?.stats?.bestEvaluationM == null"
+      [disabled]="running() || busy() || !frame() || frame()?.stats?.bestEvaluationM === null"
       (click)="replayBest()"
     >
       Replay best policy
