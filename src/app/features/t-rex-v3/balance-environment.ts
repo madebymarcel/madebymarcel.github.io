@@ -42,7 +42,7 @@ export function seededRandom(seed: number): () => number {
 }
 
 export function decodeActions(action: readonly number[]): Commands {
-  if (action.length !== ACTIONS.length || action.some((value) =>
+  if (action.length !== ACTIONS.length || Array.from(action).some((value) =>
     !Number.isFinite(value) || Math.abs(value) > 1,
   )) throw new Error('Invalid action vector');
   const commands: Record<string, Partial<Record<Axis, number>>> = {};
@@ -92,7 +92,7 @@ export function measureSupport(
 ): SupportMetrics {
   const upright = state.pelvisHeight > 2.4 && -state.sensors.gravityDirection[2] > 0.9;
   const supported =
-    state.valid && upright && footLoadN >= 0.75 * WEIGHT && otherLoadN <= 0.05 * WEIGHT;
+    !invalidPhysics(state) && upright && footLoadN >= 0.75 * WEIGHT && otherLoadN <= 0.05 * WEIGHT;
   const stable =
     supported && footLoadN <= 1.25 * WEIGHT && Math.hypot(...velocity) < 0.15;
   return { footLoadN, otherLoadN, upright, supported, stable };
@@ -101,7 +101,7 @@ export function measureSupport(
 export type EndReason = 'running' | 'fall' | 'invalid' | 'time-limit';
 
 export interface Transition {
-  readonly observation: readonly number[];
+  readonly observation: readonly number[] | null;
   readonly elapsed: number;
   readonly terminated: boolean;
   readonly truncated: boolean;
@@ -130,7 +130,7 @@ export class BalanceEnvironment {
   }
 
   reset(seed: number, perturbationDegrees = 1): Transition {
-    if (!Number.isSafeInteger(seed) || !Number.isFinite(perturbationDegrees)
+    if (!Number.isSafeInteger(seed) || seed < 0 || seed > 0xffffffff || !Number.isFinite(perturbationDegrees)
       || perturbationDegrees < 0 || perturbationDegrees > 5) {
       throw new Error('Invalid reset options');
     }
@@ -186,8 +186,11 @@ export class BalanceEnvironment {
     elapsed: number,
   ): Transition {
     const velocity = massCenter(this.rig.mechanics().bodies).velocity;
-    const observation = observe(state, velocity);
-    if (!observation.every(Number.isFinite)) this.reason = 'invalid';
+    let observation: number[] | null = state.valid ? observe(state, velocity) : null;
+    if (!observation?.every(Number.isFinite) || this.reason === 'invalid') {
+      this.reason = 'invalid';
+      observation = null;
+    }
     const support = measureSupport(state, velocity, foot, other);
     if (support.supported && this.reason !== 'invalid') this.supportedSeconds += elapsed;
     this.stableSeconds = support.stable && this.reason !== 'invalid' ? this.stableSeconds + elapsed : 0;

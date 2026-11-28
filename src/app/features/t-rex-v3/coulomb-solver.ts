@@ -35,6 +35,7 @@ export class CoulombSolver extends GSSolver {
   }
 
   override solve(dt: number, world: World): number {
+    if (world.frictionEquations.length) throw new Error('Native friction must be disabled');
     this.forces.length = 0;
     for (const body of world.bodies) {
       body.updateSolveMassProperties();
