@@ -7,8 +7,6 @@ export const serverRoutes: ServerRoute[] = [
   { path: 'projects', renderMode: RenderMode.Prerender },
   { path: 'projects/canoe-polo', renderMode: RenderMode.Prerender },
   { path: 'projects/biped', renderMode: RenderMode.Prerender },
-  { path: 'projects/t-rex', renderMode: RenderMode.Prerender },
-  { path: 'projects/t-rex-v2', renderMode: RenderMode.Prerender },
   { path: 'projects/t-rex-v3', renderMode: RenderMode.Prerender },
   { path: 'lab', renderMode: RenderMode.Prerender },
   { path: 'contact', renderMode: RenderMode.Prerender },

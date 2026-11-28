@@ -1,4 +1,4 @@
-// Physical units shared by the engine and biomechanics calculations.
-export const STEP = 1 / 120;
+// Physical units shared by rendering, diagnostics and training.
+export const STEP = 1 / 480;
 export const GRAVITY = 9.81;
 export const MASS_KG = 8000;

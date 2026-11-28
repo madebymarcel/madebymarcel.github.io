@@ -17,18 +17,8 @@ import { RouterLink } from '@angular/router';
         <a class="ds-button" routerLink="/projects/biped">Explore biped robot</a>
       </article>
       <article class="ds-card ds-stack">
-        <h2>T. rex</h2>
-        <p>A top-down study of dinosaur anatomy using scalable vector shapes.</p>
-        <a class="ds-button" routerLink="/projects/t-rex">Explore T. rex</a>
-      </article>
-      <article class="ds-card ds-stack">
-        <h2>T. rex V2</h2>
-        <p>Experimental continuous feedback learning, with planar and full 3D training.</p>
-        <a class="ds-button" routerLink="/projects/t-rex-v2">Explore T. rex V2</a>
-      </article>
-      <article class="ds-card ds-stack">
         <h2>T. rex V3</h2>
-        <p>Manually inspect an articulated 40-bone SVG skeleton from the side and above.</p>
+        <p>Explore the articulated dinosaur, physics, muscles and sensory receptors.</p>
         <a class="ds-button" routerLink="/projects/t-rex-v3">Explore T. rex V3</a>
       </article>
     </section>

@@ -146,7 +146,7 @@ export class TRexV3Page implements OnDestroy {
     }
     this.lastFrame = now;
     let steps = 0;
-    while (this.accumulator >= STEP && steps < 6) {
+    while (this.accumulator >= STEP && steps < Math.round(0.05 / STEP)) {
       this.simulation.step(this.control());
       this.accumulator -= STEP;
       steps++;
