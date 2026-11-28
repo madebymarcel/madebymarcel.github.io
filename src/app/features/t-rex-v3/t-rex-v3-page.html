@@ -7,6 +7,7 @@
     <div class="physics-controls">
       <button class="ds-button" type="button" (click)="release()">Drop / restart</button>
       <button class="ds-button" type="button" (click)="stance()">Stance start</button>
+      <button class="ds-button" type="button" (click)="balancedStance()">Balanced start</button>
       <button class="ds-button" type="button" (click)="airborne()">Airborne start</button>
       <button class="ds-button" type="button" [disabled]="!running()" (click)="pause()">
         Pause
@@ -69,7 +70,7 @@
       <option value="manual">Manual activation</option>
       <option value="reflex">Neutral-pose reflex (experimental)</option>
     </select>
-    <p>The reflex responds to joint position, motion, orientation and foot load.</p>
+    <p>Muscle limits are calibrated from estimated static loads. The reflex is experimental.</p>
     <button class="ds-button" type="button" (click)="clearMuscles()">
       Clear manual activation
     </button>

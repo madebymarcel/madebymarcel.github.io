@@ -9,9 +9,11 @@ import {
   supportMargin,
 } from './biomechanics';
 import type { Point2, SupportPoint } from './biomechanics';
+import { BALANCED_STANCE } from './muscle-profile';
 import { ligamentTorque } from './neuromuscular';
 import type { ControlInput } from './neuromuscular';
 import { GRAVITY, MASS_KG, PassiveRig, STEP } from './passive-physics';
+import type { PhysicsOptions } from './passive-physics';
 import { poseRig } from './rig';
 import type { Angles } from './rig';
 import { standingControl } from './standing-controller';
@@ -199,8 +201,11 @@ function stand(
   name: string,
   angles: Readonly<Record<string, Angles>>,
   controller: boolean,
+  options: PhysicsOptions = {},
 ): TrialResult {
-  const rig = new PassiveRig(0.002, 0, { initialPose: angles });
+  const rig = new PassiveRig(0.002, 0, { ...options, initialPose: angles });
+  const dt = rig.timestep;
+  const sampleSteps = Math.round(0.05 / dt);
   const start = massCenter(rig.mechanics().bodies).position;
   let target: StandingTarget = { angles, center: [start[0], start[1]] };
   let command: ControlInput = PASSIVE;
@@ -229,28 +234,28 @@ function stand(
   let lift = 'blocked by transfer';
   let pushOff = 'blocked by lift';
   let completedStanding = false;
-  for (let i = 1; i <= 30 / STEP; i++) {
-    const time = i * STEP;
-    if (controller && (i - 1) % 6 === 0) {
+  for (let i = 1; i <= 30 / dt; i++) {
+    const time = i * dt;
+    if (controller && (i - 1) % sampleSteps === 0) {
       command = standingControl(rig.mechanics(), rig.sense(), target);
     }
     rig.step(command);
     const sensors = rig.sense();
-    left += sensors.leftFootLoadN / 6;
-    right += sensors.rightFootLoadN / 6;
+    left += sensors.leftFootLoadN / sampleSteps;
+    right += sensors.rightFootLoadN / sampleSteps;
     const normalLoad = Object.values(sensors.contacts).reduce(
       (sum, contact) => sum + contact.normalLoadN,
       0,
     );
-    other += Math.max(0, normalLoad - sensors.leftFootLoadN - sensors.rightFootLoadN) / 6;
+    other += Math.max(0, normalLoad - sensors.leftFootLoadN - sensors.rightFootLoadN) / sampleSteps;
     if (phase === 'push') {
       for (const equation of rig['world'].frictionEquations) {
         if (!equation.enabled) continue;
         const sign = equation.bi === rig['ground'] ? 1 : equation.bj === rig['ground'] ? -1 : 0;
-        forwardImpulseNs += sign * equation.t.x * equation.multiplier * 100 * STEP;
+        forwardImpulseNs += sign * equation.t.x * equation.multiplier * 100 * dt;
       }
     }
-    if (i % 6 !== 0) continue;
+    if (i % sampleSteps !== 0) continue;
     const state = rig.snapshot();
     expect(state.valid).toBe(true);
     const frame = rig.mechanics();
@@ -451,8 +456,12 @@ describe('V3 biomechanics acceptance suite', () => {
     const { best } = findStance();
     const trials = [
       stand('neutral passive', {}, false),
-      stand('neutral standing controller', {}, true),
-      stand('candidate standing controller', best.angles, true),
+      stand('legacy balanced controller', BALANCED_STANCE, true, { muscleModel: 'legacy' }),
+      stand('calibrated balanced controller', BALANCED_STANCE, true),
+      stand('calibrated best candidate controller', best.angles, true),
+      stand('calibrated balanced controller at 480 Hz', BALANCED_STANCE, true, {
+        timestep: STEP / 4,
+      }),
     ];
     report('acceptance', trials);
     // Results deliberately remain diagnostic. No failed capability is marked
