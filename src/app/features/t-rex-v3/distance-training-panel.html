@@ -4,9 +4,18 @@
     Forward displacement is the only reward. Falling ends an episode. Invalid physics is excluded
     from learning. No gait, balance controller, or standing bonus is used.
   </p>
-  <p>{{ observationCount }} observations · {{ actionCount }} muscle actions · PPO at 30 Hz</p>
+  <p>{{ observationCount }} observations · {{ actionCount }} muscle actions · 30 Hz</p>
+  <p>Pure DEP explores through sensory feedback without a reward. Experimental DEP-MPO learns from collected experiences; the previous PPO brain remains a comparison baseline. The capability audit is a diagnostic, never a reward.</p>
   <p>Independent workers collect complete episodes with the same frozen policy.</p>
   <div class="physics-readings">
+    <label for="training-brain">
+      Brain
+      <select id="training-brain" #brainInput [value]="brain()" [disabled]="running() || busy()" (change)="setBrain(brainInput.value)">
+        <option value="dep">Pure DEP (capability audit)</option>
+        <option value="dep-mpo">Experimental DEP-MPO</option>
+        <option value="ppo">PPO (comparison baseline)</option>
+      </select>
+    </label>
     <label for="training-seed">
       Training seed
       <input
@@ -66,6 +75,9 @@
     >
       Resume training
     </button>
+    @if (frame()?.brain === 'dep') {
+    <button class="ds-button" type="button" [disabled]="running() || busy() || frame()?.phase === 'blocked'" (click)="enableMpo()">Enable experimental MPO (keep DEP memory)</button>
+    }
     <button
       class="ds-button"
       type="button"
@@ -103,7 +115,7 @@
   <small>
     Loading restores the learned policy, optimizer and recorded scores, then starts a fresh episode.
     Pausing discards any in-flight collection round, not learned weights. Save before leaving this
-    page. Replay has no time limit.
+    page. DEP checkpoints also preserve the replay buffer, per-worker controllers and recent training history. PPO checkpoints still load as PPO; their weights cannot be converted into MPO weights. Replay has no time limit.
   </small>
   @if (error()) {
   <p role="alert">{{ error() }}</p>
@@ -115,19 +127,59 @@
     <p>Episode result: {{ state.reason }}</p>
     <p>Current distance: {{ distance(state.distanceM) }}</p>
     <p>Training horizon: {{ state.horizon }} s</p>
+    <p>Brain: {{ state.brain }}</p>
+    @if (state.brain === 'ppo') {
     <p>Exploration correlation: {{ state.correlation.toFixed(2) }}</p>
+    }
     <p>Training episodes: {{ state.stats.episodes }}</p>
     <p>Invalid training episodes: {{ state.stats.invalidEpisodes }}</p>
     <p>Invalid evaluations: {{ state.stats.invalidEvaluations }}</p>
     <p>Action decisions: {{ state.stats.actions }}</p>
     <p>Uncommitted decisions this round: {{ collectingActions() }}</p>
+    @if (state.brain === 'ppo') {
     <p>Valid learned decisions: {{ state.stats.learnedActions }}</p>
     <p>PPO updates: {{ state.stats.updates }}</p>
+    } @else {
+    <p>Valid collected decisions: {{ state.stats.learnedActions }}</p>
+    <p>DEP decisions: {{ state.depDecisions }}</p>
+    <p>Replay memory: {{ state.replaySize }} transitions</p>
+    <p>MPO warmup: {{ state.warmup }} valid transitions</p>
+    <p>MPO updates: {{ state.stats.updates }}</p>
+    <p>Replay samples drawn: {{ state.sampledTransitions }}</p>
+    <p>Latest evaluation duration: {{ seconds(state.latestEvaluationSeconds) }}</p>
+    <p>Best-distance policy duration: {{ seconds(state.bestEvaluationSeconds) }}</p>
+    }
     <p>Last valid episode: {{ distance(state.stats.lastDistanceM) }}</p>
     <p>Best exploratory episode: {{ distance(state.stats.bestTrainingM) }}</p>
     <p>Latest evaluation mean: {{ distance(state.stats.evaluationM) }}</p>
     <p>Best evaluation mean: {{ distance(state.stats.bestEvaluationM) }}</p>
   </div>
+  @if (state.gate; as gate) {
+  <h3>Pure DEP capability audit</h3>
+  <p>Validation: {{ gate.passed ? 'All configured criteria observed' : 'Not established' }}. Experimental MPO is not evidence of walking.</p>
+  <div class="physics-readings">
+    <p>Valid pure DEP episodes: {{ gate.validEpisodes }}</p>
+    <p>Invalid pure DEP episodes: {{ gate.invalidEpisodes }}</p>
+    <p>Stable standing ≥ 2 s: {{ gate.stableStanding ? 'Observed' : 'Not observed' }}</p>
+    <p>Left supported foot lift: {{ gate.leftLift ? 'Observed' : 'Not observed' }}</p>
+    <p>Right supported foot lift: {{ gate.rightLift ? 'Observed' : 'Not observed' }}</p>
+    <p>Weight transfer: {{ gate.transfer ? 'Observed' : 'Not observed' }}</p>
+    <p>Alternating forward steps: {{ gate.alternatingSteps ? 'Observed' : 'Not observed' }}</p>
+  </div>
+  }
+  @if (state.bestCapability; as capability) {
+  <h3>Best observed capabilities (per episode)</h3>
+  <div class="physics-readings">
+    <p>Continuous loaded support: {{ capability.longestSupportedSeconds.toFixed(2) }} s</p>
+    <p>Stable support: {{ capability.longestStableSeconds.toFixed(2) }} s</p>
+    <p>Supported lifts (left/right): {{ capability.leftLifts }}/{{ capability.rightLifts }}</p>
+    <p>Weight transfers: {{ capability.weightTransfers }}</p>
+    <p>Forward steps (left/right): {{ capability.leftSteps }}/{{ capability.rightSteps }}</p>
+    <p>Alternating steps: {{ capability.alternatingSteps }}</p>
+    <p>Peak tail/torso pitch: {{ capability.maxTailPitchDegrees.toFixed(1) }}° / {{ capability.maxTorsoPitchDegrees.toFixed(1) }}°</p>
+  </div>
+  <small>Pitch alone does not demonstrate tail and torso coordination. Counts require measured foot load, clearance, and forward touchdown.</small>
+  }
   @if (state.message) {
   <p role="alert">{{ state.message }}</p>
   } @if (projection(); as view) {

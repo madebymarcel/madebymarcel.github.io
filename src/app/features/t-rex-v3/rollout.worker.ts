@@ -1,18 +1,21 @@
 import { collectRollouts } from './rollout-collection';
-import type { RolloutJob, RolloutProgress, RolloutResult } from './rollout-collection';
+import { collectDepRollouts } from './dep-rollout';
+import type { RolloutProgress } from './rollout-collection';
+import type { BrainJob, BrainResult } from './training-protocol';
 
 export type RolloutResponse =
   | { type: 'progress'; progress: RolloutProgress }
-  | { type: 'result'; result: RolloutResult }
+  | { type: 'result'; result: BrainResult }
   | { type: 'error'; round: number; message: string };
 
 function send(message: RolloutResponse): void {
   postMessage(message);
 }
 
-addEventListener('message', ({ data }: MessageEvent<RolloutJob>) => {
+addEventListener('message', ({ data }: MessageEvent<BrainJob>) => {
   try {
-    const result = collectRollouts(data, (progress) => send({ type: 'progress', progress }));
+    const progress = (event: RolloutProgress) => send({ type: 'progress', progress: event });
+    const result = 'brain' in data ? collectDepRollouts(data, progress) : collectRollouts(data, progress);
     send({ type: 'result', result });
   } catch (error) {
     send({
