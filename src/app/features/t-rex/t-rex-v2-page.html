@@ -92,7 +92,8 @@
       </button>
     </div>
     <p class="iteration-count">
-      {{ mode() === 'planar' ? 'Lateral movement constrained for diagnosis' : 'Full spatial balance' }}
+      {{ mode() === 'planar' ? 'Lateral movement constrained for diagnosis' : 'Full spatial balance'
+      }}
     </p>
     <div class="training-actions">
       <button class="ds-button" type="button" (click)="toggleTraining()" [disabled]="!ready()">
@@ -107,7 +108,9 @@
         Export training
       </button>
     </div>
-    <p class="iteration-count" data-testid="rex-iterations">Updates: {{ iterations() }} · Rollouts: {{ rollouts() }}</p>
+    <p class="iteration-count" data-testid="rex-iterations">
+      Updates: {{ iterations() }} · Rollouts: {{ rollouts() }}
+    </p>
     <p class="milestone" role="status">{{ notice() }}</p>
     @if (error()) {
     <p class="ds-error" role="alert">{{ error() }}</p>

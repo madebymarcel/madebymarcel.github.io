@@ -36,9 +36,7 @@ export function updateWeights(weights, directions, rewards) {
     .slice(0, ELITES);
   const scores = elite.flatMap(({ positive, negative }) => [positive, negative]);
   const mean = scores.reduce((sum, score) => sum + score, 0) / scores.length;
-  const sd = Math.sqrt(
-    scores.reduce((sum, score) => sum + (score - mean) ** 2, 0) / scores.length,
-  );
+  const sd = Math.sqrt(scores.reduce((sum, score) => sum + (score - mean) ** 2, 0) / scores.length);
   if (sd < 1e-8) return weights.slice();
   return weights.map((weight, i) => {
     const update = elite.reduce(

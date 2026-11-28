@@ -128,7 +128,9 @@ export class TRexV2Page {
     try {
       const count = Math.max(1, Math.min(6, (navigator.hardwareConcurrency || 2) - 1));
       for (let i = 0; i < count; i++) {
-        const worker = new Worker(new URL('./t-rex-v2.worker', import.meta.url), { type: 'module' });
+        const worker = new Worker(new URL('./t-rex-v2.worker', import.meta.url), {
+          type: 'module',
+        });
         worker.onmessage = ({ data }: MessageEvent<Response>) => {
           const callback = this.pending.get(data.id);
           this.pending.delete(data.id);

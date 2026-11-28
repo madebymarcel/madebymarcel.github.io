@@ -1,7 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DIRECTIONS, perturb, updateWeights } from '../src/app/features/t-rex/v2-ars.mjs';
-import { createV2Rig, evaluate, passed, rewardDelta } from '../src/app/features/t-rex/v2-learning.mjs';
+import {
+  createV2Rig,
+  evaluate,
+  passed,
+  rewardDelta,
+} from '../src/app/features/t-rex/v2-learning.mjs';
 import { activeParameters, POLICY_SIZE } from '../src/app/features/t-rex/v2-policy.mjs';
 import {
   advanceWeights,
@@ -20,7 +25,14 @@ test('paired perturbations recover a simple reward gradient, not just a winning 
   const next = updateWeights(weights, wave.directions, rewards);
   assert.ok(next[0] > 0);
   assert.equal(next[1], 0);
-  assert.deepEqual(updateWeights(weights, wave.directions, rewards.map(() => 0)), weights);
+  assert.deepEqual(
+    updateWeights(
+      weights,
+      wave.directions,
+      rewards.map(() => 0),
+    ),
+    weights,
+  );
 });
 
 test('planar mode preserves anatomy, fixes lateral lanes, and masks inactive weights', () => {
@@ -43,7 +55,9 @@ test('planar mode preserves anatomy, fixes lateral lanes, and masks inactive wei
 test('unrestricted neutral physics is finite and not falsely qualified as walking', () => {
   const m = evaluate(Array(POLICY_SIZE).fill(0), 'spatial');
   assert.ok(m.ticks > 0);
-  assert.ok(Object.values(m).every((value) => typeof value === 'boolean' || Number.isFinite(value)));
+  assert.ok(
+    Object.values(m).every((value) => typeof value === 'boolean' || Number.isFinite(value)),
+  );
   assert.equal(passed(m), false);
 });
 
@@ -68,7 +82,11 @@ test('a lunge cannot earn more instantaneous progress than target speed; falling
 test('qualification outranks a falling distance record and progress persists deterministically', () => {
   const state = emptyCheckpoint('spatial');
   const wave = propose(state);
-  const next = advanceWeights(state, wave, wave.policies.map((p) => p[0]));
+  const next = advanceWeights(
+    state,
+    wave,
+    wave.policies.map((p) => p[0]),
+  );
   assert.equal(next.iteration, 1);
   assert.equal(next.rollouts, 2 * DIRECTIONS);
   assert.deepEqual(parseCheckpoint(JSON.stringify(next), 'spatial'), next);

@@ -25,7 +25,7 @@ export function emptyCheckpoint(mode, seed = 3, initialWeights) {
   if (!MODES.includes(mode)) throw new Error('Invalid mode.');
   const active = activeParameters(mode);
   const weights = Array.from({ length: POLICY_SIZE }, (_, i) =>
-    active[i] ? initialWeights?.[i] ?? 0 : 0,
+    active[i] ? (initialWeights?.[i] ?? 0) : 0,
   );
   return {
     format: FORMAT,

@@ -17,7 +17,12 @@ export type Checkpoint = {
   weights: number[];
   best: { iteration: number; policy: number[]; evaluation: Assessment } | null;
 };
-export type Wave = { rng: number; directions: number[][]; policies: number[][]; start: TrialOptions };
+export type Wave = {
+  rng: number;
+  directions: number[][];
+  policies: number[][];
+  start: TrialOptions;
+};
 export const TEST_STARTS: TrialOptions[];
 export function storageKey(mode: Mode): string;
 export function emptyCheckpoint(mode: Mode, seed?: number, initialWeights?: number[]): Checkpoint;

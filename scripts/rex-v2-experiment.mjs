@@ -44,6 +44,10 @@ for (const seed of seeds) {
     }
   }
   console.log(
-    JSON.stringify({ mode, seed, finalHoldout: assessment(state.best.policy, mode, HOLDOUT_STARTS) }),
+    JSON.stringify({
+      mode,
+      seed,
+      finalHoldout: assessment(state.best.policy, mode, HOLDOUT_STARTS),
+    }),
   );
 }
