@@ -16,9 +16,9 @@ describe('T. rex V3 passive physics', () => {
   it('falls under gravity without any actuator or ground contact', () => {
     const rig = new PassiveRig(2, 0);
     const before = rig.snapshot();
-    for (let i = 0; i < 12; i++) rig.step();
+    for (let i = 0; i < Math.round(0.1 / STEP); i++) rig.step();
     const after = rig.snapshot();
-    expect(after.seconds).toBeCloseTo(12 * STEP);
+    expect(after.seconds).toBeCloseTo(0.1);
     expect(after.groundContacts).toBe(0);
     const expected = (GRAVITY * after.seconds ** 2) / 2;
     expect(before.centerHeight - after.centerHeight).toBeCloseTo(expected, 2);
@@ -29,9 +29,9 @@ describe('T. rex V3 passive physics', () => {
     const rig = new PassiveRig();
     const before = rig.snapshot();
     let contacted = false;
-    for (let i = 0; i < 480; i++) {
+    for (let i = 0; i < Math.round(4 / STEP); i++) {
       rig.step();
-      if (i % 12 === 0) {
+      if (i % Math.round(0.1 / STEP) === 0) {
         const state = rig.snapshot();
         expect(state.valid).toBe(true);
         contacted ||= state.groundContacts > 0;

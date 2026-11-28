@@ -69,6 +69,8 @@ export class CoulombSolver extends GSSolver {
       const x = tangent();
       const y = tangent();
       contact.ni.tangents(x.t, y.t);
+      x.t.normalize();
+      y.t.normalize();
       pairs.push({ normal, x: makeRow(x), y: makeRow(y) });
     }
     const propose = (row: Row): number =>

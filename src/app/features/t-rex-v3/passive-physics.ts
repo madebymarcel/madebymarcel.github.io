@@ -463,8 +463,7 @@ function placeSegments(
     }
   }
 
-  // Apply one rigid rotation and translation to the entire neutral rig,
-  // preserving every joint anchor and its neutral relative orientation.
+  // Apply one rigid rotation and translation, preserving every joint anchor.
   const tilt = new Quaternion().setFromAxisAngle(new Vector(1, 0, 0), tiltDegrees * DEG);
   const pivot = vec(BONES[1].start);
   let lowest = Infinity;
@@ -725,6 +724,7 @@ export class PassiveRig {
     const centerHeight = weightedHeight / mass;
     valid &&= [jointGap, angleExcess, centerHeight, penetration].every(Number.isFinite);
     const sensors = this.sense();
+    valid &&= Object.values(sensors.contacts).every((contact) => Number.isFinite(contact.normalLoadN));
     valid &&= sensors.joints.every((joint) => AXES.every((axis) => Object.values(joint.axes[axis]).every((value) => typeof value === 'boolean' || Number.isFinite(value))));
     valid &&= [...sensors.gravityDirection, ...sensors.angularVelocity, ...sensors.specificForce, sensors.leftFootLoadN, sensors.rightFootLoadN, sensors.leftFootClearanceM, sensors.rightFootClearanceM].every(Number.isFinite);
     return {
