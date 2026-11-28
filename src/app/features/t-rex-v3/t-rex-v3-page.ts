@@ -62,6 +62,10 @@ export class TRexV3Page implements OnDestroy {
     this.commands.set({});
   }
 
+  protected vectorText(value: readonly number[]): string {
+    return value.map((component) => component.toFixed(2)).join(', ');
+  }
+
   protected degrees(value: number): string {
     return ((value * 180) / Math.PI).toFixed(1);
   }

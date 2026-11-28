@@ -422,6 +422,16 @@ export class PassiveRig {
       Object.entries(contacts)
         .filter(([id]) => id.startsWith(side) && (id.endsWith('-toe') || id.endsWith('-foot')))
         .reduce((sum, [, contact]) => sum + contact.normalLoadN, 0);
+    const clearance = (side: string): number => {
+      let lowest = Infinity;
+      for (const { bone, body } of this.segments) {
+        if (bone.id.startsWith(side) && (bone.id.endsWith('-toe') || bone.id.endsWith('-foot'))) {
+          body.updateAABB();
+          lowest = Math.min(lowest, body.aabb.lowerBound.z);
+        }
+      }
+      return lowest;
+    };
     const orientation = this.pelvis.body.quaternion.mult(this.pelvis.inverseRest);
     const inverse = orientation.inverse();
     return {
@@ -432,6 +442,8 @@ export class PassiveRig {
       specificForce: inverse.vmult(this.specificForce).toArray(),
       leftFootLoadN: load('left-'),
       rightFootLoadN: load('right-'),
+      leftFootClearanceM: clearance('left-'),
+      rightFootClearanceM: clearance('right-'),
     };
   }
 

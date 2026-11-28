@@ -31,6 +31,8 @@ export interface SensorFrame {
   readonly specificForce: Vec3;
   readonly leftFootLoadN: number;
   readonly rightFootLoadN: number;
+  readonly leftFootClearanceM: number;
+  readonly rightFootClearanceM: number;
 }
 
 export interface ControlInput {
@@ -67,14 +69,14 @@ export function ligamentTorque(
   const spring = -Math.sign(angle) * 100 * excess * (1 + Math.min(2, excess / range));
   const torque = inertia * (spring - 5 * rate);
   const cap = 100 * inertia;
-  return Math.max(-cap, Math.min(cap, torque));
+  return torque === 0 ? 0 : Math.max(-cap, Math.min(cap, torque));
 }
 
 // Opposing signed muscle groups with a bounded torque-speed relationship.
 export function muscleTorque(activation: number, rate: number, limit: number): number {
   const command = signedUnit(activation);
   const speed = Math.max(0, Math.sign(command) * rate);
-  return command * limit * Math.max(0, 1 - speed / 8);
+  return command === 0 || limit === 0 ? 0 : command * limit * Math.max(0, 1 - speed / 8);
 }
 
 // Provisional engineering estimates, not reconstructed biological strengths.

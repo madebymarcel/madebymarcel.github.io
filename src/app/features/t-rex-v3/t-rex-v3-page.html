@@ -70,14 +70,19 @@
       <option value="reflex">Neutral-pose reflex (experimental)</option>
     </select>
     <p>The reflex responds to joint position, motion, orientation and foot load.</p>
-    <button class="ds-button" type="button" (click)="clearMuscles()">Clear manual activation</button>
+    <button class="ds-button" type="button" (click)="clearMuscles()">
+      Clear manual activation
+    </button>
     @if (snapshot(); as state) {
     <div class="physics-readings">
       <p>Left foot load: {{ state.sensors.leftFootLoadN.toFixed(0) }} N</p>
       <p>Right foot load: {{ state.sensors.rightFootLoadN.toFixed(0) }} N</p>
-      <p>Gravity direction: {{ state.sensors.gravityDirection.join(', ') }}</p>
-      <p>Pelvis angular velocity: {{ state.sensors.angularVelocity.join(', ') }} rad/s</p>
-      <p>Specific force: {{ state.sensors.specificForce.join(', ') }} m/s²</p>
+      <p>Left foot clearance: {{ (state.sensors.leftFootClearanceM * 100).toFixed(1) }} cm</p>
+      <p>Right foot clearance: {{ (state.sensors.rightFootClearanceM * 100).toFixed(1) }} cm</p>
+      <p>Pelvis height: {{ state.pelvisHeight.toFixed(2) }} m</p>
+      <p>Gravity direction: {{ vectorText(state.sensors.gravityDirection) }}</p>
+      <p>Pelvis angular velocity: {{ vectorText(state.sensors.angularVelocity) }} rad/s</p>
+      <p>Specific force: {{ vectorText(state.sensors.specificForce) }} m/s²</p>
     </div>
     }
   </article>

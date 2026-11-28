@@ -53,7 +53,24 @@ describe('T. rex V3 neuromuscular system', () => {
     expect(joint.axes.yaw.muscleNm).toBe(0);
     expect(Math.abs(joint.axes.pitch.angle - before.axes.pitch.angle)).toBeGreaterThan(0.0001);
     rig.step();
-    expect(rig.sense().joints.find((candidate) => candidate.id === id)!.axes.pitch.muscleNm).toBe(0);
+    const unpowered = rig.sense().joints.find((candidate) => candidate.id === id)!;
+    expect(unpowered.axes.pitch.muscleNm).toBe(0);
+  });
+
+  it('measures foot clearance and ground reaction during a near-ground release', () => {
+    const rig = new PassiveRig(0.02, 0);
+    expect(rig.sense().leftFootClearanceM).toBeCloseTo(0.02, 4);
+    expect(rig.sense().rightFootClearanceM).toBeCloseTo(0.02, 4);
+    let maximumLoad = 0;
+    for (let i = 0; i < 48; i++) {
+      rig.step({ ligaments: true, mode: 'off', commands: {} });
+      const sensors = rig.sense();
+      maximumLoad = Math.max(maximumLoad, sensors.leftFootLoadN + sensors.rightFootLoadN);
+      expect(Number.isFinite(sensors.leftFootClearanceM)).toBe(true);
+      expect(Number.isFinite(sensors.rightFootClearanceM)).toBe(true);
+    }
+    expect(maximumLoad).toBeGreaterThan(0);
+    expect(rig.snapshot().valid).toBe(true);
   });
 
   it('maps sensory displacement to an opposing reflex command', () => {
