@@ -116,6 +116,7 @@ export type EndReason = 'running' | 'fall' | 'invalid' | 'time-limit';
 export interface Transition {
   readonly observation: readonly number[] | null;
   readonly elapsed: number;
+  readonly forwardPositionM: number;
   readonly terminated: boolean;
   readonly truncated: boolean;
   readonly reason: EndReason;
@@ -142,7 +143,7 @@ export class BalanceEnvironment {
     readonly duration = 10,
     readonly ligaments = true,
   ) {
-    if (!Number.isFinite(duration) || duration <= 0) throw new Error('Invalid episode duration');
+    if (Number.isNaN(duration) || duration <= 0) throw new Error('Invalid episode duration');
   }
 
   reset(seed: number, perturbationDegrees = 1): Transition {
@@ -211,7 +212,7 @@ export class BalanceEnvironment {
     other: number,
     elapsed: number,
   ): Transition {
-    const velocity = massCenter(this.rig.mechanics().bodies).velocity;
+    const { position, velocity } = massCenter(this.rig.mechanics().bodies);
     let observation: number[] | null = state.valid ? observe(state, velocity) : null;
     if (!observation?.every(Number.isFinite) || this.reason === 'invalid') {
       this.reason = 'invalid';
@@ -225,6 +226,7 @@ export class BalanceEnvironment {
     return {
       observation,
       elapsed: state.seconds,
+      forwardPositionM: position[0],
       terminated: this.reason === 'fall' || this.reason === 'invalid',
       truncated: this.reason === 'time-limit',
       reason: this.reason,

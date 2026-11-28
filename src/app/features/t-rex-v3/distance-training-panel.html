@@ -1,0 +1,132 @@
+<article class="ds-card ds-stack">
+  <h2>Distance learning</h2>
+  <p>
+    Forward displacement is the only reward. Falling ends an episode. Invalid physics is excluded
+    from learning. No gait, balance controller, or standing bonus is used.
+  </p>
+  <p>{{ observationCount }} observations · {{ actionCount }} muscle actions · PPO at 30 Hz</p>
+  <div class="physics-readings">
+    <label for="training-seed">
+      Training seed
+      <input
+        id="training-seed"
+        #seedInput
+        type="number"
+        min="0"
+        max="4294967295"
+        step="1"
+        [value]="seed()"
+        [disabled]="running() || busy()"
+        (change)="setSeed(seedInput.value)"
+      />
+    </label>
+    <label for="training-horizon">
+      Episode horizon (seconds)
+      <input
+        id="training-horizon"
+        #horizonInput
+        type="number"
+        min="5"
+        max="120"
+        step="1"
+        [value]="horizon()"
+        [disabled]="running() || busy()"
+        (change)="setHorizon(horizonInput.value)"
+      />
+    </label>
+  </div>
+  <div class="physics-controls">
+    <button class="ds-button" type="button" [disabled]="running() || busy()" (click)="start()">
+      {{ frame() ? 'Start new training (reset)' : 'Start training' }}
+    </button>
+    <button class="ds-button" type="button" [disabled]="!running()" (click)="pause()">
+      Pause training or replay
+    </button>
+    <button
+      class="ds-button"
+      type="button"
+      [disabled]="running() || busy() || !frame() || frame()?.phase === 'blocked'"
+      (click)="resume()"
+    >
+      Resume training
+    </button>
+    <button
+      class="ds-button"
+      type="button"
+      [disabled]="running() || busy() || !frame() || frame()?.stats?.bestEvaluationM === null"
+      (click)="replayBest()"
+    >
+      Replay best policy
+    </button>
+    <button
+      class="ds-button"
+      type="button"
+      [disabled]="running() || busy() || frame()?.phase !== 'replay' || frame()?.reason !== 'running'"
+      (click)="continueReplay()"
+    >
+      Continue replay
+    </button>
+    <button
+      class="ds-button"
+      type="button"
+      [disabled]="running() || busy() || !frame()"
+      (click)="save()"
+    >
+      Save learning checkpoint
+    </button>
+  </div>
+  <label for="training-checkpoint">Load learning checkpoint</label>
+  <input
+    id="training-checkpoint"
+    #fileInput
+    type="file"
+    accept=".json,application/json"
+    [disabled]="running() || busy()"
+    (change)="load(fileInput.files?.item(0) ?? null)"
+  />
+  <small>
+    Loading restores the learned policy, optimizer and recorded scores, then starts a fresh episode.
+    Save before leaving this page. Replay has no time limit.
+  </small>
+  @if (error()) {
+  <p role="alert">{{ error() }}</p>
+  } @if (frame(); as state) {
+  <h3>Training progress</h3>
+  <div class="physics-readings">
+    <p>Phase: {{ state.phase }} {{ running() ? '(running)' : '(paused)' }}</p>
+    <p>Episode time: {{ state.elapsed.toFixed(2) }} s</p>
+    <p>Episode result: {{ state.reason }}</p>
+    <p>Current distance: {{ distance(state.distanceM) }}</p>
+    <p>Training horizon: {{ state.horizon }} s</p>
+    <p>Training episodes: {{ state.stats.episodes }}</p>
+    <p>Invalid training episodes: {{ state.stats.invalidEpisodes }}</p>
+    <p>Invalid evaluations: {{ state.stats.invalidEvaluations }}</p>
+    <p>Action decisions: {{ state.stats.actions }}</p>
+    <p>Valid learned decisions: {{ state.stats.learnedActions }}</p>
+    <p>PPO updates: {{ state.stats.updates }}</p>
+    <p>Last valid episode: {{ distance(state.stats.lastDistanceM) }}</p>
+    <p>Best exploratory episode: {{ distance(state.stats.bestTrainingM) }}</p>
+    <p>Latest evaluation mean: {{ distance(state.stats.evaluationM) }}</p>
+    <p>Best evaluation mean: {{ distance(state.stats.bestEvaluationM) }}</p>
+  </div>
+  @if (state.message) {
+  <p role="alert">{{ state.message }}</p>
+  } @if (projection(); as view) {
+  <svg [attr.viewBox]="view.box" role="img" aria-label="Live training dinosaur side view">
+    <line class="ground" x1="-1000" y1="0" x2="1000" y2="0" />
+    @for (shape of view.shapes; track shape.id) {
+    <g>
+      <title>{{ shape.label }}</title>
+      <polygon [attr.points]="shape.points" />
+      @for (detail of shape.details; track $index) {
+      <polyline [attr.points]="detail" />
+      }
+    </g>
+    }
+  </svg>
+  } }
+  <small>
+    Evaluation averages two fixed seeds with exploration disabled. A higher exploratory score alone
+    does not establish that the policy has learned to walk.
+  </small>
+</article>

@@ -30,8 +30,7 @@ body and returns an observation with no commands applied. The seed is a
 initialize the episode, never to drive muscles. All observable and action
 channels have named, fixed order in `OBSERVATIONS` and `ACTIONS`.
 `step(action)` applies the supplied action vector for up to 16 physics
-steps and returns a transition. No reward function or training algorithm
-is implemented. A caller must reset after termination/truncation.
+steps and returns a transition. The environment itself has no reward function or policy. A caller must reset after termination/truncation.
 
 An invalid numerical/constraint state is a distinct termination with a
 null observation, not a learnable fall. Valid falls and time limits are
@@ -50,3 +49,28 @@ are explicitly marked; a green CI run is not a guarantee that every
 randomized trajectory is valid. The physics engine's angular integration,
 contact proxies and calibration remain approximate. Do not claim
 reinforcement-learning readiness from a finite trajectory alone.
+
+## Distance learning
+
+The separate worker implements Gaussian PPO with independent 64-unit actor
+and critic networks, a bounded tanh action, fixed exploration variance,
+clipped updates, GAE and Adam. All training decisions use the same 30 Hz
+environment as deterministic evaluation. The only reward is the signed
+change in world-forward centre of mass position (metres), excluding the
+transition on which the dinosaur falls. A time limit truncates the rollout
+and bootstraps the value rather than recording a fall. Training uses a
+configurable 5–120 second horizon; replay of the best evaluated policy has
+no time limit. It ends on a fall, invalid physics, or user interruption.
+
+Complete invalid episodes are discarded before any PPO update. Frequent
+invalid physics stops training and must be investigated. Evaluation uses
+two fixed seeds with the Gaussian mean, and is not an unseen-seed guarantee
+of generalization. Training distance and evaluation distance are reported
+separately. No balance or survival reward, gait target, imitation data, or
+scripted motor controller is used. Forward distance alone can favor a
+lunge instead of a sustainable gait; this is the requested objective.
+
+Save/load checkpoints carry network and Adam state, random generator state,
+scores, and best policy. Import requires the same action/observation schema
+and format. Loading starts a new episode and discards unfinished rollout
+data; it is not exact in-flight simulation resumption.
