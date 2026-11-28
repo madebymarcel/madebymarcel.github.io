@@ -3,7 +3,13 @@ import { DepTrainer } from './dep-training';
 import type { DepResult } from './dep-rollout';
 import type { RolloutResult } from './rollout-collection';
 import type { TrainingFrame } from './distance-training';
-import type { Brain, BrainCheckpoint, BrainFrame, BrainJob, BrainResult } from './training-protocol';
+import type {
+  Brain,
+  BrainCheckpoint,
+  BrainFrame,
+  BrainJob,
+  BrainResult,
+} from './training-protocol';
 
 export type TrainingRequest =
   | { type: 'start'; brain: Brain; seed: number; horizon: number }
@@ -43,15 +49,19 @@ function isPpoResult(result: BrainResult): result is RolloutResult {
 addEventListener('message', ({ data }: MessageEvent<TrainingRequest>) => {
   try {
     if (data.type === 'start') {
-      trainer = data.brain === 'ppo'
-        ? new DistanceTrainer(data.seed, data.horizon)
-        : new DepTrainer(data.seed, data.horizon, data.brain);
+      trainer =
+        data.brain === 'ppo'
+          ? new DistanceTrainer(data.seed, data.horizon)
+          : new DepTrainer(data.seed, data.horizon, data.brain);
     } else if (data.type === 'import') {
       const saved = data.checkpoint;
-      trainer = typeof saved === 'object' && saved !== null &&
-        'format' in saved && saved.format === 'trex-v3-dep-mpo-1'
-        ? DepTrainer.restore(saved)
-        : DistanceTrainer.restore(saved);
+      trainer =
+        typeof saved === 'object' &&
+        saved !== null &&
+        'format' in saved &&
+        saved.format === 'trex-v3-dep-mpo-1'
+          ? DepTrainer.restore(saved)
+          : DistanceTrainer.restore(saved);
     }
     if (!trainer) throw new Error('Start or load training first');
     switch (data.type) {
@@ -59,9 +69,11 @@ addEventListener('message', ({ data }: MessageEvent<TrainingRequest>) => {
         if (trainer.frame().phase === 'training') {
           send({ type: 'collect', jobs: trainer.beginRound(data.lanes) });
         } else {
-          sendFrame(trainer instanceof DepTrainer
-            ? trainer.advance(data.count)
-            : trainer.advance(data.count, true));
+          sendFrame(
+            trainer instanceof DepTrainer
+              ? trainer.advance(data.count)
+              : trainer.advance(data.count, true),
+          );
         }
         break;
       case 'finish-round':

@@ -61,9 +61,10 @@ export function collectDepRollouts(
   const switchRandom = seededRandom((job.seed ^ 0x3c6ef372) >>> 0);
   const controller = new DepController(ACTIONS.length);
   if (job.depState) controller.restore(job.depState);
-  const policy = job.exploration === 'mixed'
-    ? new MpoPolicy(OBSERVATIONS.length, ACTIONS.length, actionRandom)
-    : null;
+  const policy =
+    job.exploration === 'mixed'
+      ? new MpoPolicy(OBSERVATIONS.length, ACTIONS.length, actionRandom)
+      : null;
   if (policy) {
     if (!job.policy) throw new Error('Missing frozen MPO policy');
     policy.restorePolicy(job.policy);
@@ -111,7 +112,8 @@ export function collectDepRollouts(
           job.exploration === 'mixed' &&
           remaining === 0 &&
           switchRandom() < DEP_INTERVENTION_PROBABILITY
-        ) remaining = DEP_INTERVENTION_LENGTH;
+        )
+          remaining = DEP_INTERVENTION_LENGTH;
         if (job.exploration === 'dep' || remaining > 0) {
           source = 'dep';
           action = proposal;

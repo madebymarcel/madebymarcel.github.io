@@ -38,7 +38,14 @@ function footX(snapshot: PhysicsSnapshot, side: Side): number {
 }
 
 function emptyFoot(): FootState {
-  return { plantedX: null, liftedFrom: null, liftSeconds: 0, liftCounted: false, lifts: 0, steps: 0 };
+  return {
+    plantedX: null,
+    liftedFrom: null,
+    liftSeconds: 0,
+    liftCounted: false,
+    lifts: 0,
+    steps: 0,
+  };
 }
 
 // Diagnostics, never reward shaping. A lift needs the other foot to carry
@@ -107,7 +114,7 @@ export class CapabilityAudit {
     let tailRate = 0;
     let torsoRate = 0;
     for (const joint of sensor.joints) {
-      const pitch = Math.abs(joint.axes.pitch.angle * 180 / Math.PI);
+      const pitch = Math.abs((joint.axes.pitch.angle * 180) / Math.PI);
       if (joint.id.startsWith('tail-')) {
         this.maxTail = Math.max(this.maxTail, pitch);
         tailRate += joint.axes.pitch.rate;
@@ -117,7 +124,12 @@ export class CapabilityAudit {
         torsoRate += joint.axes.pitch.rate;
       }
     }
-    if (state.support.supported && Math.abs(tailRate) >= 0.1 && Math.abs(torsoRate) >= 0.1 && tailRate * torsoRate < 0) {
+    if (
+      state.support.supported &&
+      Math.abs(tailRate) >= 0.1 &&
+      Math.abs(torsoRate) >= 0.1 &&
+      tailRate * torsoRate < 0
+    ) {
       this.counterRotationSeconds += dt;
     }
   }
@@ -155,14 +167,18 @@ export interface CapabilityGate {
 export function assessCapabilities(
   reports: readonly { reason: Transition['reason']; capability: CapabilityReport }[],
 ): CapabilityGate {
-  const valid = reports.filter((report) => report.reason !== 'invalid' && report.reason !== 'running');
+  const valid = reports.filter(
+    (report) => report.reason !== 'invalid' && report.reason !== 'running',
+  );
   const invalidEpisodes = reports.filter((report) => report.reason === 'invalid').length;
   const stableStanding = valid.some((report) => report.capability.longestStableSeconds >= 2);
   const leftLift = valid.some((report) => report.capability.leftLifts > 0);
   const rightLift = valid.some((report) => report.capability.rightLifts > 0);
   const transfer = valid.some((report) => report.capability.weightTransfers > 0);
   const alternatingSteps = valid.some((report) => report.capability.alternatingSteps > 0);
-  const tailTorsoCounterRotation = valid.some((report) => report.capability.counterRotationSeconds >= 0.1 - 1e-9);
+  const tailTorsoCounterRotation = valid.some(
+    (report) => report.capability.counterRotationSeconds >= 0.1 - 1e-9,
+  );
   return {
     validEpisodes: valid.length,
     invalidEpisodes,
@@ -175,12 +191,20 @@ export function assessCapabilities(
     passed:
       valid.length >= 3 &&
       invalidEpisodes <= (valid.length + invalidEpisodes) * 0.1 &&
-      stableStanding && leftLift && rightLift && transfer && alternatingSteps && tailTorsoCounterRotation,
+      stableStanding &&
+      leftLift &&
+      rightLift &&
+      transfer &&
+      alternatingSteps &&
+      tailTorsoCounterRotation,
   };
 }
 
 // Zero-action baseline uses exactly the same environment and measurement.
-export function passiveCapability(seed: number, horizon = 5): { reason: Transition['reason']; capability: CapabilityReport; elapsed: number } {
+export function passiveCapability(
+  seed: number,
+  horizon = 5,
+): { reason: Transition['reason']; capability: CapabilityReport; elapsed: number } {
   const env = new BalanceEnvironment(horizon);
   let state = env.reset(seed);
   const audit = new CapabilityAudit();

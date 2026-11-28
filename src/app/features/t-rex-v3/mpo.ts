@@ -35,8 +35,7 @@ function distribution(output: readonly number[], actions: number): Gaussian {
 }
 
 function normal(random: () => number): number {
-  return Math.sqrt(-2 * Math.log(Math.max(1e-12, random()))) *
-    Math.cos(2 * Math.PI * random());
+  return Math.sqrt(-2 * Math.log(Math.max(1e-12, random()))) * Math.cos(2 * Math.PI * random());
 }
 
 function latentSample(gaussian: Gaussian, random: () => number): number[] {
@@ -51,9 +50,10 @@ function weightsFor(values: readonly number[], temperature: number): number[] {
 }
 
 export function uniformKl(weights: readonly number[]): number {
-  return weights.reduce((sum, value) => value > 0
-    ? sum + value * Math.log(value * weights.length)
-    : sum, 0);
+  return weights.reduce(
+    (sum, value) => (value > 0 ? sum + value * Math.log(value * weights.length) : sum),
+    0,
+  );
 }
 
 // Solve the E-step temperature dual via monotone bisection of its KL
@@ -62,8 +62,13 @@ export function mpoWeights(
   rows: readonly (readonly number[])[],
   epsilon = EPSILON,
 ): { temperature: number; weights: number[][]; kl: number } {
-  if (!rows.length || rows.some((row) => !row.length || !row.every(Number.isFinite)) ||
-    !Number.isFinite(epsilon) || epsilon <= 0) throw new Error('Invalid MPO E-step');
+  if (
+    !rows.length ||
+    rows.some((row) => !row.length || !row.every(Number.isFinite)) ||
+    !Number.isFinite(epsilon) ||
+    epsilon <= 0
+  )
+    throw new Error('Invalid MPO E-step');
   const evaluate = (temperature: number) => {
     const weights = rows.map((row) => weightsFor(row, temperature));
     return {
@@ -151,7 +156,8 @@ export class MpoAgent extends MpoPolicy {
   }
 
   private targetValue(observation: readonly number[], latent: readonly number[]): number {
-    return this.critic.forward([...observation, ...latent.map(Math.tanh)], this.targetCritic).output[0];
+    return this.critic.forward([...observation, ...latent.map(Math.tanh)], this.targetCritic)
+      .output[0];
   }
 
   update(batch: readonly Experience[]): MpoUpdate {
@@ -163,10 +169,10 @@ export class MpoAgent extends MpoPolicy {
       if (item.discount !== 0) {
         const next = this.targetDistribution(item.nextObservation);
         for (let k = 0; k < CANDIDATES; k++) {
-          target += item.discount * this.targetValue(
-            item.nextObservation,
-            latentSample(next, this.random),
-          ) / CANDIDATES;
+          target +=
+            (item.discount *
+              this.targetValue(item.nextObservation, latentSample(next, this.random))) /
+            CANDIDATES;
         }
       }
       const frame = this.critic.forward([...item.observation, ...item.action]);
@@ -192,15 +198,15 @@ export class MpoAgent extends MpoPolicy {
         const variance = current.std[j] ** 2;
         const diff = current.mean[j] - old.mean[j];
         meanKl[j] += diff ** 2 / (2 * oldVariance * batch.length);
-        stdKl[j] += (current.logStd[j] - old.logStd[j] + oldVariance / (2 * variance) - 0.5) /
-          batch.length;
-        let meanGradient = Math.exp(this.logAlphaMean[j]) * diff / oldVariance;
+        stdKl[j] +=
+          (current.logStd[j] - old.logStd[j] + oldVariance / (2 * variance) - 0.5) / batch.length;
+        let meanGradient = (Math.exp(this.logAlphaMean[j]) * diff) / oldVariance;
         let stdGradient = Math.exp(this.logAlphaStd[j]) * (1 - oldVariance / variance);
         for (let k = 0; k < CANDIDATES; k++) {
           const weight = e.weights[row][k];
           // Separate means and variances exactly as in decomposed MPO:
           // fixed old std for mean MLE; fixed old mean for variance MLE.
-          meanGradient += weight * (current.mean[j] - latents[k][j]) / oldVariance;
+          meanGradient += (weight * (current.mean[j] - latents[k][j])) / oldVariance;
           stdGradient += weight * (1 - (latents[k][j] - old.mean[j]) ** 2 / variance);
         }
         gradient[j] = meanGradient;
@@ -249,16 +255,20 @@ export class MpoAgent extends MpoPolicy {
   restore(state: MpoState): void {
     if (
       !state ||
-      !Number.isSafeInteger(state.updates) || state.updates < 0 ||
+      !Number.isSafeInteger(state.updates) ||
+      state.updates < 0 ||
       ![
         [state.targetActor, this.targetActor],
         [state.targetCritic, this.targetCritic],
         [state.logAlphaMean, this.logAlphaMean],
         [state.logAlphaStd, this.logAlphaStd],
-      ].every(([source, target]) => Array.isArray(source) && source.length === target.length &&
-        source.every(Number.isFinite)) ||
+      ].every(
+        ([source, target]) =>
+          Array.isArray(source) && source.length === target.length && source.every(Number.isFinite),
+      ) ||
       [...state.logAlphaMean, ...state.logAlphaStd].some((value) => Math.abs(value) > 12)
-    ) throw new Error('Invalid MPO checkpoint');
+    )
+      throw new Error('Invalid MPO checkpoint');
     this.actor.restore(state.actor);
     this.critic.restore(state.critic);
     this.targetActor.set(state.targetActor);

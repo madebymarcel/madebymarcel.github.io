@@ -1,7 +1,13 @@
 import { Component, computed, signal } from '@angular/core';
 import type { OnDestroy } from '@angular/core';
 import { ACTIONS, OBSERVATIONS } from './balance-environment';
-import type { Brain, BrainCheckpoint, BrainFrame, BrainJob, BrainResult } from './training-protocol';
+import type {
+  Brain,
+  BrainCheckpoint,
+  BrainFrame,
+  BrainJob,
+  BrainResult,
+} from './training-protocol';
 import type { TrainingRequest, TrainingResponse } from './distance-training.worker';
 import { projectRig, viewBox } from './rig';
 import type { RolloutResponse } from './rollout.worker';
@@ -277,7 +283,12 @@ export class DistanceTrainingPanel implements OnDestroy {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'trex-v3-' + ('brain' in checkpoint ? checkpoint.brain : 'distance') + '-' + checkpoint.stats.updates + '.json';
+    link.download =
+      'trex-v3-' +
+      ('brain' in checkpoint ? checkpoint.brain : 'distance') +
+      '-' +
+      checkpoint.stats.updates +
+      '.json';
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }

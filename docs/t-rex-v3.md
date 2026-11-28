@@ -115,7 +115,7 @@ walking; a passing workflow alone does not establish an improvement.
 
 ## DEP exploration and experimental MPO
 
-Reference: Schumacher et al., ICLR 2023, *DEP-RL: Embodied Exploration for Reinforcement Learning in Overactuated and Musculoskeletal Systems*
+Reference: Schumacher et al., ICLR 2023, _DEP-RL: Embodied Exploration for Reinforcement Learning in Overactuated and Musculoskeletal Systems_
 (https://openreview.net/forum?id=C-xa_D3oTj6).
 The MIT-licensed implementation at
 https://github.com/martius-lab/depRL/tree/790df8652f7ce7bae432435e44e509a5b427433e

@@ -15,7 +15,8 @@ function send(message: RolloutResponse): void {
 addEventListener('message', ({ data }: MessageEvent<BrainJob>) => {
   try {
     const progress = (event: RolloutProgress) => send({ type: 'progress', progress: event });
-    const result = 'brain' in data ? collectDepRollouts(data, progress) : collectRollouts(data, progress);
+    const result =
+      'brain' in data ? collectDepRollouts(data, progress) : collectRollouts(data, progress);
     send({ type: 'result', result });
   } catch (error) {
     send({

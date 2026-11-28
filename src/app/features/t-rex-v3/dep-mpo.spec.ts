@@ -76,14 +76,25 @@ describe('physical capability validation', () => {
     const audit = new CapabilityAudit();
     const weight = MASS_KG * GRAVITY;
     let t = 0;
-    const observe = (leftLifted: boolean, rightLifted: boolean, leftShift: number, rightShift: number) => {
+    const observe = (
+      leftLifted: boolean,
+      rightLifted: boolean,
+      leftShift: number,
+      rightShift: number,
+    ) => {
       const leftLoad = leftLifted ? 0 : rightLifted ? weight : weight / 2;
       const rightLoad = rightLifted ? 0 : leftLifted ? weight : weight / 2;
       audit.observe(
         {
           ...reset,
           elapsed: t++ / 30,
-          support: { footLoadN: leftLoad + rightLoad, otherLoadN: 0, upright: true, supported: true, stable: false },
+          support: {
+            footLoadN: leftLoad + rightLoad,
+            otherLoadN: 0,
+            upright: true,
+            supported: true,
+            stable: false,
+          },
         },
         {
           ...snapshot,
@@ -95,7 +106,12 @@ describe('physical capability validation', () => {
             rightFootClearanceM: rightLifted ? 0.05 : 0,
           },
           pose: snapshot.pose.map((item) => {
-            const shift = item.bone.id === 'left-foot' ? leftShift : item.bone.id === 'right-foot' ? rightShift : 0;
+            const shift =
+              item.bone.id === 'left-foot'
+                ? leftShift
+                : item.bone.id === 'right-foot'
+                  ? rightShift
+                  : 0;
             return { ...item, end: [item.end[0] + shift, item.end[1], item.end[2]] as const };
           }),
         },
@@ -107,8 +123,12 @@ describe('physical capability validation', () => {
     for (let i = 0; i < 3; i++) observe(false, true, 0.1, 0.02);
     observe(false, false, 0.1, 0.1);
     expect(audit.report(reset)).toMatchObject({
-      leftLifts: 1, rightLifts: 1, leftSteps: 1, rightSteps: 1,
-      weightTransfers: 1, alternatingSteps: 1,
+      leftLifts: 1,
+      rightLifts: 1,
+      leftSteps: 1,
+      rightSteps: 1,
+      weightTransfers: 1,
+      alternatingSteps: 1,
     });
   });
 
@@ -127,12 +147,25 @@ describe('physical capability validation', () => {
 });
 
 function experience(action: number, reward: number, discount = 0): Experience {
-  return { observation: [1], action: [action], nextObservation: [1], reward, discount, source: 'dep' };
+  return {
+    observation: [1],
+    action: [action],
+    nextObservation: [1],
+    reward,
+    discount,
+    source: 'dep',
+  };
 }
 
 describe('off-policy MPO', () => {
   it('solves the shared E-step KL budget and favors high-Q actions', () => {
-    const e = mpoWeights([[0, 1, 2], [2, 4, 5]], 0.1);
+    const e = mpoWeights(
+      [
+        [0, 1, 2],
+        [2, 4, 5],
+      ],
+      0.1,
+    );
     expect(e.kl).toBeCloseTo(0.1, 5);
     for (const row of e.weights) {
       expect(row.reduce((sum, value) => sum + value, 0)).toBeCloseTo(1);
@@ -144,7 +177,11 @@ describe('off-policy MPO', () => {
   });
 
   it('stores valid off-policy transitions, uses terminal-aware n-step returns and round-trips replay', () => {
-    const items = nStepExperiences([experience(0.2, 1, 1), experience(0.4, 2, 1), experience(0.6, 3)]);
+    const items = nStepExperiences([
+      experience(0.2, 1, 1),
+      experience(0.4, 2, 1),
+      experience(0.6, 3),
+    ]);
     expect(items.map((item) => item.reward)).toEqual([6, 5, 3]);
     expect(items.map((item) => item.discount)).toEqual([0, 0, 0]);
     expect(nStepExperiences([experience(0.2, 1, 1)])[0].discount).toBe(1);

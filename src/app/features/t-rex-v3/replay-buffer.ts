@@ -85,7 +85,8 @@ export class ReplayBuffer {
       !Number.isFinite(reward) ||
       (discount !== 0 && discount !== 1) ||
       (source !== 'dep' && source !== 'policy')
-    ) throw new Error('Invalid replay experience');
+    )
+      throw new Error('Invalid replay experience');
     const row = this.cursor * this.width;
     this.data.set(observation, row);
     this.data.set(action, row + this.inputs);
@@ -138,7 +139,8 @@ export class ReplayBuffer {
       state.cursor < 0 ||
       state.cursor >= this.capacity ||
       (state.count < this.capacity && state.cursor !== state.count)
-    ) throw new Error('Invalid replay checkpoint');
+    )
+      throw new Error('Invalid replay checkpoint');
     const values = decode(state.data, state.count * this.width);
     if (!values.every(Number.isFinite)) throw new Error('Non-finite replay checkpoint');
     for (let i = 0; i < state.count; i++) {
@@ -148,9 +150,11 @@ export class ReplayBuffer {
       if (
         (discount !== 0 && discount !== 1) ||
         (source !== 0 && source !== 1) ||
-        !values.subarray(row + this.inputs, row + this.inputs + this.actions)
+        !values
+          .subarray(row + this.inputs, row + this.inputs + this.actions)
           .every((value) => Math.abs(value) <= 1)
-      ) throw new Error('Invalid replay row');
+      )
+        throw new Error('Invalid replay row');
     }
     this.data.fill(0);
     this.data.set(values);

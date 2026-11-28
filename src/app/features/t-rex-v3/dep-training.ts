@@ -120,8 +120,12 @@ function combineGate(a: CapabilityGate, b: CapabilityGate): CapabilityGate {
     passed:
       result.validEpisodes >= 3 &&
       result.invalidEpisodes <= 0.1 * (result.invalidEpisodes + result.validEpisodes) &&
-      result.stableStanding && result.leftLift && result.rightLift &&
-      result.transfer && result.alternatingSteps && result.tailTorsoCounterRotation,
+      result.stableStanding &&
+      result.leftLift &&
+      result.rightLift &&
+      result.transfer &&
+      result.alternatingSteps &&
+      result.tailTorsoCounterRotation,
   };
 }
 
@@ -193,9 +197,14 @@ export class DepTrainer {
       throw new Error('Cannot start DEP collection from this state');
     }
     if (
-      !Number.isSafeInteger(lanes) || lanes < 1 || lanes > 4 ||
-      !Number.isSafeInteger(minimumActions) || minimumActions < 1 || minimumActions > 1024
-    ) throw new Error('Invalid DEP collection budget');
+      !Number.isSafeInteger(lanes) ||
+      lanes < 1 ||
+      lanes > 4 ||
+      !Number.isSafeInteger(minimumActions) ||
+      minimumActions < 1 ||
+      minimumActions > 1024
+    )
+      throw new Error('Invalid DEP collection budget');
     const round = ++this.round;
     const pure = this.brain === 'dep' || this.buffer.size < WARMUP || this.stats.updates === 0;
     const policy = pure ? null : this.agent.policy();
@@ -250,19 +259,26 @@ export class DepTrainer {
       const result = ordered[i];
       const job = jobs[i];
       if (
-        result.round !== job.round || result.lane !== i || result.brain !== job.brain ||
-        !Number.isSafeInteger(result.attempts) || result.attempts < 0 ||
+        result.round !== job.round ||
+        result.lane !== i ||
+        result.brain !== job.brain ||
+        !Number.isSafeInteger(result.attempts) ||
+        result.attempts < 0 ||
         !Number.isSafeInteger(result.depAttempts) ||
-        result.depAttempts < 0 || result.depAttempts > result.attempts ||
+        result.depAttempts < 0 ||
+        result.depAttempts > result.attempts ||
         (job.exactBudget && result.attempts > job.minimumActions) ||
         result.episodes.reduce((sum, run) => sum + run.actions, 0) > result.attempts
-      ) throw new Error('Mismatched DEP collection result');
+      )
+        throw new Error('Mismatched DEP collection result');
       for (const run of result.episodes) {
         if (
           run.reason === 'running' ||
           (run.reason === 'invalid' && (run.experiences.length || run.distanceM !== null)) ||
-          (run.reason !== 'invalid' && (run.distanceM === null || run.experiences.length !== run.actions))
-        ) throw new Error('Invalid DEP episode');
+          (run.reason !== 'invalid' &&
+            (run.distanceM === null || run.experiences.length !== run.actions))
+        )
+          throw new Error('Invalid DEP episode');
       }
       new DepController(ACTIONS.length).restore(result.depState);
     }
@@ -318,15 +334,20 @@ export class DepTrainer {
     if (this.playback || next.reason === 'running') return;
     const invalid = next.reason === 'invalid';
     if (invalid) this.stats.invalidEvaluations++;
-    this.evaluationResults.push({ distanceM: invalid ? null : run.distanceM, elapsed: next.elapsed });
+    this.evaluationResults.push({
+      distanceM: invalid ? null : run.distanceM,
+      elapsed: next.elapsed,
+    });
     if (this.evaluationResults.length < EVALUATION_SEEDS.length) {
       this.active = evaluation(EVALUATION_SEEDS[this.evaluationResults.length], this.horizon);
       return;
     }
     if (this.evaluationResults.every((result) => result.distanceM !== null)) {
-      const mean = this.evaluationResults.reduce((sum, result) => sum + result.distanceM!, 0) /
+      const mean =
+        this.evaluationResults.reduce((sum, result) => sum + result.distanceM!, 0) /
         this.evaluationResults.length;
-      const seconds = this.evaluationResults.reduce((sum, result) => sum + result.elapsed, 0) /
+      const seconds =
+        this.evaluationResults.reduce((sum, result) => sum + result.elapsed, 0) /
         this.evaluationResults.length;
       this.stats.evaluationM = mean;
       this.latestEvaluationSeconds = seconds;
@@ -431,26 +452,48 @@ export class DepTrainer {
       saved.format !== FORMAT ||
       JSON.stringify(saved.actions) !== JSON.stringify(KEYS) ||
       JSON.stringify(saved.observations) !== JSON.stringify(OBSERVATIONS) ||
-      !saved.stats || !saved.gate || !saved.bestCapability ||
-      !Array.isArray(saved.depStates) || saved.depStates.length !== 4 ||
-      !Array.isArray(saved.history) || saved.history.length > HISTORY_LIMIT ||
-      !Array.isArray(saved.recentInvalid) || saved.recentInvalid.length > 20 ||
+      !saved.stats ||
+      !saved.gate ||
+      !saved.bestCapability ||
+      !Array.isArray(saved.depStates) ||
+      saved.depStates.length !== 4 ||
+      !Array.isArray(saved.history) ||
+      saved.history.length > HISTORY_LIMIT ||
+      !Array.isArray(saved.recentInvalid) ||
+      saved.recentInvalid.length > 20 ||
       !saved.recentInvalid.every((value) => typeof value === 'boolean') ||
-      ![saved.round, saved.depDecisions, saved.sampledTransitions, saved.consecutiveInvalid, saved.rng]
-        .every((value) => Number.isSafeInteger(value) && value >= 0) ||
+      ![
+        saved.round,
+        saved.depDecisions,
+        saved.sampledTransitions,
+        saved.consecutiveInvalid,
+        saved.rng,
+      ].every((value) => Number.isSafeInteger(value) && value >= 0) ||
       saved.rng > 0xffffffff
-    ) throw new Error('Checkpoint does not match the DEP-MPO environment');
+    )
+      throw new Error('Checkpoint does not match the DEP-MPO environment');
     const next = new DepTrainer(saved.seed, saved.horizon, saved.brain);
     next.agent.restore(saved.learner);
     next.buffer.restore(saved.replay);
-    for (const key of ['episodes', 'invalidEpisodes', 'invalidEvaluations', 'actions', 'learnedActions', 'updates'] as const) {
+    for (const key of [
+      'episodes',
+      'invalidEpisodes',
+      'invalidEvaluations',
+      'actions',
+      'learnedActions',
+      'updates',
+    ] as const) {
       if (!Number.isSafeInteger(saved.stats[key]) || saved.stats[key] < 0) {
         throw new Error('Invalid checkpoint counters');
       }
     }
     for (const value of [
-      saved.stats.lastDistanceM, saved.stats.bestTrainingM, saved.stats.evaluationM,
-      saved.stats.bestEvaluationM, saved.latestEvaluationSeconds, saved.bestEvaluationSeconds,
+      saved.stats.lastDistanceM,
+      saved.stats.bestTrainingM,
+      saved.stats.evaluationM,
+      saved.stats.bestEvaluationM,
+      saved.latestEvaluationSeconds,
+      saved.bestEvaluationSeconds,
     ]) {
       if (value !== null && !Number.isFinite(value)) throw new Error('Invalid checkpoint score');
     }
@@ -462,7 +505,8 @@ export class DepTrainer {
       saved.sampledTransitions !== saved.stats.updates * BATCH ||
       saved.replay.count > saved.stats.learnedActions ||
       (saved.bestPolicy === null) !== (saved.stats.bestEvaluationM === null)
-    ) throw new Error('Inconsistent checkpoint totals');
+    )
+      throw new Error('Inconsistent checkpoint totals');
     if (saved.bestPolicy !== null) {
       const policy = new MpoPolicy(OBSERVATIONS.length, ACTIONS.length, () => 0.5);
       policy.restorePolicy(saved.bestPolicy);
@@ -480,12 +524,20 @@ export class DepTrainer {
       }
     }
     if (
-      ![saved.gate.validEpisodes, saved.gate.invalidEpisodes]
-        .every((value) => Number.isSafeInteger(value) && value >= 0) ||
-      ![saved.gate.stableStanding, saved.gate.leftLift, saved.gate.rightLift,
-        saved.gate.transfer, saved.gate.alternatingSteps, saved.gate.tailTorsoCounterRotation, saved.gate.passed]
-        .every((value) => typeof value === 'boolean')
-    ) throw new Error('Invalid capability gate');
+      ![saved.gate.validEpisodes, saved.gate.invalidEpisodes].every(
+        (value) => Number.isSafeInteger(value) && value >= 0,
+      ) ||
+      ![
+        saved.gate.stableStanding,
+        saved.gate.leftLift,
+        saved.gate.rightLift,
+        saved.gate.transfer,
+        saved.gate.alternatingSteps,
+        saved.gate.tailTorsoCounterRotation,
+        saved.gate.passed,
+      ].every((value) => typeof value === 'boolean')
+    )
+      throw new Error('Invalid capability gate');
     next.rng = saved.rng;
     next.round = saved.round;
     next.stats = { ...saved.stats };

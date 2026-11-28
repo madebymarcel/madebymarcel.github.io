@@ -40,7 +40,9 @@ test('starts the distance learning worker and exposes separate training metrics'
   await expect(page.getByText('Uncommitted decisions this round: 0')).toBeVisible();
 });
 
-test('starts pure DEP and preserves collected memory when enabling experimental MPO', async ({ page }) => {
+test('starts pure DEP and preserves collected memory when enabling experimental MPO', async ({
+  page,
+}) => {
   await page.goto('/projects/t-rex-v3/');
   await expect(page.getByLabel('Brain')).toHaveValue('dep');
   await page.getByLabel('Simulation workers').selectOption('1');

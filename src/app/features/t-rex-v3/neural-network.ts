@@ -134,4 +134,3 @@ export class Network {
     this.updates = state.updates;
   }
 }
-

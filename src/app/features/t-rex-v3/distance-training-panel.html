@@ -5,12 +5,22 @@
     from learning. No gait, balance controller, or standing bonus is used.
   </p>
   <p>{{ observationCount }} observations · {{ actionCount }} muscle actions · 30 Hz</p>
-  <p>Pure DEP explores through sensory feedback without a reward. Experimental DEP-MPO learns from collected experiences; the previous PPO brain remains a comparison baseline. The capability audit is a diagnostic, never a reward.</p>
+  <p>
+    Pure DEP explores through sensory feedback without a reward. Experimental DEP-MPO learns from
+    collected experiences; the previous PPO brain remains a comparison baseline. The capability
+    audit is a diagnostic, never a reward.
+  </p>
   <p>Independent workers collect complete episodes with the same frozen policy.</p>
   <div class="physics-readings">
     <label for="training-brain">
       Brain
-      <select id="training-brain" #brainInput [value]="brain()" [disabled]="running() || busy()" (change)="setBrain(brainInput.value)">
+      <select
+        id="training-brain"
+        #brainInput
+        [value]="brain()"
+        [disabled]="running() || busy()"
+        (change)="setBrain(brainInput.value)"
+      >
         <option value="dep">Pure DEP (capability audit)</option>
         <option value="dep-mpo">Experimental DEP-MPO</option>
         <option value="ppo">PPO (comparison baseline)</option>
@@ -76,7 +86,14 @@
       Resume training
     </button>
     @if (frame()?.brain === 'dep') {
-    <button class="ds-button" type="button" [disabled]="running() || busy() || frame()?.phase === 'blocked'" (click)="enableMpo()">Enable experimental MPO (keep DEP memory)</button>
+    <button
+      class="ds-button"
+      type="button"
+      [disabled]="running() || busy() || frame()?.phase === 'blocked'"
+      (click)="enableMpo()"
+    >
+      Enable experimental MPO (keep DEP memory)
+    </button>
     }
     <button
       class="ds-button"
@@ -115,7 +132,9 @@
   <small>
     Loading restores the learned policy, optimizer and recorded scores, then starts a fresh episode.
     Pausing discards any in-flight collection round, not learned weights. Save before leaving this
-    page. DEP checkpoints also preserve the replay buffer, per-worker controllers and recent training history. PPO checkpoints still load as PPO; their weights cannot be converted into MPO weights. Replay has no time limit.
+    page. DEP checkpoints also preserve the replay buffer, per-worker controllers and recent
+    training history. PPO checkpoints still load as PPO; their weights cannot be converted into MPO
+    weights. Replay has no time limit.
   </small>
   @if (error()) {
   <p role="alert">{{ error() }}</p>
@@ -156,7 +175,10 @@
   </div>
   @if (state.gate; as gate) {
   <h3>Pure DEP capability audit</h3>
-  <p>Validation: {{ gate.passed ? 'All configured criteria observed' : 'Not established' }}. Experimental MPO is not evidence of walking.</p>
+  <p>
+    Validation: {{ gate.passed ? 'All configured criteria observed' : 'Not established' }}.
+    Experimental MPO is not evidence of walking.
+  </p>
   <div class="physics-readings">
     <p>Valid pure DEP episodes: {{ gate.validEpisodes }}</p>
     <p>Invalid pure DEP episodes: {{ gate.invalidEpisodes }}</p>
@@ -165,10 +187,12 @@
     <p>Right supported foot lift: {{ gate.rightLift ? 'Observed' : 'Not observed' }}</p>
     <p>Weight transfer: {{ gate.transfer ? 'Observed' : 'Not observed' }}</p>
     <p>Alternating forward steps: {{ gate.alternatingSteps ? 'Observed' : 'Not observed' }}</p>
-    <p>Loaded tail/torso counter-rotation: {{ gate.tailTorsoCounterRotation ? 'Observed' : 'Not observed' }}</p>
+    <p>
+      Loaded tail/torso counter-rotation: {{ gate.tailTorsoCounterRotation ? 'Observed' : 'Not
+      observed' }}
+    </p>
   </div>
-  }
-  @if (state.bestCapability; as capability) {
+  } @if (state.bestCapability; as capability) {
   <h3>Best observed capabilities (per episode)</h3>
   <div class="physics-readings">
     <p>Continuous loaded support: {{ capability.longestSupportedSeconds.toFixed(2) }} s</p>
@@ -178,11 +202,16 @@
     <p>Forward steps (left/right): {{ capability.leftSteps }}/{{ capability.rightSteps }}</p>
     <p>Alternating steps: {{ capability.alternatingSteps }}</p>
     <p>Loaded tail/torso counter-rotation: {{ capability.counterRotationSeconds.toFixed(2) }} s</p>
-    <p>Peak tail/torso pitch: {{ capability.maxTailPitchDegrees.toFixed(1) }}° / {{ capability.maxTorsoPitchDegrees.toFixed(1) }}°</p>
+    <p>
+      Peak tail/torso pitch: {{ capability.maxTailPitchDegrees.toFixed(1) }}° / {{
+      capability.maxTorsoPitchDegrees.toFixed(1) }}°
+    </p>
   </div>
-  <small>Counter-rotation is a proxy, not proof that the tail stabilizes the torso. Counts require measured foot load, clearance, and forward touchdown.</small>
-  }
-  @if (state.message) {
+  <small
+    >Counter-rotation is a proxy, not proof that the tail stabilizes the torso. Counts require
+    measured foot load, clearance, and forward touchdown.</small
+  >
+  } @if (state.message) {
   <p role="alert">{{ state.message }}</p>
   } @if (projection(); as view) {
   <svg [attr.viewBox]="view.box" role="img" aria-label="Live training dinosaur side view">

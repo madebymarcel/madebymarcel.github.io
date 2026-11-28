@@ -46,13 +46,20 @@ export class DepController {
     readonly options: DepOptions = OSTRICH_DEP,
   ) {
     if (
-      !Number.isSafeInteger(size) || size < 1 ||
-      !Number.isFinite(options.kappa) || options.kappa <= 0 ||
-      !Number.isSafeInteger(options.tau) || options.tau < 3 ||
-      !Number.isSafeInteger(options.delay) || options.delay < 0 ||
-      !Number.isFinite(options.biasRate) || options.biasRate < 0 ||
-      !Number.isFinite(options.regularization) || options.regularization <= 0
-    ) throw new Error('Invalid DEP settings');
+      !Number.isSafeInteger(size) ||
+      size < 1 ||
+      !Number.isFinite(options.kappa) ||
+      options.kappa <= 0 ||
+      !Number.isSafeInteger(options.tau) ||
+      options.tau < 3 ||
+      !Number.isSafeInteger(options.delay) ||
+      options.delay < 0 ||
+      !Number.isFinite(options.biasRate) ||
+      options.biasRate < 0 ||
+      !Number.isFinite(options.regularization) ||
+      options.regularization <= 0
+    )
+      throw new Error('Invalid DEP settings');
     this.matrix = new Float64Array(size * size);
     this.bias = new Float64Array(size);
     this.lastOutput = Array(size).fill(0);
@@ -132,7 +139,8 @@ export class DepController {
       !Array.isArray(state.bias) ||
       state.bias.length !== this.bias.length ||
       !state.bias.every(Number.isFinite)
-    ) throw new Error('Invalid DEP controller state');
+    )
+      throw new Error('Invalid DEP controller state');
     this.matrix.set(state.matrix);
     this.bias.set(state.bias);
     this.resetHistory();

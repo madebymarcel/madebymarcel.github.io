@@ -46,18 +46,20 @@ async function capabilityAudit() {
   const comparisons = [];
   for (const exploration of ['zero', 'iid', 'dep']) {
     const results = await Promise.all(
-      seeds.map((seed, lane) => runWorker({
-        brain: 'dep',
-        round: 1,
-        lane,
-        seed,
-        horizon,
-        minimumActions: attemptsPerSeed,
-        exactBudget: true,
-        exploration,
-        depState: null,
-        policy: null,
-      })),
+      seeds.map((seed, lane) =>
+        runWorker({
+          brain: 'dep',
+          round: 1,
+          lane,
+          seed,
+          horizon,
+          minimumActions: attemptsPerSeed,
+          exactBudget: true,
+          exploration,
+          depState: null,
+          policy: null,
+        }),
+      ),
     );
     assert.ok(results.every((result) => result.attempts === attemptsPerSeed));
     const records = results.map((result, i) => ({
@@ -105,9 +107,12 @@ async function learnerAudit(gate) {
     console.log('V3_MPO_ROUND ' + JSON.stringify(record));
     if (mixed) {
       mixedRound = true;
-      assert.ok(results.some((result) => result.episodes.some((run) =>
-        run.experiences.some((item) => item.source === 'policy'),
-      )), 'Mixed rollout must collect actual policy-generated actions');
+      assert.ok(
+        results.some((result) =>
+          result.episodes.some((run) => run.experiences.some((item) => item.source === 'policy')),
+        ),
+        'Mixed rollout must collect actual policy-generated actions',
+      );
     }
     if (frame.phase === 'blocked' || mixedRound) break;
   }
@@ -120,14 +125,17 @@ async function learnerAudit(gate) {
   assert.deepEqual(roundTrip.depStates, saved.depStates);
   assert.deepEqual(roundTrip.history, saved.history);
   const learned = saved.stats.updates > 0 && mixedRound;
-  console.log('V3_MPO_SUMMARY ' + JSON.stringify({
-    pureDepValidated: gate.passed,
-    warmup: WARMUP,
-    learned,
-    mixedRound,
-    blocked: trainer.frame().phase === 'blocked',
-    timeline,
-  }));
+  console.log(
+    'V3_MPO_SUMMARY ' +
+      JSON.stringify({
+        pureDepValidated: gate.passed,
+        warmup: WARMUP,
+        learned,
+        mixedRound,
+        blocked: trainer.frame().phase === 'blocked',
+        timeline,
+      }),
+  );
   // A blocked physics run is a valid diagnostic outcome, not a walking
   // success. If enough valid replay exists, require actual optimizer updates.
   if (saved.replay.count >= WARMUP && trainer.frame().phase !== 'blocked') {
