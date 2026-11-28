@@ -12,6 +12,15 @@ import {
 } from 'cannon-es';
 import { AXES, BONES } from './rig';
 import type { Axis, Bone, PosedBone, Vec3 } from './rig';
+import {
+  PASSIVE,
+  activationStep,
+  ligamentTorque,
+  muscleTorque,
+  nominalStrengthNm,
+  reflexCommands,
+} from './neuromuscular';
+import type { AxisSense, Commands, ControlInput, JointSense, SensorFrame } from './neuromuscular';
 
 export const STEP = 1 / 120;
 export const GRAVITY = 9.81;
@@ -40,6 +49,7 @@ export interface PhysicsSnapshot {
   readonly angleExcess: number;
   readonly penetration: number;
   readonly valid: boolean;
+  readonly sensors: SensorFrame;
 }
 
 function weight(bone: Bone): number {
@@ -179,6 +189,10 @@ class AngularStop extends Equation {
 
 class Joint extends PointToPointConstraint {
   private readonly stops: { axis: Axis; equation: AngularStop }[] = [];
+  private readonly activation: Record<Axis, number> = { pitch: 0, yaw: 0, roll: 0 };
+  private readonly ligament: Record<Axis, number> = { pitch: 0, yaw: 0, roll: 0 };
+  private readonly muscle: Record<Axis, number> = { pitch: 0, yaw: 0, roll: 0 };
+  private readonly maximum: Record<Axis, number> = { pitch: 0, yaw: 0, roll: 0 };
 
   constructor(
     private readonly parent: Segment,
@@ -215,6 +229,63 @@ class Joint extends PointToPointConstraint {
     const state = jointState(this.parent, this.child);
     for (const { axis, equation } of this.stops) {
       equation.updateStop(state.angles[axis], state.gradients[axis]);
+    }
+  }
+
+  private inertia(gradient: Vector): number {
+    const a = this.parent.body.invInertiaWorld.vmult(gradient);
+    const b = this.child.body.invInertiaWorld.vmult(gradient);
+    const inverse = gradient.dot(a) + gradient.dot(b);
+    return inverse > 1e-10 ? KG_PER_UNIT / inverse : 0;
+  }
+
+  private rate(gradient: Vector): number {
+    const relative = this.child.body.angularVelocity.vsub(this.parent.body.angularVelocity);
+    return gradient.dot(relative);
+  }
+
+  read(): JointSense {
+    const state = jointState(this.parent, this.child);
+    const axisSense = (axis: Axis): AxisSense => {
+      const [min, max] = this.child.bone.limits[axis];
+      return {
+        angle: state.angles[axis],
+        rate: this.rate(state.gradients[axis]),
+        activation: this.activation[axis],
+        ligamentNm: this.ligament[axis],
+        muscleNm: this.muscle[axis],
+        maximumNm: this.maximum[axis],
+        locked: min === max,
+      };
+    };
+    return {
+      id: this.child.bone.id,
+      axes: { pitch: axisSense('pitch'), yaw: axisSense('yaw'), roll: axisSense('roll') },
+    };
+  }
+
+  drive(ligaments: boolean, powered: boolean, commands: Commands): void {
+    const state = jointState(this.parent, this.child);
+    for (const axis of AXES) {
+      const [min, max] = this.child.bone.limits[axis];
+      const gradient = state.gradients[axis];
+      const angle = state.angles[axis];
+      const rate = this.rate(gradient);
+      const inertia = this.inertia(gradient);
+      const enabled = min !== max;
+      const nominal = nominalStrengthNm(this.child.bone.id);
+      const limit = enabled ? Math.min(nominal, 180 * inertia) : 0;
+      this.maximum[axis] = limit;
+      const target = commands[this.child.bone.id]?.[axis] ?? 0;
+      this.activation[axis] =
+        powered && enabled ? activationStep(this.activation[axis], target, STEP) : 0;
+      this.ligament[axis] = ligaments
+        ? ligamentTorque(angle, rate, min * DEG, max * DEG, inertia)
+        : 0;
+      this.muscle[axis] = muscleTorque(this.activation[axis], rate, limit);
+      const torque = gradient.scale((this.ligament[axis] + this.muscle[axis]) / KG_PER_UNIT);
+      this.child.body.torque.vadd(torque, this.child.body.torque);
+      this.parent.body.torque.vsub(torque, this.parent.body.torque);
     }
   }
 
@@ -274,6 +345,8 @@ export class PassiveRig {
   private readonly segments = VISIBLE.map(makeSegment);
   private readonly joints: Joint[] = [];
   private steps = 0;
+  private readonly pelvis = this.segments[0];
+  private specificForce = new Vector();
 
   constructor(dropHeight = 0.35, tiltDegrees = 5) {
     const solver = new GSSolver();
@@ -329,8 +402,60 @@ export class PassiveRig {
     }
   }
 
-  step(): void {
+  sense(): SensorFrame {
+    const contacts: Record<string, { touching: boolean; normalLoadN: number }> = {};
+    const ids = new Map<Body, string>();
+    for (const segment of this.segments) {
+      ids.set(segment.body, segment.bone.id);
+      contacts[segment.bone.id] = { touching: false, normalLoadN: 0 };
+    }
+    for (const contact of this.world.contacts) {
+      if (!contact.enabled) continue;
+      const a = ids.get(contact.bi);
+      const b = ids.get(contact.bj);
+      if (a) contacts[a].touching = true;
+      if (b) contacts[b].touching = true;
+      const id = contact.bi === this.ground ? b : contact.bj === this.ground ? a : undefined;
+      if (id) contacts[id].normalLoadN += Math.max(0, contact.multiplier) * KG_PER_UNIT;
+    }
+    const load = (side: string): number =>
+      Object.entries(contacts)
+        .filter(([id]) => id.startsWith(side) && (id.endsWith('-toe') || id.endsWith('-foot')))
+        .reduce((sum, [, contact]) => sum + contact.normalLoadN, 0);
+    const clearance = (side: string): number => {
+      let lowest = Infinity;
+      for (const { bone, body } of this.segments) {
+        if (bone.id.startsWith(side) && (bone.id.endsWith('-toe') || bone.id.endsWith('-foot'))) {
+          body.updateAABB();
+          lowest = Math.min(lowest, body.aabb.lowerBound.z);
+        }
+      }
+      return lowest;
+    };
+    const orientation = this.pelvis.body.quaternion.mult(this.pelvis.inverseRest);
+    const inverse = orientation.inverse();
+    return {
+      joints: this.joints.map((joint) => joint.read()),
+      contacts,
+      gravityDirection: inverse.vmult(new Vector(0, 0, -1)).toArray(),
+      angularVelocity: inverse.vmult(this.pelvis.body.angularVelocity).toArray(),
+      specificForce: inverse.vmult(this.specificForce).toArray(),
+      leftFootLoadN: load('left-'),
+      rightFootLoadN: load('right-'),
+      leftFootClearanceM: clearance('left-'),
+      rightFootClearanceM: clearance('right-'),
+    };
+  }
+
+  step(input: ControlInput = PASSIVE): void {
+    const commands = input.mode === 'reflex' ? reflexCommands(this.sense()) : input.commands;
+    for (const joint of this.joints) {
+      joint.drive(input.ligaments, input.mode !== 'off', commands);
+    }
+    const previous = this.pelvis.body.velocity.clone();
     this.world.step(STEP);
+    this.specificForce = this.pelvis.body.velocity.vsub(previous).scale(1 / STEP);
+    this.specificForce.z += GRAVITY;
     this.steps++;
   }
 
@@ -370,6 +495,7 @@ export class PassiveRig {
       angleExcess,
       penetration,
       valid,
+      sensors: this.sense(),
     };
   }
 }

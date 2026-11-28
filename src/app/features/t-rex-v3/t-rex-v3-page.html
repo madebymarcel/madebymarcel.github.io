@@ -2,10 +2,12 @@
   <h1>T. rex V3</h1>
   <p>Skeleton validation: 40 rig bones, 39 visible shapes, one shared pose.</p>
   <article class="ds-card ds-stack">
-    <h2>Passive physics</h2>
-    <p>Release the neutral skeleton 35 cm above the floor with a small sideways tilt.</p>
+    <h2>Physical validation</h2>
+    <p>Compare a passive drop, a near-ground stance, and an airborne joint experiment.</p>
     <div class="physics-controls">
-      <button class="ds-button" type="button" (click)="release()">Release / restart</button>
+      <button class="ds-button" type="button" (click)="release()">Drop / restart</button>
+      <button class="ds-button" type="button" (click)="stance()">Stance start</button>
+      <button class="ds-button" type="button" (click)="airborne()">Airborne start</button>
       <button class="ds-button" type="button" [disabled]="!running()" (click)="pause()">
         Pause
       </button>
@@ -48,7 +50,41 @@
     @if (!state.valid) {
     <p role="alert">Invalid physics state. Simulation stopped; restart to inspect again.</p>
     } }
-    <p>Passive rigid bodies only. No motors, balance controller or animation.</p>
+    <p>All movement comes from forces and contact. No walking animation or learning.</p>
+  </article>
+  <article class="ds-card ds-stack">
+    <h2>Ligaments and nervous system</h2>
+    <label class="toggle">
+      <input
+        type="checkbox"
+        #ligamentInput
+        [checked]="ligaments()"
+        (change)="ligaments.set(ligamentInput.checked)"
+      />
+      Passive joint resistance
+    </label>
+    <label for="control-mode">Muscle control</label>
+    <select id="control-mode" #modeInput [value]="mode()" (change)="setMode(modeInput.value)">
+      <option value="off">Off (passive)</option>
+      <option value="manual">Manual activation</option>
+      <option value="reflex">Neutral-pose reflex (experimental)</option>
+    </select>
+    <p>The reflex responds to joint position, motion, orientation and foot load.</p>
+    <button class="ds-button" type="button" (click)="clearMuscles()">
+      Clear manual activation
+    </button>
+    @if (snapshot(); as state) {
+    <div class="physics-readings">
+      <p>Left foot load: {{ state.sensors.leftFootLoadN.toFixed(0) }} N</p>
+      <p>Right foot load: {{ state.sensors.rightFootLoadN.toFixed(0) }} N</p>
+      <p>Left foot clearance: {{ (state.sensors.leftFootClearanceM * 100).toFixed(1) }} cm</p>
+      <p>Right foot clearance: {{ (state.sensors.rightFootClearanceM * 100).toFixed(1) }} cm</p>
+      <p>Pelvis height: {{ state.pelvisHeight.toFixed(2) }} m</p>
+      <p>Gravity direction: {{ vectorText(state.sensors.gravityDirection) }}</p>
+      <p>Pelvis angular velocity: {{ vectorText(state.sensors.angularVelocity) }} rad/s</p>
+      <p>Specific force: {{ vectorText(state.sensors.specificForce) }} m/s²</p>
+    </div>
+    }
   </article>
   <div class="rig-layout">
     <div class="ds-stack">
@@ -109,6 +145,34 @@
         <button class="ds-button" type="button" (click)="resetPose()">Reset pose</button>
       </fieldset>
       <p>Angles are relative to the neutral pose. Limits are initial engineering estimates.</p>
+      @if (selectedSense(); as joint) {
+      <h3>Joint receptors and muscle activation</h3>
+      @for (axis of axes; track axis) {
+      <div class="joint-axis">
+        <p>{{ axis }}: {{ degrees(joint.axes[axis].angle) }}°</p>
+        <p>Velocity: {{ joint.axes[axis].rate.toFixed(2) }} rad/s</p>
+        <p>Ligament torque: {{ joint.axes[axis].ligamentNm.toFixed(1) }} Nm</p>
+        <p>Muscle torque: {{ joint.axes[axis].muscleNm.toFixed(1) }} Nm</p>
+        <p>Activation: {{ joint.axes[axis].activation.toFixed(2) }}</p>
+        <label [attr.for]="'muscle-' + axis">Manual activation ({{ axis }})</label>
+        <input
+          #muscleInput
+          [id]="'muscle-' + axis"
+          type="range"
+          min="-1"
+          max="1"
+          step="0.05"
+          [value]="commands()[joint.id]?.[axis] ?? 0"
+          [disabled]="mode() !== 'manual' || joint.axes[axis].locked"
+          (input)="setMuscle(axis, muscleInput.value)"
+        />
+        <small>Current torque limit: {{ joint.axes[axis].maximumNm.toFixed(0) }} Nm</small>
+      </div>
+      } } @if (selectedContact(); as contact) {
+      <h3>Contact receptors</h3>
+      <p>Touch: {{ contact.touching ? 'Yes' : 'No' }}</p>
+      <p>Ground normal load: {{ contact.normalLoadN.toFixed(0) }} N</p>
+      }
     </aside>
   </div>
 </section>
