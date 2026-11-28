@@ -56,8 +56,10 @@ export class DistanceTrainingPanel implements OnDestroy {
         this.download(data.checkpoint);
       } else {
         this.frame.set(data.frame);
-        if (data.frame.phase === 'blocked' ||
-          (data.frame.phase === 'replay' && data.frame.reason !== 'running')) {
+        if (
+          data.frame.phase === 'blocked' ||
+          (data.frame.phase === 'replay' && data.frame.reason !== 'running')
+        ) {
           this.pause();
         }
         this.schedule();
@@ -84,12 +86,15 @@ export class DistanceTrainingPanel implements OnDestroy {
   private schedule(): void {
     if (!this.running() || this.busy() || this.timer !== null) return;
     const replay = this.frame()?.phase === 'replay';
-    this.timer = window.setTimeout(() => {
-      this.timer = null;
-      if (this.running() && !this.busy()) {
-        this.send({ type: 'advance', count: replay ? 1 : 8 });
-      }
-    }, replay ? 1000 / 30 : 0);
+    this.timer = window.setTimeout(
+      () => {
+        this.timer = null;
+        if (this.running() && !this.busy()) {
+          this.send({ type: 'advance', count: replay ? 1 : 8 });
+        }
+      },
+      replay ? 1000 / 30 : 0,
+    );
   }
 
   private fail(message: string): void {
@@ -126,8 +131,14 @@ export class DistanceTrainingPanel implements OnDestroy {
   }
 
   protected continueReplay(): void {
-    if (this.busy() || this.running() || this.frame()?.phase !== 'replay' ||
-      this.frame()?.reason !== 'running' || !this.worker) return;
+    if (
+      this.busy() ||
+      this.running() ||
+      this.frame()?.phase !== 'replay' ||
+      this.frame()?.reason !== 'running' ||
+      !this.worker
+    )
+      return;
     this.running.set(true);
     this.schedule();
   }

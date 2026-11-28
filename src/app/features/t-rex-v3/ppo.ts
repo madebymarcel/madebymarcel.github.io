@@ -85,7 +85,8 @@ class Network {
     this.second = new Float64Array(this.weights.length);
     for (let j = 0; j < hiddenSize; j++) {
       for (let i = 0; i < inputs; i++) {
-        this.weights[j * (inputs + 1) + i] = ((random() * 2 - 1) * Math.sqrt(3)) / Math.sqrt(inputs);
+        this.weights[j * (inputs + 1) + i] =
+          ((random() * 2 - 1) * Math.sqrt(3)) / Math.sqrt(inputs);
       }
     }
     for (let j = 0; j < outputs; j++) {
@@ -185,7 +186,11 @@ export class PpoAgent {
   private readonly actor: Network;
   private readonly critic: Network;
 
-  constructor(inputs: number, outputs: number, private readonly random: () => number) {
+  constructor(
+    inputs: number,
+    outputs: number,
+    private readonly random: () => number,
+  ) {
     this.actor = new Network(inputs, 64, outputs, random, 0.01);
     this.critic = new Network(inputs, 64, 1, random, 0.1);
   }
@@ -239,7 +244,9 @@ export class PpoAgent {
           const logp = gaussianLogProbability(item.latent, actor.output);
           const ratio = Math.exp(Math.max(-20, Math.min(20, logp - item.logProbability)));
           const factor = clippedPolicyDerivative(ratio, (item.advantage - avg) / deviation);
-          const derivative = actor.output.map((mean, i) => (factor * (item.latent[i] - mean)) / STD ** 2);
+          const derivative = actor.output.map(
+            (mean, i) => (factor * (item.latent[i] - mean)) / STD ** 2,
+          );
           this.actor.accumulate(actor, derivative, actorGradient);
           const critic = this.critic.forward(item.observation);
           this.critic.accumulate(critic, [critic.output[0] - item.target], criticGradient);

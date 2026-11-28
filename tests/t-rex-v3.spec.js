@@ -20,7 +20,9 @@ test('V3 is the only dinosaur project and exposes the physical rig', async ({ pa
   await expect(page.getByRole('button', { name: 'Return to rig' })).toBeDisabled();
 });
 
-test('starts the distance learning worker and exposes separate training metrics', async ({ page }) => {
+test('starts the distance learning worker and exposes separate training metrics', async ({
+  page,
+}) => {
   await page.goto('/projects/t-rex-v3/');
   await page.getByRole('button', { name: 'Start training', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Training progress' })).toBeVisible();

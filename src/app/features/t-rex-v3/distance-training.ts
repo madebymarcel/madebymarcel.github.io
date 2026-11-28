@@ -66,9 +66,16 @@ function episode(seed: number, horizon: number): Episode {
 
 function emptyStats(): TrainingStats {
   return {
-    episodes: 0, invalidEpisodes: 0, invalidEvaluations: 0, actions: 0,
-    learnedActions: 0, updates: 0, lastDistanceM: null, bestTrainingM: null,
-    evaluationM: null, bestEvaluationM: null,
+    episodes: 0,
+    invalidEpisodes: 0,
+    invalidEvaluations: 0,
+    actions: 0,
+    learnedActions: 0,
+    updates: 0,
+    lastDistanceM: null,
+    bestTrainingM: null,
+    evaluationM: null,
+    bestEvaluationM: null,
   };
 }
 
@@ -90,7 +97,10 @@ export class DistanceTrainer {
   private message = '';
   private stats = emptyStats();
 
-  constructor(seed: number, readonly horizon = 30) {
+  constructor(
+    seed: number,
+    readonly horizon = 30,
+  ) {
     if (!Number.isSafeInteger(seed) || seed < 0 || seed > 0xffffffff) {
       throw new Error('Invalid training seed');
     }
@@ -127,7 +137,8 @@ export class DistanceTrainer {
       (this.recentInvalid.length === 20 && this.recentInvalid.filter(Boolean).length >= 10)
     ) {
       this.phase = 'blocked';
-      this.message = 'Too many invalid physics episodes. Training stopped; inspect the body before learning.';
+      this.message =
+        'Too many invalid physics episodes. Training stopped; inspect the body before learning.';
       this.batch = [];
       return;
     }
@@ -181,10 +192,9 @@ export class DistanceTrainer {
     const previous = run.state.forwardPositionM;
     const learning = !this.replay && this.phase === 'training';
     const decision = learning ? this.agent.sample(observation) : null;
-    const action = decision?.action ?? this.agent.action(
-      observation,
-      this.replay ? this.bestPolicy ?? undefined : undefined,
-    );
+    const action =
+      decision?.action ??
+      this.agent.action(observation, this.replay ? (this.bestPolicy ?? undefined) : undefined);
     const next = run.env.step(action);
     const reward = distanceReward(previous, next.forwardPositionM, next.reason);
     run.state = next;
@@ -207,7 +217,8 @@ export class DistanceTrainer {
   }
 
   advance(count: number): TrainingFrame {
-    if (!Number.isSafeInteger(count) || count < 1 || count > 16) throw new Error('Invalid step budget');
+    if (!Number.isSafeInteger(count) || count < 1 || count > 16)
+      throw new Error('Invalid step budget');
     for (let i = 0; i < count; i++) {
       if (this.replay && this.replay.state.reason !== 'running') break;
       if (this.phase === 'blocked' && !this.replay) break;
@@ -264,16 +275,29 @@ export class DistanceTrainer {
       JSON.stringify(saved.actions) !== JSON.stringify(ACTION_KEYS) ||
       JSON.stringify(saved.observations) !== JSON.stringify(OBSERVATIONS) ||
       !saved.stats
-    ) throw new Error('Checkpoint does not match this V3 environment');
+    )
+      throw new Error('Checkpoint does not match this V3 environment');
     const next = new DistanceTrainer(saved.rng, saved.horizon);
     next.agent.restore(saved.learner);
     const stats = emptyStats();
-    for (const key of ['episodes', 'invalidEpisodes', 'invalidEvaluations', 'actions', 'learnedActions', 'updates'] as const) {
+    for (const key of [
+      'episodes',
+      'invalidEpisodes',
+      'invalidEvaluations',
+      'actions',
+      'learnedActions',
+      'updates',
+    ] as const) {
       const value = saved.stats[key];
       if (!Number.isSafeInteger(value) || value < 0) throw new Error('Invalid checkpoint counters');
       stats[key] = value;
     }
-    for (const key of ['lastDistanceM', 'bestTrainingM', 'evaluationM', 'bestEvaluationM'] as const) {
+    for (const key of [
+      'lastDistanceM',
+      'bestTrainingM',
+      'evaluationM',
+      'bestEvaluationM',
+    ] as const) {
       const value = saved.stats[key];
       if (value !== null && !Number.isFinite(value)) throw new Error('Invalid checkpoint score');
       stats[key] = value;
@@ -281,11 +305,13 @@ export class DistanceTrainer {
     if (stats.invalidEpisodes > stats.episodes || stats.learnedActions > stats.actions) {
       throw new Error('Invalid checkpoint totals');
     }
-    if (saved.bestPolicy !== null && (
-      !Array.isArray(saved.bestPolicy) ||
-      saved.bestPolicy.length !== next.agent.policy().length ||
-      !saved.bestPolicy.every(Number.isFinite)
-    )) throw new Error('Invalid best policy');
+    if (
+      saved.bestPolicy !== null &&
+      (!Array.isArray(saved.bestPolicy) ||
+        saved.bestPolicy.length !== next.agent.policy().length ||
+        !saved.bestPolicy.every(Number.isFinite))
+    )
+      throw new Error('Invalid best policy');
     if ((saved.bestPolicy === null) !== (stats.bestEvaluationM === null)) {
       throw new Error('Inconsistent best policy');
     }

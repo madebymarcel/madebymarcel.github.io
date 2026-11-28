@@ -1,8 +1,8 @@
 <article class="ds-card ds-stack">
   <h2>Distance learning</h2>
   <p>
-    Forward displacement is the only reward. Falling ends an episode. Invalid physics is
-    excluded from learning. No gait, balance controller, or standing bonus is used.
+    Forward displacement is the only reward. Falling ends an episode. Invalid physics is excluded
+    from learning. No gait, balance controller, or standing bonus is used.
   </p>
   <p>{{ observationCount }} observations · {{ actionCount }} muscle actions · PPO at 30 Hz</p>
   <div class="physics-readings">
@@ -89,45 +89,42 @@
     Save before leaving this page. Replay has no time limit.
   </small>
   @if (error()) {
-    <p role="alert">{{ error() }}</p>
-  }
-  @if (frame(); as state) {
-    <h3>Training progress</h3>
-    <div class="physics-readings">
-      <p>Phase: {{ state.phase }} {{ running() ? '(running)' : '(paused)' }}</p>
-      <p>Episode time: {{ state.elapsed.toFixed(2) }} s</p>
-      <p>Episode result: {{ state.reason }}</p>
-      <p>Current distance: {{ distance(state.distanceM) }}</p>
-      <p>Training horizon: {{ state.horizon }} s</p>
-      <p>Training episodes: {{ state.stats.episodes }}</p>
-      <p>Invalid training episodes: {{ state.stats.invalidEpisodes }}</p>
-      <p>Invalid evaluations: {{ state.stats.invalidEvaluations }}</p>
-      <p>Action decisions: {{ state.stats.actions }}</p>
-      <p>Valid learned decisions: {{ state.stats.learnedActions }}</p>
-      <p>PPO updates: {{ state.stats.updates }}</p>
-      <p>Last valid episode: {{ distance(state.stats.lastDistanceM) }}</p>
-      <p>Best exploratory episode: {{ distance(state.stats.bestTrainingM) }}</p>
-      <p>Latest evaluation mean: {{ distance(state.stats.evaluationM) }}</p>
-      <p>Best evaluation mean: {{ distance(state.stats.bestEvaluationM) }}</p>
-    </div>
-    @if (state.message) {
-      <p role="alert">{{ state.message }}</p>
+  <p role="alert">{{ error() }}</p>
+  } @if (frame(); as state) {
+  <h3>Training progress</h3>
+  <div class="physics-readings">
+    <p>Phase: {{ state.phase }} {{ running() ? '(running)' : '(paused)' }}</p>
+    <p>Episode time: {{ state.elapsed.toFixed(2) }} s</p>
+    <p>Episode result: {{ state.reason }}</p>
+    <p>Current distance: {{ distance(state.distanceM) }}</p>
+    <p>Training horizon: {{ state.horizon }} s</p>
+    <p>Training episodes: {{ state.stats.episodes }}</p>
+    <p>Invalid training episodes: {{ state.stats.invalidEpisodes }}</p>
+    <p>Invalid evaluations: {{ state.stats.invalidEvaluations }}</p>
+    <p>Action decisions: {{ state.stats.actions }}</p>
+    <p>Valid learned decisions: {{ state.stats.learnedActions }}</p>
+    <p>PPO updates: {{ state.stats.updates }}</p>
+    <p>Last valid episode: {{ distance(state.stats.lastDistanceM) }}</p>
+    <p>Best exploratory episode: {{ distance(state.stats.bestTrainingM) }}</p>
+    <p>Latest evaluation mean: {{ distance(state.stats.evaluationM) }}</p>
+    <p>Best evaluation mean: {{ distance(state.stats.bestEvaluationM) }}</p>
+  </div>
+  @if (state.message) {
+  <p role="alert">{{ state.message }}</p>
+  } @if (projection(); as view) {
+  <svg [attr.viewBox]="view.box" role="img" aria-label="Live training dinosaur side view">
+    <line class="ground" x1="-1000" y1="0" x2="1000" y2="0" />
+    @for (shape of view.shapes; track shape.id) {
+    <g>
+      <title>{{ shape.label }}</title>
+      <polygon [attr.points]="shape.points" />
+      @for (detail of shape.details; track $index) {
+      <polyline [attr.points]="detail" />
+      }
+    </g>
     }
-    @if (projection(); as view) {
-      <svg [attr.viewBox]="view.box" role="img" aria-label="Live training dinosaur side view">
-        <line class="ground" x1="-1000" y1="0" x2="1000" y2="0" />
-        @for (shape of view.shapes; track shape.id) {
-          <g>
-            <title>{{ shape.label }}</title>
-            <polygon [attr.points]="shape.points" />
-            @for (detail of shape.details; track $index) {
-              <polyline [attr.points]="detail" />
-            }
-          </g>
-        }
-      </svg>
-    }
-  }
+  </svg>
+  } }
   <small>
     Evaluation averages two fixed seeds with exploration disabled. A higher exploratory score alone
     does not establish that the policy has learned to walk.
