@@ -51,7 +51,10 @@ async function train(seed, correlation) {
     const start = performance.now();
     const results = await Promise.all(jobs.map(runWorker));
     const wallSeconds = (performance.now() - start) / 1000;
-    assert.equal(results.reduce((sum, result) => sum + result.attempts, 0), lanes * perLane);
+    assert.equal(
+      results.reduce((sum, result) => sum + result.attempts, 0),
+      lanes * perLane,
+    );
     let frame = trainer.finishRound(results);
     timeline.push({
       round: round + 1,
@@ -132,7 +135,10 @@ async function main() {
     'BENCHMARK_SUMMARY ' +
       JSON.stringify({ complete, wins, pairedSeeds: seeds.length, budget, comparisons }),
   );
-  assert.ok(complete, 'Both modes must complete the matched attempted-action budget and update PPO');
+  assert.ok(
+    complete,
+    'Both modes must complete the matched attempted-action budget and update PPO',
+  );
 }
 
 if (isMainThread) {

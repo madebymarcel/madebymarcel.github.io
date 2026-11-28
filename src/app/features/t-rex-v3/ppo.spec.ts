@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { seededRandom } from './balance-environment';
-import { PpoAgent, advantages, clippedPolicyDerivative, conditionalGaussian, gaussianLogProbability } from './ppo';
+import {
+  PpoAgent,
+  advantages,
+  clippedPolicyDerivative,
+  conditionalGaussian,
+  gaussianLogProbability,
+} from './ppo';
 import type { Sample } from './ppo';
 
 describe('V3 PPO', () => {
@@ -41,10 +47,11 @@ describe('V3 PPO', () => {
     }
     const average = residuals.reduce((sum, value) => sum + value, 0) / residuals.length;
     const variance = residuals.reduce((sum, value) => sum + (value - average) ** 2, 0);
-    const lag = residuals.slice(1).reduce(
-      (sum, value, index) => sum + (value - average) * (residuals[index] - average),
-      0,
-    ) / variance;
+    const lag =
+      residuals
+        .slice(1)
+        .reduce((sum, value, index) => sum + (value - average) * (residuals[index] - average), 0) /
+      variance;
     expect(lag).toBeGreaterThan(0.79);
     expect(lag).toBeLessThan(0.91);
     expect(variance / residuals.length).toBeGreaterThan(0.14);

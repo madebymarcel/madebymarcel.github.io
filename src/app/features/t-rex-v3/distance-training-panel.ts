@@ -119,7 +119,9 @@ export class DistanceTrainingPanel implements OnDestroy {
       if (this.pool.length !== jobs.length) {
         this.stopPool();
         for (let i = 0; i < jobs.length; i++) {
-          this.pool.push(new Worker(new URL('./rollout.worker', import.meta.url), { type: 'module' }));
+          this.pool.push(
+            new Worker(new URL('./rollout.worker', import.meta.url), { type: 'module' }),
+          );
         }
       }
       jobs.forEach((job, lane) => {

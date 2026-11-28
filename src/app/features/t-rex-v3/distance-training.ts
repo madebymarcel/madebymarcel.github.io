@@ -3,7 +3,12 @@ import type { EndReason, Transition } from './balance-environment';
 import type { PhysicsSnapshot } from './passive-physics';
 import { DEFAULT_CORRELATION, PpoAgent, advantages } from './ppo';
 import { distanceReward } from './rollout-collection';
-import type { CompletedRollout, RolloutJob, RolloutResult, RolloutView } from './rollout-collection';
+import type {
+  CompletedRollout,
+  RolloutJob,
+  RolloutResult,
+  RolloutView,
+} from './rollout-collection';
 
 export { distanceReward } from './rollout-collection';
 import type { Sample, TrainingSample } from './ppo';
@@ -170,7 +175,8 @@ export class DistanceTrainer {
   private finishTraining(): void {
     const run = this.active;
     const invalid = run.state.reason === 'invalid' || !run.state.observation;
-    const bootstrap = !invalid && run.state.truncated ? this.agent.value(run.state.observation!) : 0;
+    const bootstrap =
+      !invalid && run.state.truncated ? this.agent.value(run.state.observation!) : 0;
     this.recordEpisode({
       actions: run.samples.length,
       distanceM: invalid ? null : run.distance,
@@ -182,22 +188,24 @@ export class DistanceTrainer {
   }
 
   beginRound(lanes: number, minimumActions = 64, exactBudget = false): readonly RolloutJob[] {
+    if (this.phase !== 'training' || this.replay || this.pendingRound || this.active.samples.length)
+      throw new Error('Cannot start a collection round from this state');
     if (
-      this.phase !== 'training' ||
-      this.replay ||
-      this.pendingRound ||
-      this.active.samples.length
-    ) throw new Error('Cannot start a collection round from this state');
-    if (
-      !Number.isSafeInteger(lanes) || lanes < 1 || lanes > 4 ||
-      !Number.isSafeInteger(minimumActions) || minimumActions < 1 || minimumActions > 1024
-    ) throw new Error('Invalid collection budget');
+      !Number.isSafeInteger(lanes) ||
+      lanes < 1 ||
+      lanes > 4 ||
+      !Number.isSafeInteger(minimumActions) ||
+      minimumActions < 1 ||
+      minimumActions > 1024
+    )
+      throw new Error('Invalid collection budget');
     const round = ++this.round;
     const policy = this.agent.inference();
     this.pendingRound = Array.from({ length: lanes }, (_, lane) => ({
       round,
       lane,
-      seed: (this.rolloutSeed ^ Math.imul(round, 0x9e3779b9) ^ Math.imul(lane + 1, 0x85ebca6b)) >>> 0,
+      seed:
+        (this.rolloutSeed ^ Math.imul(round, 0x9e3779b9) ^ Math.imul(lane + 1, 0x85ebca6b)) >>> 0,
       horizon: this.horizon,
       correlation: this.correlation,
       policy,
@@ -213,18 +221,24 @@ export class DistanceTrainer {
     const ordered = [...results].sort((a, b) => a.lane - b.lane);
     ordered.forEach((result, lane) => {
       const job = jobs[lane];
-      if (result.round !== job.round || result.lane !== lane ||
-        !Number.isSafeInteger(result.attempts) || result.attempts < 0 ||
+      if (
+        result.round !== job.round ||
+        result.lane !== lane ||
+        !Number.isSafeInteger(result.attempts) ||
+        result.attempts < 0 ||
         (job.exactBudget && result.attempts > job.minimumActions) ||
-        result.episodes.reduce((sum, run) => sum + run.actions, 0) > result.attempts) {
+        result.episodes.reduce((sum, run) => sum + run.actions, 0) > result.attempts
+      ) {
         throw new Error('Mismatched collection result');
       }
       for (const run of result.episodes) {
         if (
           run.reason === 'running' ||
           (run.reason === 'invalid' && (run.samples.length || run.distanceM !== null)) ||
-          (run.reason !== 'invalid' && (run.distanceM === null || run.samples.length !== run.actions))
-        ) throw new Error('Invalid completed rollout');
+          (run.reason !== 'invalid' &&
+            (run.distanceM === null || run.samples.length !== run.actions))
+        )
+          throw new Error('Invalid completed rollout');
       }
     });
     this.pendingRound = null;

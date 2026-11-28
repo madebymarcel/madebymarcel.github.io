@@ -55,5 +55,4 @@ describe('V3 independent-exploration baseline', () => {
     console.info('V3_ROLLOUT_DIAGNOSTIC ' + JSON.stringify(results));
     expect(results).toHaveLength(9);
   }, 120000);
-
 });
