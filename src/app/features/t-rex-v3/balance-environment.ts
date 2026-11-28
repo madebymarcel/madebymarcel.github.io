@@ -114,7 +114,8 @@ export function measureSupport(
 export type EndReason = 'running' | 'fall' | 'invalid' | 'time-limit';
 
 export type PhysicsResolution = Pick<PhysicsOptions, 'timestep' | 'iterations'>;
-export type PhysicsFaultKind = 'non-finite' | 'joint-gap' | 'angle-limit' | 'ground-penetration' | 'observation';
+export type PhysicsFaultKind =
+  'non-finite' | 'joint-gap' | 'angle-limit' | 'ground-penetration' | 'observation';
 
 export interface PhysicsFault extends ConstraintLocations {
   readonly kinds: readonly PhysicsFaultKind[];
@@ -136,16 +137,28 @@ export function physicsFaultKinds(state: PhysicsSnapshot): PhysicsFaultKind[] {
 export function describePhysicsFault(fault: PhysicsFault): string {
   const details: string[] = [];
   if (fault.kinds.includes('non-finite')) details.push('non-finite physical state');
-  if (fault.kinds.includes('joint-gap')) details.push(
-    'joint separation at ' + fault.gapJoint + ': ' + ((fault.gapM ?? 0) * 100).toFixed(2) + ' cm',
-  );
-  if (fault.kinds.includes('angle-limit')) details.push(
-    'angular limit at ' + fault.limitJoint + ' (' + fault.limitAxis + '): ' +
-      (fault.excessDegrees ?? 0).toFixed(2) + ' degrees beyond limit',
-  );
-  if (fault.kinds.includes('ground-penetration')) details.push(
-    'ground penetration at ' + fault.groundBody + ': ' + ((fault.penetrationM ?? 0) * 100).toFixed(2) + ' cm',
-  );
+  if (fault.kinds.includes('joint-gap'))
+    details.push(
+      'joint separation at ' + fault.gapJoint + ': ' + ((fault.gapM ?? 0) * 100).toFixed(2) + ' cm',
+    );
+  if (fault.kinds.includes('angle-limit'))
+    details.push(
+      'angular limit at ' +
+        fault.limitJoint +
+        ' (' +
+        fault.limitAxis +
+        '): ' +
+        (fault.excessDegrees ?? 0).toFixed(2) +
+        ' degrees beyond limit',
+    );
+  if (fault.kinds.includes('ground-penetration'))
+    details.push(
+      'ground penetration at ' +
+        fault.groundBody +
+        ': ' +
+        ((fault.penetrationM ?? 0) * 100).toFixed(2) +
+        ' cm',
+    );
   if (fault.kinds.includes('observation')) details.push('non-finite observation');
   return details.join('; ') + ' at ' + fault.elapsed.toFixed(3) + ' s';
 }
@@ -185,8 +198,11 @@ export class BalanceEnvironment {
   ) {
     if (Number.isNaN(duration) || duration <= 0) throw new Error('Invalid episode duration');
     const ratio = 1 / ((resolution.timestep ?? STEP) * ACTION_HZ);
-    if (!Number.isSafeInteger(Math.round(ratio)) || ratio < 1 ||
-      Math.abs(ratio - Math.round(ratio)) > 1e-9) {
+    if (
+      !Number.isSafeInteger(Math.round(ratio)) ||
+      ratio < 1 ||
+      Math.abs(ratio - Math.round(ratio)) > 1e-9
+    ) {
       throw new Error('Physics timestep must divide the 30 Hz control interval');
     }
     this.substeps = Math.round(ratio);
@@ -289,7 +305,7 @@ export class BalanceEnvironment {
   private failure(state: PhysicsSnapshot): PhysicsFault {
     const kinds = physicsFaultKinds(state);
     if (!kinds.length) kinds.push('observation');
-    const finite = (value: number) => Number.isFinite(value) ? value : null;
+    const finite = (value: number) => (Number.isFinite(value) ? value : null);
     return {
       ...this.rig.constraintLocations(state),
       kinds,

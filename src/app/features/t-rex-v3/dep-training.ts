@@ -1,4 +1,9 @@
-import { ACTIONS, OBSERVATIONS, BalanceEnvironment, describePhysicsFault } from './balance-environment';
+import {
+  ACTIONS,
+  OBSERVATIONS,
+  BalanceEnvironment,
+  describePhysicsFault,
+} from './balance-environment';
 import type { PhysicsFault, PhysicsFaultKind, Transition } from './balance-environment';
 import { CapabilityAudit, assessCapabilities } from './capability-audit';
 import type { CapabilityGate, CapabilityReport } from './capability-audit';
@@ -415,7 +420,9 @@ export class DepTrainer {
       snapshot: collected?.snapshot ?? run.env.snapshot(),
       horizon: this.horizon,
       message: this.playback ? '' : this.message,
-      ...(this.lastPhysicsFault ? { lastPhysicsFault: describePhysicsFault(this.lastPhysicsFault) } : {}),
+      ...(this.lastPhysicsFault
+        ? { lastPhysicsFault: describePhysicsFault(this.lastPhysicsFault) }
+        : {}),
       physicsFaultCounts: { ...this.physicsFaultCounts },
       gate: { ...this.gate },
       bestCapability: { ...this.bestCapability },

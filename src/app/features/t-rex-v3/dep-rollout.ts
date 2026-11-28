@@ -166,7 +166,8 @@ export function collectDepRollouts(
     const invalid = state.reason === 'invalid' || !state.observation;
     if (invalid) {
       controller.restore(before);
-      if (state.physicsFault) captureFailure?.({ resetSeed, actions: trace, fault: state.physicsFault });
+      if (state.physicsFault)
+        captureFailure?.({ resetSeed, actions: trace, fault: state.physicsFault });
     }
     episodes.push({
       actions: attempts - start,

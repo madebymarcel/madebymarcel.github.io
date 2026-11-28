@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { ACTIONS, OBSERVATIONS, BalanceEnvironment, physicsFaultKinds, seededRandom } from './balance-environment';
+import {
+  ACTIONS,
+  OBSERVATIONS,
+  BalanceEnvironment,
+  physicsFaultKinds,
+  seededRandom,
+} from './balance-environment';
 import { CapabilityAudit, assessCapabilities, passiveCapability } from './capability-audit';
 import { DepController, OSTRICH_DEP, depSensors } from './dep-controller';
 import { collectDepRollouts } from './dep-rollout';
@@ -248,9 +254,9 @@ describe('physics fault localization', () => {
     env.reset(37);
     const state = env.snapshot();
     expect(physicsFaultKinds(state)).toEqual([]);
-    expect(physicsFaultKinds({ ...state, jointGap: 0.031, angleExcess: 3.01, penetration: 0.031 })).toEqual([
-      'joint-gap', 'angle-limit', 'ground-penetration',
-    ]);
+    expect(
+      physicsFaultKinds({ ...state, jointGap: 0.031, angleExcess: 3.01, penetration: 0.031 }),
+    ).toEqual(['joint-gap', 'angle-limit', 'ground-penetration']);
     expect(physicsFaultKinds({ ...state, valid: false })).toEqual(['non-finite']);
     expect(() => new BalanceEnvironment(5, true, { timestep: 1 / 500 })).toThrow();
   });
