@@ -331,7 +331,7 @@ export class DistanceTrainer {
 
   frame(): TrainingFrame {
     const run = this.replay ?? this.active;
-    const collected = this.replay || this.phase !== 'training' ? null : this.lastRollout;
+    const collected = this.replay || this.phase === 'evaluation' ? null : this.lastRollout;
     return {
       phase: this.replay ? 'replay' : this.phase,
       stats: { ...this.stats },
