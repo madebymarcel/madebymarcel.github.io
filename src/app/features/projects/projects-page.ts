@@ -26,6 +26,11 @@ import { RouterLink } from '@angular/router';
         <p>Experimental continuous feedback learning, with planar and full 3D training.</p>
         <a class="ds-button" routerLink="/projects/t-rex-v2">Explore T. rex V2</a>
       </article>
+      <article class="ds-card ds-stack">
+        <h2>T. rex V3</h2>
+        <p>Manually inspect an articulated 40-bone SVG skeleton from the side and above.</p>
+        <a class="ds-button" routerLink="/projects/t-rex-v3">Explore T. rex V3</a>
+      </article>
     </section>
   `,
 })
