@@ -47,8 +47,7 @@
     </div>
     @if (!state.valid) {
     <p role="alert">Invalid physics state. Simulation stopped; restart to inspect again.</p>
-    }
-    }
+    } }
     <p>Passive rigid bodies only. No motors, balance controller or animation.</p>
   </article>
   <div class="rig-layout">
@@ -63,8 +62,7 @@
         >
           @if (snapshot() && view === 'side') {
           <line class="ground" x1="-1000" y1="0" x2="1000" y2="0" />
-          }
-          @for (shape of projections()[view].shapes; track shape.id) {
+          } @for (shape of projections()[view].shapes; track shape.id) {
           <g [class.selected]="shape.id === selected().id">
             <title>{{ shape.label }}</title>
             <polygon [attr.points]="shape.points" />

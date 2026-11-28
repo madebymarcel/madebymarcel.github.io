@@ -71,10 +71,7 @@ function vec(value: Vec3): Vector {
 // perpendicular to the bone and the world lateral axis.
 function restRotation(direction: Vector): Quaternion {
   const x = direction.unit();
-  const pitch = new Quaternion().setFromAxisAngle(
-    new Vector(0, 1, 0),
-    Math.atan2(-x.z, x.x),
-  );
+  const pitch = new Quaternion().setFromAxisAngle(new Vector(0, 1, 0), Math.atan2(-x.z, x.x));
   const yaw = new Quaternion().setFromAxisAngle(
     new Vector(0, 0, 1),
     Math.asin(Math.max(-1, Math.min(1, x.y))),
@@ -174,7 +171,9 @@ class AngularStop extends Equation {
   override computeGiMGt(): number {
     const a = this.jacobianElementA.rotational;
     const b = this.jacobianElementB.rotational;
-    return a.dot(this.bi.invInertiaWorldSolve.vmult(a)) + b.dot(this.bj.invInertiaWorldSolve.vmult(b));
+    return (
+      a.dot(this.bi.invInertiaWorldSolve.vmult(a)) + b.dot(this.bj.invInertiaWorldSolve.vmult(b))
+    );
   }
 }
 
